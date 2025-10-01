@@ -168,19 +168,6 @@ Click "Add Environment Variable" for EACH of these:
 
 ---
 
-## 🌱 **STEP 5: SEED DATABASE (3 min)**
-
-### **5.1 Run Seed Script**
-- [ ] Go to Render dashboard
-- [ ] Click your backend service
-- [ ] Click "Shell" tab
-- [ ] Wait for `$` prompt
-- [ ] Type: `npm run seed`
-- [ ] Press Enter
-- [ ] Wait for: "Seed data created successfully!"
-
----
-
 ## 🧪 **STEP 6: TEST LIVE SYSTEM (5 min)**
 
 ### **6.1 Open Your App**
