@@ -84,11 +84,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p>Demo Credentials:</p>
-          <p className="mt-1 font-medium">Email: founder@connectshiksha.com</p>
-          <p className="font-medium">Password: founder123</p>
-        </div>
+       
       </div>
     </div>
   );
