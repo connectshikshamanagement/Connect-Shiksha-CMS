@@ -157,7 +157,7 @@ Click "Add Environment Variable" for EACH of these:
 - [ ] Click "Deploy"
 - [ ] Wait 2-3 minutes
 - [ ] Copy your Vercel URL
-- [ ] Save URL here: `_________________________________`
+- [ ] Save URL here: `https://connect-shiksha-cms.vercel.app/`
 
 ### **4.6 Update Render**
 - [ ] Go to Render → Your service
