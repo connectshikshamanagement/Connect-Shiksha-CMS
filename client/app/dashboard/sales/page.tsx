@@ -13,7 +13,7 @@ import { FiPlus, FiShoppingCart, FiPackage, FiAlertTriangle } from 'react-icons/
 
 export default function SalesPage() {
   const [sales, setSales] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -33,6 +33,8 @@ export default function SalesPage() {
     paymentMethod: 'bank_transfer',
     notes: '',
   });
+
+  
 
   useEffect(() => {
     fetchData();
@@ -55,7 +57,7 @@ export default function SalesPage() {
   };
 
   const handleProductChange = (productId: string) => {
-    const product = products.find((p: any) => p._id === productId);
+    const product = products.find((p) => p._id === productId) as any;
     setSelectedProduct(product);
     setFormData({
       ...formData,
