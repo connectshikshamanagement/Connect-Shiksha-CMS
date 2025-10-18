@@ -30,8 +30,12 @@ const checklistItemSchema = new mongoose.Schema({
 const taskSchema = new mongoose.Schema({
   projectId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Project',
-    required: [true, 'Please assign a project']
+    ref: 'Project'
+  },
+  teamId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Team',
+    required: [true, 'Please assign a team']
   },
   title: {
     type: String,
@@ -46,6 +50,16 @@ const taskSchema = new mongoose.Schema({
     enum: ['todo', 'in_progress', 'review', 'done', 'blocked'],
     default: 'todo'
   },
+  assignedTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Please assign task to a member']
+  },
+  assignedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
   assigneeIds: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -55,8 +69,15 @@ const taskSchema = new mongoose.Schema({
     enum: ['low', 'medium', 'high', 'urgent'],
     default: 'medium'
   },
-  dueDate: {
-    type: Date
+  deadline: {
+    type: Date,
+    required: [true, 'Please provide a deadline']
+  },
+  progress: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
   },
   estimatedHours: {
     type: Number,

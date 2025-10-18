@@ -47,7 +47,38 @@ const teamSchema = new mongoose.Schema({
   remainingBudget: {
     type: Number,
     default: 0
-  }
+  },
+  // Per-member budget tracking
+  memberBudgets: [{
+    memberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    monthlyLimit: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    currentExpense: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    remainingBudget: {
+      type: Number,
+      default: 0
+    },
+    creditLimit: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    lastResetDate: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 }, {
   timestamps: true
 });

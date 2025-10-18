@@ -75,12 +75,13 @@ router.post('/', async (req, res) => {
       const totalCurrentExpenses = currentMonthExpenses.length > 0 ? currentMonthExpenses[0].total : 0;
       const newExpenseAmount = req.body.amount || 0;
       const totalAfterExpense = totalCurrentExpenses + newExpenseAmount;
-      const maxAllowed = team.monthlyBudget + team.creditLimit;
+      const maxAllowed = (team.monthlyBudget || 0) + (team.creditLimit || 0);
 
-      if (totalAfterExpense > maxAllowed) {
+      // Only check budget limit if team has a budget set
+      if (maxAllowed > 0 && totalAfterExpense > maxAllowed) {
         return res.status(400).json({
           success: false,
-          message: `Budget limit exceeded for this team. Current expenses: ₹${totalCurrentExpenses}, Monthly budget: ₹${team.monthlyBudget}, Credit limit: ₹${team.creditLimit}, Max allowed: ₹${maxAllowed}`
+          message: `Budget limit exceeded for this team. Current expenses: ₹${totalCurrentExpenses}, Monthly budget: ₹${team.monthlyBudget || 0}, Credit limit: ₹${team.creditLimit || 0}, Max allowed: ₹${maxAllowed}`
         });
       }
     }

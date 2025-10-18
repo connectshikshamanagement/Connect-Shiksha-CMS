@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Expense = require('../models/Expense');
 const Income = require('../models/Income');
 const Team = require('../models/Team');
@@ -51,6 +52,7 @@ router.get('/team-summary', authorize('finance.read'), async (req, res) => {
         const teamIncome = await Income.aggregate([
           {
             $match: {
+              teamId: team._id,
               date: { $gte: startOfMonth, $lte: endOfMonth }
             }
           },
@@ -255,10 +257,27 @@ router.get('/project-summary', authorize('finance.read'), async (req, res) => {
 // Update team budget
 router.put('/team/:teamId/budget', authorize('finance.update'), async (req, res) => {
   try {
+    const { teamId } = req.params;
     const { monthlyBudget, creditLimit } = req.body;
 
+    // Validate teamId
+    if (!mongoose.Types.ObjectId.isValid(teamId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Team ID'
+      });
+    }
+
+    // Validate budget values
+    if (monthlyBudget < 0 || creditLimit < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Budget values cannot be negative'
+      });
+    }
+
     const team = await Team.findByIdAndUpdate(
-      req.params.teamId,
+      teamId,
       { monthlyBudget, creditLimit },
       { new: true, runValidators: true }
     ).populate('leadUserId', 'name email');

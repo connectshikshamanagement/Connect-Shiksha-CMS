@@ -29,6 +29,11 @@ const clientRoutes = require('./routes/clientRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const financeRoutes = require('./routes/financeRoutes');
+const userHistoryRoutes = require('./routes/userHistoryRoutes');
+const teamBudgetRoutes = require('./routes/teamBudgetRoutes');
+const enhancedTaskRoutes = require('./routes/enhancedTaskRoutes');
+const enhancedExpenseRoutes = require('./routes/enhancedExpenseRoutes');
+const teamPerformanceRoutes = require('./routes/teamPerformanceRoutes');
 const attachmentRoutes = require('./routes/attachmentRoutes');
 
 // Initialize app
@@ -75,6 +80,11 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/users', userHistoryRoutes);
+app.use('/api/teams', teamBudgetRoutes);
+app.use('/api/tasks', enhancedTaskRoutes);
+app.use('/api/expenses', enhancedExpenseRoutes);
+app.use('/api/teams', teamPerformanceRoutes);
 app.use('/api/attachments', attachmentRoutes);
 
 // Health check

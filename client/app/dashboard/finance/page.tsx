@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { incomeAPI, expenseAPI, clientAPI, teamAPI, financeAPI, payrollAPI, reportAPI } from '@/lib/api';
+import { io } from 'socket.io-client';
+import { incomeAPI, expenseAPI, clientAPI, teamAPI, projectAPI, userAPI, financeAPI, payrollAPI, reportAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import Modal from '@/components/Modal';
@@ -17,6 +18,8 @@ import {
 
 export default function FinancePage() {
   const [teams, setTeams] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [users, setUsers] = useState([]);
   const [teamFinancials, setTeamFinancials] = useState([]);
   const [projectFinancials, setProjectFinancials] = useState([]);
   const [payrolls, setPayrolls] = useState([]);
@@ -34,6 +37,15 @@ export default function FinancePage() {
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [selectedTeam, setSelectedTeam] = useState<any>(null);
+  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [socket, setSocket] = useState<any>(null);
+  
+  // Filter states
+  const [filters, setFilters] = useState({
+    teamId: '',
+    projectId: '',
+    memberId: ''
+  });
 
   // Form data
   const [incomeFormData, setIncomeFormData] = useState({
@@ -45,6 +57,9 @@ export default function FinancePage() {
     transactionId: '',
     invoiceNumber: '',
     clientId: '',
+    teamId: '',
+    projectId: '',
+    memberId: '',
   });
 
   const [expenseFormData, setExpenseFormData] = useState({
@@ -57,6 +72,7 @@ export default function FinancePage() {
     billNumber: '',
     teamId: '',
     projectId: '',
+    memberId: '',
   });
 
   const [payrollFormData, setPayrollFormData] = useState({
@@ -74,18 +90,46 @@ export default function FinancePage() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedMonth]);
+  }, [selectedMonth, filters]);
+
+  // Socket.io connection for real-time updates
+  useEffect(() => {
+    const newSocket = io('http://localhost:5000');
+    setSocket(newSocket);
+
+    newSocket.on('finance-update', (data) => {
+      console.log('Finance update received:', data);
+      // Refresh data when finance updates are received
+      fetchData();
+    });
+
+    return () => {
+      newSocket.close();
+    };
+  }, []);
 
   const fetchData = async () => {
     try {
-      const [teamsRes, teamFinancialsRes, projectFinancialsRes, payrollsRes] = await Promise.all([
+      // Build filter parameters
+      const filterParams = {
+        month: selectedMonth,
+        ...(filters.teamId && { teamId: filters.teamId }),
+        ...(filters.projectId && { projectId: filters.projectId }),
+        ...(filters.memberId && { memberId: filters.memberId })
+      };
+
+      const [teamsRes, projectsRes, usersRes, teamFinancialsRes, projectFinancialsRes, payrollsRes] = await Promise.all([
         teamAPI.getAll(),
-        financeAPI.getTeamSummary({ month: selectedMonth }),
-        financeAPI.getProjectSummary({ month: selectedMonth }),
-        payrollAPI.getAll({ month: selectedMonth })
+        projectAPI.getAll(),
+        userAPI.getAll(),
+        financeAPI.getTeamSummary(filterParams),
+        financeAPI.getProjectSummary(filterParams),
+        payrollAPI.getAll(filterParams)
       ]);
       
       if (teamsRes.data.success) setTeams(teamsRes.data.data);
+      if (projectsRes.data.success) setProjects(projectsRes.data.data);
+      if (usersRes.data.success) setUsers(usersRes.data.data);
       if (teamFinancialsRes.data.success) setTeamFinancials(teamFinancialsRes.data.data);
       if (projectFinancialsRes.data.success) setProjectFinancials(projectFinancialsRes.data.data);
       if (payrollsRes.data.success) setPayrolls(payrollsRes.data.data);
@@ -99,19 +143,25 @@ export default function FinancePage() {
   const handleIncomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!incomeFormData.sourceType || incomeFormData.amount <= 0) {
-      showToast.error('Please fill in all required fields');
+    if (!incomeFormData.sourceType || incomeFormData.amount <= 0 || !incomeFormData.teamId || !incomeFormData.memberId) {
+      showToast.error('Please fill in all required fields including team and member selection');
       return;
     }
 
     const loadingToast = showToast.loading(editingItem ? 'Updating income...' : 'Creating income...');
 
     try {
+      // Clean the form data to handle empty clientId
+      const cleanedIncomeData = {
+        ...incomeFormData,
+        clientId: incomeFormData.clientId === '' ? undefined : incomeFormData.clientId
+      };
+
       if (editingItem) {
-        await incomeAPI.update(editingItem._id, incomeFormData);
+        await incomeAPI.update(editingItem._id, cleanedIncomeData);
         showToast.success('Income updated successfully!');
       } else {
-        await incomeAPI.create(incomeFormData);
+        await incomeAPI.create(cleanedIncomeData);
         showToast.success('Income created successfully! Profit-sharing computed automatically.');
       }
       
@@ -119,6 +169,15 @@ export default function FinancePage() {
       setShowIncomeModal(false);
       resetIncomeForm();
       fetchData();
+      
+      // Emit socket event for real-time updates
+      if (socket) {
+        socket.emit('finance-update', { 
+          type: 'income', 
+          teamId: cleanedIncomeData.teamId,
+          projectId: cleanedIncomeData.projectId 
+        });
+      }
     } catch (error: any) {
       showToast.dismiss(loadingToast);
       showToast.error(error.response?.data?.message || 'Operation failed');
@@ -128,8 +187,8 @@ export default function FinancePage() {
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!expenseFormData.category || expenseFormData.amount <= 0 || !expenseFormData.description || !expenseFormData.teamId) {
-      showToast.error('Please fill in all required fields including team selection');
+    if (!expenseFormData.category || expenseFormData.amount <= 0 || !expenseFormData.description || !expenseFormData.teamId || !expenseFormData.memberId) {
+      showToast.error('Please fill in all required fields including team and member selection');
       return;
     }
 
@@ -148,6 +207,15 @@ export default function FinancePage() {
       setShowExpenseModal(false);
       resetExpenseForm();
       fetchData();
+      
+      // Emit socket event for real-time updates
+      if (socket) {
+        socket.emit('finance-update', { 
+          type: 'expense', 
+          teamId: expenseFormData.teamId,
+          projectId: expenseFormData.projectId 
+        });
+      }
     } catch (error: any) {
       showToast.dismiss(loadingToast);
       showToast.error(error.response?.data?.message || 'Operation failed');
@@ -177,6 +245,14 @@ export default function FinancePage() {
       setShowPayrollModal(false);
       resetPayrollForm();
       fetchData();
+      
+      // Emit socket event for real-time updates
+      if (socket) {
+        socket.emit('finance-update', { 
+          type: 'payroll', 
+          teamId: payrollFormData.teamId
+        });
+      }
     } catch (error: any) {
       showToast.dismiss(loadingToast);
       showToast.error(error.response?.data?.message || 'Operation failed');
@@ -185,17 +261,29 @@ export default function FinancePage() {
 
   const handleBudgetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!selectedTeam) return;
+
+    if (!selectedTeam || !selectedTeam._id) {
+      showToast.error('Please select a team first');
+      return;
+    }
 
     const loadingToast = showToast.loading('Updating team budget...');
 
     try {
+      console.log('Updating budget for team:', selectedTeam._id, 'with data:', budgetFormData);
       await financeAPI.updateTeamBudget(selectedTeam._id, budgetFormData);
       showToast.dismiss(loadingToast);
       showToast.success('Team budget updated successfully!');
       setShowBudgetModal(false);
       fetchData();
+      
+      // Emit socket event for real-time updates
+      if (socket) {
+        socket.emit('finance-update', { 
+          type: 'budget', 
+          teamId: selectedTeam._id 
+        });
+      }
     } catch (error: any) {
       showToast.dismiss(loadingToast);
       showToast.error(error.response?.data?.message || 'Operation failed');
@@ -241,6 +329,42 @@ export default function FinancePage() {
     }
   };
 
+  // Helper functions for cascading dropdowns
+  const getProjectsByTeam = (teamId: string) => {
+    return projects.filter((project: any) => project.teamId === teamId);
+  };
+
+  const getUsersByTeam = (teamId: string) => {
+    const team = teams.find((t: any) => t._id === teamId) as any;
+    if (!team) return [];
+    return users.filter((user: any) => team.members.includes(user._id));
+  };
+
+  // Filter handlers
+  const handleFilterChange = (filterType: string, value: string) => {
+    setFilters(prev => {
+      const newFilters = { ...prev, [filterType]: value };
+      
+      // Reset dependent filters when parent filter changes
+      if (filterType === 'teamId') {
+        newFilters.projectId = '';
+        newFilters.memberId = '';
+      } else if (filterType === 'projectId') {
+        newFilters.memberId = '';
+      }
+      
+      return newFilters;
+    });
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      teamId: '',
+      projectId: '',
+      memberId: ''
+    });
+  };
+
   const resetIncomeForm = () => {
     setIncomeFormData({
       sourceType: '',
@@ -251,6 +375,9 @@ export default function FinancePage() {
       transactionId: '',
       invoiceNumber: '',
       clientId: '',
+      teamId: '',
+      projectId: '',
+      memberId: '',
     });
     setEditingItem(null);
   };
@@ -266,6 +393,7 @@ export default function FinancePage() {
       billNumber: '',
       teamId: '',
       projectId: '',
+      memberId: '',
     });
     setEditingItem(null);
   };
@@ -327,11 +455,12 @@ export default function FinancePage() {
         <div className="p-8">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">Financial Management</h2>
+            <h2 className="text-2xl font-bold text-gray-800">Financial Management</h2>
               <p className="mt-1 text-sm text-gray-600">Team-based financial control and reporting</p>
             </div>
             <div className="flex items-center gap-3">
               <FormInput
+                label="Select Month"
                 type="month"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
@@ -345,6 +474,58 @@ export default function FinancePage() {
                 <FiPlus className="mr-2" />
                 Add Expense
               </Button>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="mb-6 rounded-lg bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Filters</h3>
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                Clear Filters
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <FormSelect
+                label="Filter by Team"
+                value={filters.teamId}
+                onChange={(e) => handleFilterChange('teamId', e.target.value)}
+                options={[
+                  { value: '', label: 'All Teams' },
+                  ...teams.map((team: any) => ({
+                    value: team._id,
+                    label: team.name,
+                  }))
+                ]}
+              />
+              
+              <FormSelect
+                label="Filter by Project"
+                value={filters.projectId}
+                onChange={(e) => handleFilterChange('projectId', e.target.value)}
+                options={[
+                  { value: '', label: 'All Projects' },
+                  ...getProjectsByTeam(filters.teamId).map((project: any) => ({
+                    value: project._id,
+                    label: project.title,
+                  }))
+                ]}
+                disabled={!filters.teamId}
+              />
+              
+              <FormSelect
+                label="Filter by Member"
+                value={filters.memberId}
+                onChange={(e) => handleFilterChange('memberId', e.target.value)}
+                options={[
+                  { value: '', label: 'All Members' },
+                  ...getUsersByTeam(filters.teamId).map((user: any) => ({
+                    value: user._id,
+                    label: user.name,
+                  }))
+                ]}
+                disabled={!filters.teamId}
+              />
             </div>
           </div>
 
@@ -394,17 +575,17 @@ export default function FinancePage() {
           {/* Tabs */}
           <div className="mb-6 flex gap-4">
             {['overview', 'teams', 'projects', 'payroll'].map((tab) => (
-              <button
+            <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`rounded-lg px-6 py-3 font-medium transition-colors capitalize ${
                   activeTab === tab 
-                    ? 'bg-primary-600 text-white shadow-md' 
-                    : 'bg-white text-gray-700 shadow hover:bg-gray-50'
-                }`}
-              >
+                  ? 'bg-primary-600 text-white shadow-md' 
+                  : 'bg-white text-gray-700 shadow hover:bg-gray-50'
+              }`}
+            >
                 {tab} {tab === 'teams' && `(${teamFinancials.length})`}
-              </button>
+            </button>
             ))}
           </div>
 
@@ -417,21 +598,21 @@ export default function FinancePage() {
                 <div className="space-y-4">
                   {teamFinancials.map((team: any) => (
                     <div key={team.teamId} className="rounded-lg border p-4">
-                      <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                         <div>
                           <h4 className="font-medium text-gray-900">{team.teamName}</h4>
                           <p className="text-sm text-gray-600">{team.category}</p>
-                        </div>
+                    </div>
                         <div className="text-right">
                           <p className="text-lg font-bold text-gray-900">₹{team.netProfit.toLocaleString()}</p>
                           <p className="text-xs text-gray-500">Net Profit</p>
-                        </div>
-                      </div>
+                  </div>
+                </div>
                       <div className="mt-2 flex justify-between text-sm">
                         <span>Income: ₹{team.totalIncome.toLocaleString()}</span>
                         <span>Expenses: ₹{team.totalExpense.toLocaleString()}</span>
                         <span>Payroll: ₹{team.totalPayroll.toLocaleString()}</span>
-                      </div>
+              </div>
                     </div>
                   ))}
                 </div>
@@ -443,7 +624,7 @@ export default function FinancePage() {
                 <div className="space-y-4">
                   {projectFinancials.slice(0, 5).map((project: any) => (
                     <div key={project.projectId} className="rounded-lg border p-4">
-                      <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between">
                         <div>
                           <h4 className="font-medium text-gray-900">{project.projectName}</h4>
                           <p className="text-sm text-gray-600">{project.category}</p>
@@ -460,11 +641,11 @@ export default function FinancePage() {
                           <FiAlertTriangle className="mr-1" />
                           Budget exceeded by ₹{(project.totalExpense - project.allocatedBudget).toLocaleString()}
                         </div>
-                      )}
-                    </div>
+                          )}
+                        </div>
                   ))}
-                </div>
-              </div>
+                        </div>
+                      </div>
             </div>
           )}
 
@@ -477,17 +658,17 @@ export default function FinancePage() {
                       <h3 className="text-lg font-semibold text-gray-900">{team.teamName}</h3>
                       <p className="text-sm text-primary-600">{team.category}</p>
                       <p className="text-xs text-gray-500">{team.memberCount} members</p>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
                         onClick={() => handleOpenBudgetModal(team)}
                         title="Edit Budget"
-                      >
+                          >
                         <FiEdit />
-                      </Button>
-                      <Button
+                          </Button>
+                      <Button 
                         variant="outline"
                         size="sm"
                         onClick={() => handleGenerateReport(team.teamId, team.teamName)}
@@ -521,15 +702,15 @@ export default function FinancePage() {
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Credit Used:</span>
                         <span className="font-medium text-orange-600">₹{team.creditUsed.toLocaleString()}</span>
-                      </div>
-                    )}
+                  </div>
+                )}
                     <div className="border-t pt-3">
                       <div className="flex justify-between">
                         <span className="text-sm font-semibold text-gray-700">Net Profit:</span>
                         <span className={`font-bold ${team.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           ₹{team.netProfit.toLocaleString()}
                         </span>
-                      </div>
+              </div>
                     </div>
                   </div>
                 </div>
@@ -564,7 +745,7 @@ export default function FinancePage() {
                             'bg-gray-100 text-gray-800'
                           }`}>
                             {project.status}
-                          </span>
+                            </span>
                           {project.budgetExceeded && (
                             <span className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
                               Budget Exceeded
@@ -645,13 +826,13 @@ export default function FinancePage() {
                         </div>
                         <div className="flex gap-1">
                           {payroll.status === 'pending' && (
-                            <Button
-                              variant="success"
-                              size="sm"
+                              <Button
+                                variant="success"
+                                size="sm"
                               onClick={() => handleMarkPayrollPaid(payroll._id, 'bank_transfer', '')}
-                            >
-                              <FiCheck />
-                            </Button>
+                              >
+                                <FiCheck />
+                              </Button>
                           )}
                           <Button variant="outline" size="sm">
                             <FiEdit />
@@ -730,6 +911,49 @@ export default function FinancePage() {
               ]}
             />
 
+            <FormSelect
+              label="Team"
+              required
+              value={incomeFormData.teamId}
+              onChange={(e) => setIncomeFormData({ 
+                ...incomeFormData, 
+                teamId: e.target.value, 
+                projectId: '', 
+                memberId: '' 
+              })}
+              options={teams.map((team: any) => ({
+                value: team._id,
+                label: team.name,
+              }))}
+            />
+
+            <FormSelect
+              label="Project"
+              value={incomeFormData.projectId}
+              onChange={(e) => setIncomeFormData({ ...incomeFormData, projectId: e.target.value })}
+              options={[
+                { value: '', label: 'Select Project (Optional)' },
+                ...getProjectsByTeam(incomeFormData.teamId).map((project: any) => ({
+                  value: project._id,
+                  label: project.title,
+                }))
+              ]}
+            />
+
+            <FormSelect
+              label="Member"
+              required
+              value={incomeFormData.memberId}
+              onChange={(e) => setIncomeFormData({ ...incomeFormData, memberId: e.target.value })}
+              options={[
+                { value: '', label: 'Select Member' },
+                ...getUsersByTeam(incomeFormData.teamId).map((user: any) => ({
+                  value: user._id,
+                  label: user.name,
+                }))
+              ]}
+            />
+
             <FormInput
               label="Transaction ID"
               value={incomeFormData.transactionId}
@@ -797,7 +1021,12 @@ export default function FinancePage() {
               label="Team"
               required
               value={expenseFormData.teamId}
-              onChange={(e) => setExpenseFormData({ ...expenseFormData, teamId: e.target.value })}
+              onChange={(e) => setExpenseFormData({ 
+                ...expenseFormData, 
+                teamId: e.target.value, 
+                projectId: '', 
+                memberId: '' 
+              })}
               options={teams.map((team: any) => ({
                 value: team._id,
                 label: team.name,
@@ -853,6 +1082,33 @@ export default function FinancePage() {
                 { value: 'cheque', label: 'Cheque' },
                 { value: 'card', label: 'Card' },
                 { value: 'other', label: 'Other' },
+              ]}
+            />
+
+            <FormSelect
+              label="Project"
+              value={expenseFormData.projectId}
+              onChange={(e) => setExpenseFormData({ ...expenseFormData, projectId: e.target.value })}
+              options={[
+                { value: '', label: 'Select Project (Optional)' },
+                ...getProjectsByTeam(expenseFormData.teamId).map((project: any) => ({
+                  value: project._id,
+                  label: project.title,
+                }))
+              ]}
+            />
+
+            <FormSelect
+              label="Member"
+              required
+              value={expenseFormData.memberId}
+              onChange={(e) => setExpenseFormData({ ...expenseFormData, memberId: e.target.value })}
+              options={[
+                { value: '', label: 'Select Member' },
+                ...getUsersByTeam(expenseFormData.teamId).map((user: any) => ({
+                  value: user._id,
+                  label: user.name,
+                }))
               ]}
             />
 

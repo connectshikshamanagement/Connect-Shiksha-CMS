@@ -31,10 +31,18 @@ router.get('/', authorize('finance.read'), async (req, res) => {
 // Create income and trigger profit sharing
 router.post('/', authorize('finance.create'), async (req, res) => {
   try {
-    const income = await Income.create({
+    // Clean the request body to handle empty strings
+    const cleanedBody = {
       ...req.body,
       receivedByUserId: req.user.id
-    });
+    };
+
+    // Handle empty clientId - set to undefined if empty string
+    if (cleanedBody.clientId === '' || cleanedBody.clientId === null) {
+      cleanedBody.clientId = undefined;
+    }
+
+    const income = await Income.create(cleanedBody);
 
     // Automatically compute profit sharing
     if (!income.profitShared) {

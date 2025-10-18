@@ -59,7 +59,66 @@ const userSchema = new mongoose.Schema({
     ifscCode: String,
     bankName: String,
     accountHolderName: String
-  }
+  },
+  // History tracking
+  teamHistory: [{
+    teamId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Team'
+    },
+    joinedOn: {
+      type: Date,
+      default: Date.now
+    },
+    leftOn: Date,
+    roleAtThatTime: String,
+    isActive: {
+      type: Boolean,
+      default: true
+    }
+  }],
+  taskHistory: [{
+    taskId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Task'
+    },
+    title: String,
+    status: String,
+    completedOn: Date,
+    assignedOn: Date,
+    teamId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Team'
+    }
+  }],
+  expenseHistory: [{
+    expenseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Expense'
+    },
+    amount: Number,
+    category: String,
+    date: Date,
+    teamId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Team'
+    },
+    status: String
+  }],
+  payrollHistory: [{
+    payrollId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Payroll'
+    },
+    month: String,
+    salaryAmount: Number,
+    status: String,
+    paymentDate: Date,
+    teamId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Team'
+    }
+  }]
 }, {
   timestamps: true
 });

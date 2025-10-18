@@ -48,6 +48,16 @@ const seedData = async () => {
         salary: 100000,
         active: true,
       });
+
+      await User.create({
+        name: 'Nikhil',
+        email: 'nikhil@connectshiksha.com',
+        phone: '9876543211',
+        passwordHash: 'nikhil123', // will be hashed by pre-save middleware
+        roleIds: [innovationRole._id],
+        salary: 80000,
+        active: true,
+      });
      
     
 

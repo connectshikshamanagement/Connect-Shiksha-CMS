@@ -152,3 +152,40 @@ export const reportAPI = {
     api.get(`/reports/team/${teamId}/${month}`, { responseType: 'blob' }),
 };
 
+export const userHistoryAPI = {
+  getUserHistory: (userId: string, params?: any) => api.get(`/users/${userId}/history`, { params }),
+  getUserPerformance: (userId: string, params?: any) => api.get(`/users/${userId}/performance`, { params }),
+};
+
+export const teamBudgetAPI = {
+  getTeamBudget: (teamId: string) => api.get(`/teams/${teamId}/budget`),
+  updateMemberBudget: (teamId: string, memberId: string, data: any) => 
+    api.put(`/teams/${teamId}/member-budget/${memberId}`, data),
+  resetBudgets: (teamId: string) => api.post(`/teams/${teamId}/reset-budgets`),
+  getBudgetStatus: (teamId: string, memberId: string, amount: number) => 
+    api.get(`/teams/${teamId}/member/${memberId}/budget-status`, { params: { amount } }),
+};
+
+export const enhancedTaskAPI = {
+  getTasksByTeam: (teamId: string, params?: any) => api.get(`/tasks/team/${teamId}`, { params }),
+  getTasksByUser: (userId: string, params?: any) => api.get(`/tasks/user/${userId}`, { params }),
+  createTask: (data: any) => api.post('/tasks', data),
+  updateTaskStatus: (taskId: string, status: string) => api.patch(`/tasks/${taskId}/status`, { status }),
+  updateTaskProgress: (taskId: string, progress: number) => api.patch(`/tasks/${taskId}/progress`, { progress }),
+  addTaskComment: (taskId: string, text: string) => api.post(`/tasks/${taskId}/comments`, { text }),
+  getTaskAnalytics: (teamId: string, params?: any) => api.get(`/tasks/analytics/${teamId}`, { params }),
+};
+
+export const enhancedExpenseAPI = {
+  getExpensesByTeam: (teamId: string, params?: any) => api.get(`/expenses/team/${teamId}`, { params }),
+  getExpensesByUser: (userId: string, params?: any) => api.get(`/expenses/user/${userId}`, { params }),
+  createExpense: (data: any) => api.post('/expenses', data),
+  approveExpense: (expenseId: string, status: string) => api.patch(`/expenses/${expenseId}/approve`, { status }),
+  getExpenseAnalytics: (teamId: string, params?: any) => api.get(`/expenses/analytics/${teamId}`, { params }),
+};
+
+export const teamPerformanceAPI = {
+  getTeamSummary: (teamId: string, params?: any) => api.get(`/teams/${teamId}/summary`, { params }),
+  getTeamAnalytics: (teamId: string, params?: any) => api.get(`/teams/${teamId}/analytics`, { params }),
+};
+

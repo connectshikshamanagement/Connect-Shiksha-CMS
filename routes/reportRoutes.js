@@ -103,6 +103,9 @@ router.get('/team/:teamId/:month', authorize('finance.read'), async (req, res) =
     const creditUsed = Math.max(0, totalExpense - team.monthlyBudget);
     const netProfit = totalIncome - totalExpense - totalPayroll;
 
+    // Get member-level breakdown
+    const memberBreakdown = await getMemberBreakdown(team._id, expenses, payrolls, startOfMonth, endOfMonth);
+
     // Create PDF document
     const doc = new PDFDocument({ margin: 50 });
     
@@ -276,6 +279,44 @@ router.get('/team/:teamId/:month', authorize('finance.read'), async (req, res) =
       });
     }
 
+    // Member-level breakdown
+    if (memberBreakdown.length > 0) {
+      if (yPosition > 650) {
+        doc.addPage();
+        yPosition = 50;
+      }
+      
+      doc.fontSize(14)
+         .font('Helvetica-Bold')
+         .text('Member Performance Breakdown', 50, yPosition);
+      
+      yPosition += 30;
+      
+      memberBreakdown.forEach(member => {
+        if (yPosition > 700) {
+          doc.addPage();
+          yPosition = 50;
+        }
+        
+        doc.fontSize(12)
+           .font('Helvetica-Bold')
+           .text(member.name, 50, yPosition);
+        
+        yPosition += 20;
+        
+        doc.fontSize(10)
+           .font('Helvetica')
+           .text(`Budget Used: ₹${member.expenseAmount.toLocaleString()} / ₹${member.budgetLimit.toLocaleString()} (${member.budgetUsage.toFixed(1)}%)`, 50, yPosition)
+           .text(`Payroll: ₹${member.payrollAmount.toLocaleString()} (${member.payrollStatus})`, 250, yPosition);
+        
+        yPosition += 15;
+        
+        doc.text(`Tasks Completed: ${member.tasksCompleted} / ${member.totalTasks} (${member.taskCompletionRate.toFixed(1)}%)`, 50, yPosition);
+        
+        yPosition += 25;
+      });
+    }
+
     // Footer
     const pageHeight = doc.page.height;
     doc.fontSize(10)
@@ -292,5 +333,62 @@ router.get('/team/:teamId/:month', authorize('finance.read'), async (req, res) =
     });
   }
 });
+
+// Helper function to get member breakdown
+async function getMemberBreakdown(teamId, expenses, payrolls, startOfMonth, endOfMonth) {
+  const Task = require('../models/Task');
+  
+  // Get team members
+  const team = await Team.findById(teamId).populate('members', 'name email');
+  
+  const memberBreakdown = await Promise.all(
+    team.members.map(async (member) => {
+      // Calculate member expenses
+      const memberExpenses = expenses.filter(expense => 
+        String(expense.submittedBy._id) === String(member._id)
+      );
+      const expenseAmount = memberExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+      
+      // Get member budget
+      const memberBudget = team.memberBudgets.find(
+        budget => String(budget.memberId) === String(member._id)
+      );
+      const budgetLimit = memberBudget ? memberBudget.monthlyLimit : 0;
+      const budgetUsage = budgetLimit > 0 ? (expenseAmount / budgetLimit) * 100 : 0;
+      
+      // Calculate member payroll
+      const memberPayroll = payrolls.find(payroll => 
+        String(payroll.userId._id) === String(member._id)
+      );
+      const payrollAmount = memberPayroll ? memberPayroll.salaryAmount : 0;
+      const payrollStatus = memberPayroll ? memberPayroll.status : 'N/A';
+      
+      // Calculate member tasks
+      const memberTasks = await Task.find({
+        assignedTo: member._id,
+        createdAt: { $gte: startOfMonth, $lte: endOfMonth }
+      });
+      
+      const totalTasks = memberTasks.length;
+      const tasksCompleted = memberTasks.filter(task => task.status === 'done').length;
+      const taskCompletionRate = totalTasks > 0 ? (tasksCompleted / totalTasks) * 100 : 0;
+      
+      return {
+        name: member.name,
+        email: member.email,
+        expenseAmount,
+        budgetLimit,
+        budgetUsage,
+        payrollAmount,
+        payrollStatus,
+        totalTasks,
+        tasksCompleted,
+        taskCompletionRate
+      };
+    })
+  );
+  
+  return memberBreakdown;
+}
 
 module.exports = router;
