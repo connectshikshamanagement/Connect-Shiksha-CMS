@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { incomeAPI, expenseAPI, clientAPI } from '@/lib/api';
+import { incomeAPI, expenseAPI, clientAPI, teamAPI, financeAPI, payrollAPI, reportAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import Modal from '@/components/Modal';
@@ -9,18 +9,33 @@ import Button from '@/components/Button';
 import FormInput from '@/components/FormInput';
 import FormSelect from '@/components/FormSelect';
 import { showToast } from '@/lib/toast';
-import { FiPlus, FiTrendingUp, FiTrendingDown, FiDollarSign, FiEdit, FiTrash2, FiCheck, FiX } from 'react-icons/fi';
+import { 
+  FiPlus, FiTrendingUp, FiTrendingDown, FiDollarSign, FiEdit, FiTrash2, 
+  FiCheck, FiX, FiUsers, FiFileText, FiDownload, FiAlertTriangle, 
+  FiCreditCard, FiTarget, FiCalendar 
+} from 'react-icons/fi';
 
 export default function FinancePage() {
-  const [income, setIncome] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [clients, setClients] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [teamFinancials, setTeamFinancials] = useState([]);
+  const [projectFinancials, setProjectFinancials] = useState([]);
+  const [payrolls, setPayrolls] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('income');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  // Modal states
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showPayrollModal, setShowPayrollModal] = useState(false);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [selectedTeam, setSelectedTeam] = useState<any>(null);
 
+  // Form data
   const [incomeFormData, setIncomeFormData] = useState({
     sourceType: '',
     amount: 0,
@@ -40,23 +55,40 @@ export default function FinancePage() {
     paymentMethod: 'bank_transfer',
     vendorName: '',
     billNumber: '',
+    teamId: '',
+    projectId: '',
+  });
+
+  const [payrollFormData, setPayrollFormData] = useState({
+    userId: '',
+    teamId: '',
+    month: '',
+    salaryAmount: 0,
+    notes: '',
+  });
+
+  const [budgetFormData, setBudgetFormData] = useState({
+    monthlyBudget: 0,
+    creditLimit: 0,
   });
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedMonth]);
 
   const fetchData = async () => {
     try {
-      const [incomeRes, expenseRes, clientsRes] = await Promise.all([
-        incomeAPI.getAll(),
-        expenseAPI.getAll(),
-        clientAPI.getAll()
+      const [teamsRes, teamFinancialsRes, projectFinancialsRes, payrollsRes] = await Promise.all([
+        teamAPI.getAll(),
+        financeAPI.getTeamSummary({ month: selectedMonth }),
+        financeAPI.getProjectSummary({ month: selectedMonth }),
+        payrollAPI.getAll({ month: selectedMonth })
       ]);
       
-      if (incomeRes.data.success) setIncome(incomeRes.data.data);
-      if (expenseRes.data.success) setExpenses(expenseRes.data.data);
-      if (clientsRes.data.success) setClients(clientsRes.data.data);
+      if (teamsRes.data.success) setTeams(teamsRes.data.data);
+      if (teamFinancialsRes.data.success) setTeamFinancials(teamFinancialsRes.data.data);
+      if (projectFinancialsRes.data.success) setProjectFinancials(projectFinancialsRes.data.data);
+      if (payrollsRes.data.success) setPayrolls(payrollsRes.data.data);
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to fetch data');
     } finally {
@@ -96,8 +128,8 @@ export default function FinancePage() {
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!expenseFormData.category || expenseFormData.amount <= 0 || !expenseFormData.description) {
-      showToast.error('Please fill in all required fields');
+    if (!expenseFormData.category || expenseFormData.amount <= 0 || !expenseFormData.description || !expenseFormData.teamId) {
+      showToast.error('Please fill in all required fields including team selection');
       return;
     }
 
@@ -122,13 +154,28 @@ export default function FinancePage() {
     }
   };
 
-  const handleApproveExpense = async (expenseId: string, status: string) => {
-    const loadingToast = showToast.loading(`${status === 'approved' ? 'Approving' : 'Rejecting'} expense...`);
+  const handlePayrollSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!payrollFormData.userId || !payrollFormData.teamId || !payrollFormData.month || payrollFormData.salaryAmount <= 0) {
+      showToast.error('Please fill in all required fields');
+      return;
+    }
+
+    const loadingToast = showToast.loading(editingItem ? 'Updating payroll...' : 'Creating payroll...');
 
     try {
-      await expenseAPI.approve(expenseId, status);
+      if (editingItem) {
+        await payrollAPI.update(editingItem._id, payrollFormData);
+        showToast.success('Payroll updated successfully!');
+      } else {
+        await payrollAPI.create(payrollFormData);
+        showToast.success('Payroll created successfully!');
+      }
+      
       showToast.dismiss(loadingToast);
-      showToast.success(`Expense ${status} successfully!`);
+      setShowPayrollModal(false);
+      resetPayrollForm();
       fetchData();
     } catch (error: any) {
       showToast.dismiss(loadingToast);
@@ -136,35 +183,61 @@ export default function FinancePage() {
     }
   };
 
-  const handleDeleteIncome = async (incomeId: string) => {
-    if (!confirm('Are you sure you want to delete this income record?')) return;
+  const handleBudgetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedTeam) return;
 
-    const loadingToast = showToast.loading('Deleting income...');
+    const loadingToast = showToast.loading('Updating team budget...');
 
     try {
-      await incomeAPI.delete(incomeId);
+      await financeAPI.updateTeamBudget(selectedTeam._id, budgetFormData);
       showToast.dismiss(loadingToast);
-      showToast.success('Income deleted successfully!');
+      showToast.success('Team budget updated successfully!');
+      setShowBudgetModal(false);
       fetchData();
     } catch (error: any) {
       showToast.dismiss(loadingToast);
-      showToast.error(error.response?.data?.message || 'Delete failed');
+      showToast.error(error.response?.data?.message || 'Operation failed');
     }
   };
 
-  const handleDeleteExpense = async (expenseId: string) => {
-    if (!confirm('Are you sure you want to delete this expense record?')) return;
-
-    const loadingToast = showToast.loading('Deleting expense...');
+  const handleMarkPayrollPaid = async (payrollId: string, paymentMethod: string, transactionId: string) => {
+    const loadingToast = showToast.loading('Marking payroll as paid...');
 
     try {
-      await expenseAPI.delete(expenseId);
+      await payrollAPI.markPaid(payrollId, { paymentMethod, transactionId });
       showToast.dismiss(loadingToast);
-      showToast.success('Expense deleted successfully!');
+      showToast.success('Payroll marked as paid successfully!');
       fetchData();
     } catch (error: any) {
       showToast.dismiss(loadingToast);
-      showToast.error(error.response?.data?.message || 'Delete failed');
+      showToast.error(error.response?.data?.message || 'Operation failed');
+    }
+  };
+
+  const handleGenerateReport = async (teamId: string, teamName: string) => {
+    const loadingToast = showToast.loading('Generating report...');
+
+    try {
+      const response = await reportAPI.getTeamReport(teamId, selectedMonth);
+      
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `team-financial-report-${teamName}-${selectedMonth}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      showToast.dismiss(loadingToast);
+      showToast.success('Report downloaded successfully!');
+    } catch (error: any) {
+      showToast.dismiss(loadingToast);
+      showToast.error(error.response?.data?.message || 'Failed to generate report');
     }
   };
 
@@ -191,13 +264,39 @@ export default function FinancePage() {
       paymentMethod: 'bank_transfer',
       vendorName: '',
       billNumber: '',
+      teamId: '',
+      projectId: '',
     });
     setEditingItem(null);
   };
 
-  const totalIncome = income.reduce((sum: number, i: any) => sum + i.amount, 0);
-  const totalExpenses = expenses.filter((e: any) => e.status === 'approved').reduce((sum: number, e: any) => sum + e.amount, 0);
-  const netProfit = totalIncome - totalExpenses;
+  const resetPayrollForm = () => {
+    setPayrollFormData({
+      userId: '',
+      teamId: '',
+      month: selectedMonth,
+      salaryAmount: 0,
+      notes: '',
+    });
+    setEditingItem(null);
+  };
+
+  const resetBudgetForm = () => {
+    setBudgetFormData({
+      monthlyBudget: 0,
+      creditLimit: 0,
+    });
+    setSelectedTeam(null);
+  };
+
+  const handleOpenBudgetModal = (team: any) => {
+    setSelectedTeam(team);
+    setBudgetFormData({
+      monthlyBudget: team.monthlyBudget || 0,
+      creditLimit: team.creditLimit || 0,
+    });
+    setShowBudgetModal(true);
+  };
 
   if (loading) {
     return (
@@ -213,6 +312,11 @@ export default function FinancePage() {
     );
   }
 
+  const totalIncome = teamFinancials.reduce((sum: number, team: any) => sum + team.totalIncome, 0);
+  const totalExpenses = teamFinancials.reduce((sum: number, team: any) => sum + team.totalExpense, 0);
+  const totalPayroll = teamFinancials.reduce((sum: number, team: any) => sum + team.totalPayroll, 0);
+  const netProfit = totalIncome - totalExpenses - totalPayroll;
+
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
@@ -221,20 +325,36 @@ export default function FinancePage() {
         <Header title="Finance" />
 
         <div className="p-8">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Financial Management</h2>
-            <p className="mt-1 text-sm text-gray-600">Track income, expenses, and profitability</p>
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">Financial Management</h2>
+              <p className="mt-1 text-sm text-gray-600">Team-based financial control and reporting</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <FormInput
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="w-auto"
+              />
+              <Button onClick={() => { resetIncomeForm(); setShowIncomeModal(true); }}>
+                <FiPlus className="mr-2" />
+                Add Income
+              </Button>
+              <Button variant="danger" onClick={() => { resetExpenseForm(); setShowExpenseModal(true); }}>
+                <FiPlus className="mr-2" />
+                Add Expense
+              </Button>
+            </div>
           </div>
 
           {/* Summary Cards */}
-          <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
             <div className="rounded-lg bg-gradient-to-br from-green-500 to-green-600 p-6 text-white shadow-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium opacity-90">Total Income</p>
-                  <p className="mt-2 text-3xl font-bold">
-                    ₹{totalIncome.toLocaleString()}
-                  </p>
+                  <p className="mt-2 text-3xl font-bold">₹{totalIncome.toLocaleString()}</p>
                 </div>
                 <FiTrendingUp className="h-12 w-12 opacity-80" />
               </div>
@@ -244,21 +364,27 @@ export default function FinancePage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium opacity-90">Total Expenses</p>
-                  <p className="mt-2 text-3xl font-bold">
-                    ₹{totalExpenses.toLocaleString()}
-                  </p>
+                  <p className="mt-2 text-3xl font-bold">₹{totalExpenses.toLocaleString()}</p>
                 </div>
                 <FiTrendingDown className="h-12 w-12 opacity-80" />
               </div>
             </div>
 
-            <div className={`rounded-lg bg-gradient-to-br ${netProfit >= 0 ? 'from-blue-500 to-blue-600' : 'from-orange-500 to-orange-600'} p-6 text-white shadow-lg`}>
+            <div className="rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 p-6 text-white shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium opacity-90">Total Payroll</p>
+                  <p className="mt-2 text-3xl font-bold">₹{totalPayroll.toLocaleString()}</p>
+                </div>
+                <FiCreditCard className="h-12 w-12 opacity-80" />
+              </div>
+            </div>
+
+            <div className={`rounded-lg bg-gradient-to-br ${netProfit >= 0 ? 'from-emerald-500 to-emerald-600' : 'from-orange-500 to-orange-600'} p-6 text-white shadow-lg`}>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium opacity-90">Net Profit</p>
-                  <p className="mt-2 text-3xl font-bold">
-                    ₹{netProfit.toLocaleString()}
-                  </p>
+                  <p className="mt-2 text-3xl font-bold">₹{netProfit.toLocaleString()}</p>
                 </div>
                 <FiDollarSign className="h-12 w-12 opacity-80" />
               </div>
@@ -266,166 +392,271 @@ export default function FinancePage() {
           </div>
 
           {/* Tabs */}
-          <div className="mb-4 flex gap-4">
-            <button
-              onClick={() => setActiveTab('income')}
-              className={`rounded-lg px-6 py-3 font-medium transition-colors ${
-                activeTab === 'income' 
-                  ? 'bg-primary-600 text-white shadow-md' 
-                  : 'bg-white text-gray-700 shadow hover:bg-gray-50'
-              }`}
-            >
-              Income ({income.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('expenses')}
-              className={`rounded-lg px-6 py-3 font-medium transition-colors ${
-                activeTab === 'expenses' 
-                  ? 'bg-primary-600 text-white shadow-md' 
-                  : 'bg-white text-gray-700 shadow hover:bg-gray-50'
-              }`}
-            >
-              Expenses ({expenses.length})
-            </button>
+          <div className="mb-6 flex gap-4">
+            {['overview', 'teams', 'projects', 'payroll'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`rounded-lg px-6 py-3 font-medium transition-colors capitalize ${
+                  activeTab === tab 
+                    ? 'bg-primary-600 text-white shadow-md' 
+                    : 'bg-white text-gray-700 shadow hover:bg-gray-50'
+                }`}
+              >
+                {tab} {tab === 'teams' && `(${teamFinancials.length})`}
+              </button>
+            ))}
           </div>
 
           {/* Content */}
-          {activeTab === 'income' && (
-            <div className="rounded-lg bg-white shadow">
-              <div className="border-b p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">Income Records</h3>
-                  <Button onClick={() => { resetIncomeForm(); setShowIncomeModal(true); }}>
-                    <FiPlus className="mr-2" />
-                    Add Income
-                  </Button>
-                </div>
-              </div>
-              <div className="divide-y">
-                {income.map((item: any) => (
-                  <div key={item._id} className="p-4 transition-colors hover:bg-gray-50">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                            {item.sourceType}
-                          </span>
-                          {item.profitShared && (
-                            <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                              Profit Shared
-                            </span>
-                          )}
+          {activeTab === 'overview' && (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Team Performance Overview */}
+              <div className="rounded-lg bg-white p-6 shadow">
+                <h3 className="mb-4 text-lg font-semibold text-gray-900">Team Performance Overview</h3>
+                <div className="space-y-4">
+                  {teamFinancials.map((team: any) => (
+                    <div key={team.teamId} className="rounded-lg border p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-gray-900">{team.teamName}</h4>
+                          <p className="text-sm text-gray-600">{team.category}</p>
                         </div>
-                        <p className="mt-1 font-medium text-gray-900">{item.description || 'No description'}</p>
-                        <div className="mt-2 flex gap-4 text-xs text-gray-500">
-                          <span>{new Date(item.date).toLocaleDateString()}</span>
-                          <span>● {item.paymentMethod}</span>
-                          {item.transactionId && <span>● {item.transactionId}</span>}
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-gray-900">₹{team.netProfit.toLocaleString()}</p>
+                          <p className="text-xs text-gray-500">Net Profit</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-green-600">+₹{item.amount.toLocaleString()}</p>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteIncome(item._id)}
-                          >
-                            <FiTrash2 />
-                          </Button>
-                        </div>
+                      <div className="mt-2 flex justify-between text-sm">
+                        <span>Income: ₹{team.totalIncome.toLocaleString()}</span>
+                        <span>Expenses: ₹{team.totalExpense.toLocaleString()}</span>
+                        <span>Payroll: ₹{team.totalPayroll.toLocaleString()}</span>
                       </div>
                     </div>
-                  </div>
-                ))}
-                {income.length === 0 && (
-                  <div className="p-8 text-center text-gray-500">
-                    <FiTrendingUp className="mx-auto mb-2 h-10 w-10 text-gray-300" />
-                    <p>No income records found</p>
-                    <Button className="mt-4" size="sm" onClick={() => { resetIncomeForm(); setShowIncomeModal(true); }}>
-                      Add Your First Income
-                    </Button>
-                  </div>
-                )}
+                  ))}
+                </div>
+              </div>
+
+              {/* Project Status Overview */}
+              <div className="rounded-lg bg-white p-6 shadow">
+                <h3 className="mb-4 text-lg font-semibold text-gray-900">Project Status Overview</h3>
+                <div className="space-y-4">
+                  {projectFinancials.slice(0, 5).map((project: any) => (
+                    <div key={project.projectId} className="rounded-lg border p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-gray-900">{project.projectName}</h4>
+                          <p className="text-sm text-gray-600">{project.category}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-lg font-bold ${project.budgetExceeded ? 'text-red-600' : 'text-green-600'}`}>
+                            ₹{project.netProfit.toLocaleString()}
+                          </p>
+                          <p className="text-xs text-gray-500">Net Profit</p>
+                        </div>
+                      </div>
+                      {project.budgetExceeded && (
+                        <div className="mt-2 flex items-center text-sm text-red-600">
+                          <FiAlertTriangle className="mr-1" />
+                          Budget exceeded by ₹{(project.totalExpense - project.allocatedBudget).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
 
-          {activeTab === 'expenses' && (
+          {activeTab === 'teams' && (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {teamFinancials.map((team: any) => (
+                <div key={team.teamId} className="rounded-lg bg-white p-6 shadow">
+                  <div className="mb-4 flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900">{team.teamName}</h3>
+                      <p className="text-sm text-primary-600">{team.category}</p>
+                      <p className="text-xs text-gray-500">{team.memberCount} members</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenBudgetModal(team)}
+                        title="Edit Budget"
+                      >
+                        <FiEdit />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleGenerateReport(team.teamId, team.teamName)}
+                        title="Generate Report"
+                      >
+                        <FiDownload />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Monthly Budget:</span>
+                      <span className="font-medium">₹{team.monthlyBudget.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Total Income:</span>
+                      <span className="font-medium text-green-600">₹{team.totalIncome.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Total Expenses:</span>
+                      <span className="font-medium text-red-600">₹{team.totalExpense.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Remaining Budget:</span>
+                      <span className={`font-medium ${team.remainingBudget >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ₹{team.remainingBudget.toLocaleString()}
+                      </span>
+                    </div>
+                    {team.creditUsed > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Credit Used:</span>
+                        <span className="font-medium text-orange-600">₹{team.creditUsed.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="border-t pt-3">
+                      <div className="flex justify-between">
+                        <span className="text-sm font-semibold text-gray-700">Net Profit:</span>
+                        <span className={`font-bold ${team.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          ₹{team.netProfit.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'projects' && (
             <div className="rounded-lg bg-white shadow">
               <div className="border-b p-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">Expense Records</h3>
-                  <Button variant="danger" onClick={() => { resetExpenseForm(); setShowExpenseModal(true); }}>
+                  <h3 className="font-semibold text-gray-900">Project Finances</h3>
+                  <Button onClick={() => { resetPayrollForm(); setShowPayrollModal(true); }}>
                     <FiPlus className="mr-2" />
-                    Add Expense
+                    Add Payroll
                   </Button>
                 </div>
               </div>
               <div className="divide-y">
-                {expenses.map((item: any) => (
-                  <div key={item._id} className="p-4 transition-colors hover:bg-gray-50">
+                {projectFinancials.map((project: any) => (
+                  <div key={project.projectId} className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
-                            {item.category}
+                          <h4 className="font-medium text-gray-900">{project.projectName}</h4>
+                          <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                            {project.category}
                           </span>
-                          {item.status === 'pending' && (
-                            <span className="rounded bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800">
-                              Pending Approval
-                            </span>
-                          )}
-                          {item.status === 'approved' && (
-                            <span className="rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                              Approved
-                            </span>
-                          )}
-                          {item.status === 'rejected' && (
+                          <span className={`rounded px-2 py-1 text-xs font-medium ${
+                            project.status === 'active' ? 'bg-green-100 text-green-800' :
+                            project.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {project.status}
+                          </span>
+                          {project.budgetExceeded && (
                             <span className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
-                              Rejected
+                              Budget Exceeded
                             </span>
                           )}
                         </div>
-                        <p className="mt-1 font-medium text-gray-900">{item.description}</p>
-                        <div className="mt-2 flex gap-4 text-xs text-gray-500">
-                          <span>{new Date(item.date).toLocaleDateString()}</span>
-                          <span>● {item.paymentMethod}</span>
-                          {item.vendorName && <span>● {item.vendorName}</span>}
+                        <div className="mt-2 flex gap-4 text-sm text-gray-500">
+                          <span>Team: {project.teamId?.name || 'N/A'}</span>
+                          <span>Owner: {project.ownerId?.name || 'N/A'}</span>
+                          <span>Progress: {project.progress}%</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="flex gap-4 text-sm">
+                          <div>
+                            <p className="text-gray-500">Allocated Budget</p>
+                            <p className="font-medium">₹{project.allocatedBudget.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Total Income</p>
+                            <p className="font-medium text-green-600">₹{project.totalIncome.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Total Expense</p>
+                            <p className="font-medium text-red-600">₹{project.totalExpense.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Net Profit</p>
+                            <p className={`font-bold ${project.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              ₹{project.netProfit.toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'payroll' && (
+            <div className="rounded-lg bg-white shadow">
+              <div className="border-b p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900">Payroll Management</h3>
+                  <Button onClick={() => { resetPayrollForm(); setShowPayrollModal(true); }}>
+                    <FiPlus className="mr-2" />
+                    Add Payroll
+                  </Button>
+                </div>
+              </div>
+              <div className="divide-y">
+                {payrolls.map((payroll: any) => (
+                  <div key={payroll._id} className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-gray-900">{payroll.userId?.name || 'N/A'}</h4>
+                          <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                            {payroll.teamId?.name || 'N/A'}
+                          </span>
+                          <span className={`rounded px-2 py-1 text-xs font-medium ${
+                            payroll.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {payroll.status}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex gap-4 text-sm text-gray-500">
+                          <span>Month: {payroll.month}</span>
+                          {payroll.paymentDate && <span>Paid: {new Date(payroll.paymentDate).toLocaleDateString()}</span>}
+                          {payroll.transactionId && <span>Transaction: {payroll.transactionId}</span>}
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <p className="text-2xl font-bold text-red-600">-₹{item.amount.toLocaleString()}</p>
+                          <p className="text-2xl font-bold text-gray-900">₹{payroll.salaryAmount.toLocaleString()}</p>
                         </div>
                         <div className="flex gap-1">
-                          {item.status === 'pending' && (
-                            <>
-                              <Button
-                                variant="success"
-                                size="sm"
-                                onClick={() => handleApproveExpense(item._id, 'approved')}
-                                title="Approve"
-                              >
-                                <FiCheck />
-                              </Button>
-                              <Button
-                                variant="danger"
-                                size="sm"
-                                onClick={() => handleApproveExpense(item._id, 'rejected')}
-                                title="Reject"
-                              >
-                                <FiX />
-                              </Button>
-                            </>
+                          {payroll.status === 'pending' && (
+                            <Button
+                              variant="success"
+                              size="sm"
+                              onClick={() => handleMarkPayrollPaid(payroll._id, 'bank_transfer', '')}
+                            >
+                              <FiCheck />
+                            </Button>
                           )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteExpense(item._id)}
-                          >
+                          <Button variant="outline" size="sm">
+                            <FiEdit />
+                          </Button>
+                          <Button variant="danger" size="sm">
                             <FiTrash2 />
                           </Button>
                         </div>
@@ -433,15 +664,6 @@ export default function FinancePage() {
                     </div>
                   </div>
                 ))}
-                {expenses.length === 0 && (
-                  <div className="p-8 text-center text-gray-500">
-                    <FiTrendingDown className="mx-auto mb-2 h-10 w-10 text-gray-300" />
-                    <p>No expense records found</p>
-                    <Button className="mt-4" variant="danger" size="sm" onClick={() => { resetExpenseForm(); setShowExpenseModal(true); }}>
-                      Add Your First Expense
-                    </Button>
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -466,11 +688,11 @@ export default function FinancePage() {
               value={incomeFormData.sourceType}
               onChange={(e) => setIncomeFormData({ ...incomeFormData, sourceType: e.target.value })}
               options={[
-                { value: 'Coaching', label: 'Coaching (₹50k/batch)' },
-                { value: 'Paid Workshops', label: 'Paid Workshops (₹1.5L/2 months)' },
-                { value: 'Guest Lectures', label: 'Guest Lectures (₹50k/month)' },
-                { value: 'Product Sales', label: 'Product Sales (₹2.5k/product)' },
-                { value: 'Online Courses', label: 'Online Courses (₹40k/2 months)' },
+                { value: 'Coaching', label: 'Coaching' },
+                { value: 'Paid Workshops', label: 'Paid Workshops' },
+                { value: 'Guest Lectures', label: 'Guest Lectures' },
+                { value: 'Product Sales', label: 'Product Sales' },
+                { value: 'Online Courses', label: 'Online Courses' },
                 { value: 'Other', label: 'Other' },
               ]}
             />
@@ -522,16 +744,6 @@ export default function FinancePage() {
               placeholder="Optional"
             />
 
-            <FormSelect
-              label="Client"
-              value={incomeFormData.clientId}
-              onChange={(e) => setIncomeFormData({ ...incomeFormData, clientId: e.target.value })}
-              options={clients.map((client: any) => ({
-                value: client._id,
-                label: client.name,
-              }))}
-            />
-
             <div className="col-span-2">
               <label className="mb-1 block text-sm font-medium text-gray-700">
                 Description <span className="text-red-500">*</span>
@@ -581,6 +793,17 @@ export default function FinancePage() {
       >
         <form onSubmit={handleExpenseSubmit}>
           <div className="grid grid-cols-2 gap-4">
+            <FormSelect
+              label="Team"
+              required
+              value={expenseFormData.teamId}
+              onChange={(e) => setExpenseFormData({ ...expenseFormData, teamId: e.target.value })}
+              options={teams.map((team: any) => ({
+                value: team._id,
+                label: team.name,
+              }))}
+            />
+
             <FormSelect
               label="Expense Category"
               required
@@ -662,7 +885,7 @@ export default function FinancePage() {
             </div>
 
             <div className="col-span-2 rounded bg-yellow-50 p-3 text-sm text-yellow-800">
-              <strong>Note:</strong> Expense will be in "Pending" status until approved by an authorized user.
+              <strong>Note:</strong> Expense will be validated against team budget limits and require approval.
             </div>
           </div>
 
@@ -679,6 +902,149 @@ export default function FinancePage() {
             </Button>
             <Button type="submit" variant="danger">
               {editingItem ? 'Update Expense' : 'Submit Expense'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Payroll Modal */}
+      <Modal
+        isOpen={showPayrollModal}
+        onClose={() => {
+          setShowPayrollModal(false);
+          resetPayrollForm();
+        }}
+        title={editingItem ? 'Edit Payroll' : 'Add New Payroll'}
+        size="lg"
+      >
+        <form onSubmit={handlePayrollSubmit}>
+          <div className="grid grid-cols-2 gap-4">
+            <FormSelect
+              label="Team"
+              required
+              value={payrollFormData.teamId}
+              onChange={(e) => setPayrollFormData({ ...payrollFormData, teamId: e.target.value })}
+              options={teams.map((team: any) => ({
+                value: team._id,
+                label: team.name,
+              }))}
+            />
+
+            <FormSelect
+              label="Member"
+              required
+              value={payrollFormData.userId}
+              onChange={(e) => setPayrollFormData({ ...payrollFormData, userId: e.target.value })}
+              options={teams
+                .filter((team: any) => team._id === payrollFormData.teamId)
+                .flatMap((team: any) => 
+                  team.members?.map((member: any) => ({
+                    value: member._id,
+                    label: member.name,
+                  })) || []
+                )}
+            />
+
+            <FormInput
+              label="Month"
+              type="month"
+              required
+              value={payrollFormData.month}
+              onChange={(e) => setPayrollFormData({ ...payrollFormData, month: e.target.value })}
+            />
+
+            <FormInput
+              label="Salary Amount (₹)"
+              type="number"
+              required
+              min="0"
+              value={payrollFormData.salaryAmount}
+              onChange={(e) => setPayrollFormData({ ...payrollFormData, salaryAmount: Number(e.target.value) })}
+              placeholder="0"
+            />
+
+            <div className="col-span-2">
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Notes
+              </label>
+              <textarea
+                value={payrollFormData.notes}
+                onChange={(e) => setPayrollFormData({ ...payrollFormData, notes: e.target.value })}
+                rows={2}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder="Optional notes about this payroll..."
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowPayrollModal(false);
+                resetPayrollForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              {editingItem ? 'Update Payroll' : 'Create Payroll'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Budget Modal */}
+      <Modal
+        isOpen={showBudgetModal}
+        onClose={() => {
+          setShowBudgetModal(false);
+          resetBudgetForm();
+        }}
+        title={`Edit Budget - ${selectedTeam?.name || ''}`}
+        size="md"
+      >
+        <form onSubmit={handleBudgetSubmit}>
+          <div className="space-y-4">
+            <FormInput
+              label="Monthly Budget (₹)"
+              type="number"
+              required
+              min="0"
+              value={budgetFormData.monthlyBudget}
+              onChange={(e) => setBudgetFormData({ ...budgetFormData, monthlyBudget: Number(e.target.value) })}
+              placeholder="0"
+            />
+
+            <FormInput
+              label="Credit Limit (₹)"
+              type="number"
+              required
+              min="0"
+              value={budgetFormData.creditLimit}
+              onChange={(e) => setBudgetFormData({ ...budgetFormData, creditLimit: Number(e.target.value) })}
+              placeholder="0"
+            />
+
+            <div className="rounded bg-blue-50 p-3 text-sm text-blue-800">
+              <strong>Note:</strong> Credit limit allows teams to exceed their monthly budget up to this amount.
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowBudgetModal(false);
+                resetBudgetForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              Update Budget
             </Button>
           </div>
         </form>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { teamAPI, userAPI } from '@/lib/api';
+import { teamAPI, userAPI, roleAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import Modal from '@/components/Modal';
@@ -14,6 +14,7 @@ import { FiEdit, FiTrash2, FiUsers, FiPlus } from 'react-icons/fi';
 export default function TeamsPage() {
   const [teams, setTeams] = useState([]);
   const [users, setUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingTeam, setEditingTeam] = useState<any>(null);
@@ -24,6 +25,16 @@ export default function TeamsPage() {
     members: [] as string[],
     category: '',
   });
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [newMember, setNewMember] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    roleId: '',
+    teamId: '',
+  });
+  const [creatingMember, setCreatingMember] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -31,13 +42,15 @@ export default function TeamsPage() {
 
   const fetchData = async () => {
     try {
-      const [teamsRes, usersRes] = await Promise.all([
+      const [teamsRes, usersRes, rolesRes] = await Promise.all([
         teamAPI.getAll(),
-        userAPI.getAll()
+        userAPI.getAll(),
+        roleAPI.getAll(),
       ]);
       
       if (teamsRes.data.success) setTeams(teamsRes.data.data);
       if (usersRes.data.success) setUsers(usersRes.data.data);
+      if (rolesRes.data.success) setRoles(rolesRes.data.data);
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to fetch data');
     } finally {
@@ -111,6 +124,8 @@ export default function TeamsPage() {
       category: '',
     });
     setEditingTeam(null);
+    setShowAddMember(false);
+    setNewMember({ name: '', email: '', phone: '', password: '', roleId: '', teamId: '' });
   };
 
   const handleOpenModal = () => {
@@ -280,11 +295,134 @@ export default function TeamsPage() {
             >
               {users.map((user: any) => (
                 <option key={user._id} value={user._id}>
-                  {user.name} - {user.email}
+                  {user.name}
                 </option>
               ))}
             </select>
             <p className="mt-1 text-xs text-gray-500">Hold Ctrl/Cmd to select multiple members</p>
+
+            <div className="mt-3">
+              <button
+                type="button"
+                className="text-sm text-primary-600 hover:underline"
+                onClick={() => setShowAddMember(!showAddMember)}
+              >
+                {showAddMember ? 'Hide quick add' : 'Quick add new member'}
+              </button>
+            </div>
+
+            {showAddMember && (
+              <div className="mt-3 rounded-lg border border-gray-200 p-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    label="Name"
+                    value={newMember.name}
+                    onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                    placeholder="Full name"
+                  />
+                  <FormInput
+                    label="Email"
+                    type="email"
+                    value={newMember.email}
+                    onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                    placeholder="email@example.com"
+                  />
+                  <FormInput
+                    label="Phone"
+                    value={newMember.phone}
+                    onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
+                    placeholder="10-digit phone"
+                  />
+                  <FormInput
+                    label="Temp Password"
+                    type="password"
+                    value={newMember.password}
+                    onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
+                    placeholder="min 6 chars"
+                  />
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Role</label>
+                    <select
+                      value={newMember.roleId}
+                      onChange={(e) => setNewMember({ ...newMember, roleId: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      <option value="">Select role</option>
+                      {roles.map((role: any) => (
+                        <option key={role._id} value={role._id}>{role.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Assign to Team</label>
+                    <select
+                      value={newMember.teamId}
+                      onChange={(e) => setNewMember({ ...newMember, teamId: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      <option value="">Select team (optional)</option>
+                      {teams.map((t: any) => (
+                        <option key={t._id} value={t._id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={async () => {
+                      if (!newMember.name || !newMember.email || !newMember.phone || !newMember.password || !newMember.roleId) {
+                        showToast.error('Fill name, email, phone, password, role');
+                        return;
+                      }
+                      if (!/^\d{10}$/.test(newMember.phone)) {
+                        showToast.error('Phone must be 10 digits');
+                        return;
+                      }
+                      setCreatingMember(true);
+                      try {
+                        const res = await userAPI.create({
+                          name: newMember.name,
+                          email: newMember.email,
+                          phone: newMember.phone,
+                          password: newMember.password,
+                          roleIds: [newMember.roleId],
+                        });
+                        if (res.data?.success) {
+                          // Refresh users and select the newly created member
+                          const usersRes = await userAPI.getAll();
+                          if (usersRes.data.success) {
+                            setUsers(usersRes.data.data);
+                            const newId = res.data.data._id;
+                            setFormData((prev) => ({ ...prev, members: Array.from(new Set([...(prev.members || []), newId])) }));
+                            // Optionally assign to a team via Teams update if different from current editing team
+                            if (newMember.teamId && (!editingTeam || newMember.teamId !== editingTeam._id)) {
+                              const targetTeam = teams.find((t: any) => t._id === newMember.teamId) as any;
+                              if (targetTeam) {
+                                const existingMembers = (targetTeam.members || [])
+                                  .map((m: any) => (typeof m === 'string' ? m : m._id));
+                                await teamAPI.update(targetTeam._id, { members: Array.from(new Set([...existingMembers, newId])) });
+                              }
+                            }
+                            showToast.success('Member created and added');
+                            setShowAddMember(false);
+                            setNewMember({ name: '', email: '', phone: '', password: '', roleId: '', teamId: '' });
+                          }
+                        }
+                      } catch (err: any) {
+                        showToast.error(err.response?.data?.message || 'Failed to create member');
+                      } finally {
+                        setCreatingMember(false);
+                      }
+                    }}
+                    disabled={creatingMember}
+                  >
+                    {creatingMember ? 'Adding...' : 'Add Member'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mb-4">

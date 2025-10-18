@@ -20,6 +20,11 @@ const expenseSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project'
   },
+  teamId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Team',
+    required: true
+  },
   description: {
     type: String,
     required: [true, 'Please provide a description']
@@ -34,6 +39,11 @@ const expenseSchema = new mongoose.Schema({
   },
   billNumber: {
     type: String
+  },
+  // Business unit for role-based scoping (e.g., Coaching, IOT, Robotics, Media)
+  businessUnit: {
+    type: String,
+    enum: ['Coaching', 'IOT', 'Robotics', 'Media', 'Workshop', 'GuestLectures', 'Other'],
   },
   submittedBy: {
     type: mongoose.Schema.Types.ObjectId,

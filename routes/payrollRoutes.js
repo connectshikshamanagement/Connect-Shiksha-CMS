@@ -1,50 +1,33 @@
 const express = require('express');
-const Payout = require('../models/Payout');
+const Payroll = require('../models/Payroll');
 const User = require('../models/User');
+const Team = require('../models/Team');
 const { protect, authorize } = require('../middleware/auth');
-const ExcelJS = require('exceljs');
-const PDFDocument = require('pdfkit');
 
 const router = express.Router();
 
 router.use(protect);
-router.use(authorize('payroll.read'));
 
-// Run payroll for a specific month/year
-router.get('/run', async (req, res) => {
+// Get all payroll records
+router.get('/', authorize('finance.read'), async (req, res) => {
   try {
-    const { month, year } = req.query;
+    const { month, teamId, status } = req.query;
     
-    if (!month || !year) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide month and year'
-      });
-    }
+    let query = {};
+    if (month) query.month = month;
+    if (teamId) query.teamId = teamId;
+    if (status) query.status = status;
 
-    const payouts = await Payout.find({
-      month: parseInt(month),
-      year: parseInt(year)
-    })
-      .populate('userId')
-      .sort('userId.name');
-
-    // Calculate summary
-    const summary = {
-      totalEmployees: payouts.length,
-      totalBaseSalary: payouts.reduce((sum, p) => sum + p.baseSalary, 0),
-      totalShares: payouts.reduce((sum, p) => sum + p.totalShares, 0),
-      totalBonuses: payouts.reduce((sum, p) => sum + p.bonuses, 0),
-      totalDeductions: payouts.reduce((sum, p) => sum + p.deductions, 0),
-      totalPayout: payouts.reduce((sum, p) => sum + p.netAmount, 0)
-    };
+    const payrolls = await Payroll.find(query)
+      .populate('userId', 'name email')
+      .populate('teamId', 'name category')
+      .populate('createdBy', 'name email')
+      .sort('-createdAt');
 
     res.status(200).json({
       success: true,
-      month: parseInt(month),
-      year: parseInt(year),
-      summary,
-      data: payouts
+      count: payrolls.length,
+      data: payrolls
     });
   } catch (error) {
     res.status(500).json({
@@ -54,76 +37,49 @@ router.get('/run', async (req, res) => {
   }
 });
 
-// Export payroll to Excel
-router.get('/export/excel', async (req, res) => {
+// Get team-wise payroll summary
+router.get('/summary/:month', authorize('finance.read'), async (req, res) => {
   try {
-    const { month, year } = req.query;
+    const { month } = req.params;
     
-    if (!month || !year) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide month and year'
-      });
-    }
+    const summary = await Payroll.aggregate([
+      {
+        $match: { month }
+      },
+      {
+        $group: {
+          _id: '$teamId',
+          totalAmount: { $sum: '$salaryAmount' },
+          pendingAmount: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'pending'] }, '$salaryAmount', 0]
+            }
+          },
+          paidAmount: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'paid'] }, '$salaryAmount', 0]
+            }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $lookup: {
+          from: 'teams',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'team'
+        }
+      },
+      {
+        $unwind: '$team'
+      }
+    ]);
 
-    const payouts = await Payout.find({
-      month: parseInt(month),
-      year: parseInt(year)
-    })
-      .populate('userId')
-      .sort('userId.name');
-
-    // Create Excel workbook
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet(`Payroll ${month}-${year}`);
-
-    // Add headers
-    worksheet.columns = [
-      { header: 'Employee Name', key: 'name', width: 30 },
-      { header: 'Employee ID', key: 'id', width: 20 },
-      { header: 'Base Salary', key: 'baseSalary', width: 15 },
-      { header: 'Profit Shares', key: 'shares', width: 15 },
-      { header: 'Bonuses', key: 'bonuses', width: 15 },
-      { header: 'Deductions', key: 'deductions', width: 15 },
-      { header: 'Net Amount', key: 'netAmount', width: 15 },
-      { header: 'Status', key: 'status', width: 15 }
-    ];
-
-    // Add data
-    payouts.forEach(payout => {
-      worksheet.addRow({
-        name: payout.userId.name,
-        id: payout.userId._id,
-        baseSalary: payout.baseSalary,
-        shares: payout.totalShares,
-        bonuses: payout.bonuses,
-        deductions: payout.deductions,
-        netAmount: payout.netAmount,
-        status: payout.status
-      });
+    res.status(200).json({
+      success: true,
+      data: summary
     });
-
-    // Style header row
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF366092' }
-    };
-
-    // Set response headers
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename=payroll-${month}-${year}.xlsx`
-    );
-
-    // Write to response
-    await workbook.xlsx.write(res);
-    res.end();
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -132,74 +88,145 @@ router.get('/export/excel', async (req, res) => {
   }
 });
 
-// Export payroll to PDF
-router.get('/export/pdf', async (req, res) => {
+// Create payroll record
+router.post('/', authorize('finance.create'), async (req, res) => {
   try {
-    const { month, year } = req.query;
-    
-    if (!month || !year) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide month and year'
+    const { userId, teamId, month, salaryAmount, notes } = req.body;
+
+    // Check if user exists and is in the team
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return res.status(404).json({ success: false, message: 'Team not found' });
+    }
+
+    // Check if user is in the team
+    if (!team.members.includes(userId)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User is not a member of the specified team' 
       });
     }
 
-    const payouts = await Payout.find({
-      month: parseInt(month),
-      year: parseInt(year)
-    })
-      .populate('userId')
-      .sort('userId.name');
-
-    // Create PDF document
-    const doc = new PDFDocument({ margin: 50 });
-
-    // Set response headers
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename=payroll-${month}-${year}.pdf`
-    );
-
-    // Pipe PDF to response
-    doc.pipe(res);
-
-    // Add content
-    doc.fontSize(20).text('Connect Shiksha - Payroll Report', { align: 'center' });
-    doc.fontSize(12).text(`Month: ${month}/${year}`, { align: 'center' });
-    doc.moveDown();
-
-    // Table headers
-    const tableTop = 150;
-    doc.fontSize(10).font('Helvetica-Bold');
-    doc.text('Employee', 50, tableTop);
-    doc.text('Base Salary', 200, tableTop);
-    doc.text('Shares', 280, tableTop);
-    doc.text('Bonuses', 340, tableTop);
-    doc.text('Deductions', 400, tableTop);
-    doc.text('Net Amount', 480, tableTop);
-
-    // Table rows
-    doc.font('Helvetica');
-    let y = tableTop + 20;
-    payouts.forEach(payout => {
-      doc.text(payout.userId.name.substring(0, 20), 50, y);
-      doc.text(`₹${payout.baseSalary}`, 200, y);
-      doc.text(`₹${payout.totalShares}`, 280, y);
-      doc.text(`₹${payout.bonuses}`, 340, y);
-      doc.text(`₹${payout.deductions}`, 400, y);
-      doc.text(`₹${payout.netAmount}`, 480, y);
-      y += 20;
+    const payroll = await Payroll.create({
+      userId,
+      teamId,
+      month,
+      salaryAmount,
+      notes,
+      createdBy: req.user.id
     });
 
-    // Calculate total
-    const total = payouts.reduce((sum, p) => sum + p.netAmount, 0);
-    doc.moveDown();
-    doc.font('Helvetica-Bold');
-    doc.text(`Total Payout: ₹${total}`, 50, y + 20);
+    const populatedPayroll = await Payroll.findById(payroll._id)
+      .populate('userId', 'name email')
+      .populate('teamId', 'name category')
+      .populate('createdBy', 'name email');
 
-    // Finalize PDF
-    doc.end();
+    res.status(201).json({
+      success: true,
+      data: populatedPayroll
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payroll record already exists for this user and month'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// Update payroll record
+router.put('/:id', authorize('finance.update'), async (req, res) => {
+  try {
+    const payroll = await Payroll.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    ).populate('userId', 'name email')
+     .populate('teamId', 'name category')
+     .populate('createdBy', 'name email');
+
+    if (!payroll) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payroll record not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: payroll
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// Mark payroll as paid
+router.patch('/:id/pay', authorize('finance.update'), async (req, res) => {
+  try {
+    const { paymentMethod, transactionId } = req.body;
+
+    const payroll = await Payroll.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: 'paid',
+        paymentDate: new Date(),
+        paymentMethod: paymentMethod || 'bank_transfer',
+        transactionId
+      },
+      { new: true, runValidators: true }
+    ).populate('userId', 'name email')
+     .populate('teamId', 'name category')
+     .populate('createdBy', 'name email');
+
+    if (!payroll) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payroll record not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: payroll
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// Delete payroll record
+router.delete('/:id', authorize('finance.delete'), async (req, res) => {
+  try {
+    const payroll = await Payroll.findByIdAndDelete(req.params.id);
+
+    if (!payroll) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payroll record not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {}
+    });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -209,4 +236,3 @@ router.get('/export/pdf', async (req, res) => {
 });
 
 module.exports = router;
-

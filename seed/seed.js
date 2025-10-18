@@ -8,6 +8,7 @@ dotenv.config();
 const User = require('../models/User');
 const Role = require('../models/Role');
 const Product = require('../models/Product');
+const Team = require('../models/Team');
 
 mongoose
   .connect(process.env.MONGODB_URI)
@@ -33,6 +34,10 @@ const seedData = async () => {
     // ---- USERS ----
     if (await User.countDocuments() === 0) {
       const founderRole = await Role.findOne({ key: 'FOUNDER' });
+      const innovationRole = await Role.findOne({ key: 'INNOVATION_LEAD' });
+      const coachingRole = await Role.findOne({ key: 'COACHING_MANAGER' });
+      const mediaRole = await Role.findOne({ key: 'MEDIA_MANAGER' });
+      const mentorRole = await Role.findOne({ key: 'MENTOR' });
 
       await User.create({
         name: 'Founder',
@@ -43,6 +48,8 @@ const seedData = async () => {
         salary: 100000,
         active: true,
       });
+     
+    
 
       console.log('✅ Users seeded');
     } else {
@@ -80,6 +87,47 @@ const seedData = async () => {
       console.log('✅ Products seeded');
     } else {
       console.log('ℹ️ Products already exist, skipping');
+    }
+
+    // ---- TEAMS WITH BUDGETS ----
+    if (await Team.countDocuments() === 0) {
+      const founder = await User.findOne({ email: 'founder@connectshiksha.com' });
+      
+      await Team.insertMany([
+        {
+          name: 'Coaching Center Team',
+          description: 'Responsible for coaching and training activities',
+          leadUserId: founder._id,
+          category: 'Coaching Center',
+          monthlyBudget: 50000,
+          creditLimit: 10000,
+          members: [founder._id],
+          active: true,
+        },
+        {
+          name: 'Innovation Team',
+          description: 'Handles innovation projects and R&D',
+          leadUserId: founder._id,
+          category: 'Funding & Innovation',
+          monthlyBudget: 75000,
+          creditLimit: 15000,
+          members: [founder._id],
+          active: true,
+        },
+        {
+          name: 'Media & Content Team',
+          description: 'Creates and manages media content',
+          leadUserId: founder._id,
+          category: 'Media & Content',
+          monthlyBudget: 30000,
+          creditLimit: 5000,
+          members: [founder._id],
+          active: true,
+        },
+      ]);
+      console.log('✅ Teams with budgets seeded');
+    } else {
+      console.log('ℹ️ Teams already exist, skipping');
     }
 
     console.log('\n🎉 Safe seed done!');

@@ -110,6 +110,13 @@ export const teamAPI = {
   delete: (id: string) => api.delete(`/teams/${id}`),
 };
 
+export const roleAPI = {
+  getAll: () => api.get('/roles'),
+  create: (data: any) => api.post('/roles', data),
+  update: (id: string, data: any) => api.put(`/roles/${id}`, data),
+  delete: (id: string) => api.delete(`/roles/${id}`),
+};
+
 export const productAPI = {
   getAll: () => api.get('/products'),
   create: (data: any) => api.post('/products', data),
@@ -122,5 +129,26 @@ export const salesAPI = {
   create: (data: any) => api.post('/sales', data),
   update: (id: string, data: any) => api.put(`/sales/${id}`, data),
   delete: (id: string) => api.delete(`/sales/${id}`),
+};
+
+export const payrollAPI = {
+  getAll: (params?: any) => api.get('/payroll', { params }),
+  getSummary: (month: string) => api.get(`/payroll/summary/${month}`),
+  create: (data: any) => api.post('/payroll', data),
+  update: (id: string, data: any) => api.put(`/payroll/${id}`, data),
+  markPaid: (id: string, data: any) => api.patch(`/payroll/${id}/pay`, data),
+  delete: (id: string) => api.delete(`/payroll/${id}`),
+};
+
+export const financeAPI = {
+  getTeamSummary: (params?: any) => api.get('/finance/team-summary', { params }),
+  getProjectSummary: (params?: any) => api.get('/finance/project-summary', { params }),
+  updateTeamBudget: (teamId: string, data: any) => api.put(`/finance/team/${teamId}/budget`, data),
+  resetBudgets: (month: string) => api.post('/finance/reset-budgets', { month }),
+};
+
+export const reportAPI = {
+  getTeamReport: (teamId: string, month: string) => 
+    api.get(`/reports/team/${teamId}/${month}`, { responseType: 'blob' }),
 };
 

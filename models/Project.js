@@ -34,6 +34,26 @@ const projectSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  allocatedBudget: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  totalIncome: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  totalExpense: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  investmentAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   startDate: {
     type: Date,
     default: Date.now

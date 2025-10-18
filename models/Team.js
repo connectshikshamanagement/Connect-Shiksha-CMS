@@ -27,6 +27,26 @@ const teamSchema = new mongoose.Schema({
   active: {
     type: Boolean,
     default: true
+  },
+  // Financial controls
+  monthlyBudget: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  creditLimit: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  // Auto-calculated fields (virtual)
+  currentExpense: {
+    type: Number,
+    default: 0
+  },
+  remainingBudget: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

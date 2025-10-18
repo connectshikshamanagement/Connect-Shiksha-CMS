@@ -28,6 +28,7 @@ const payrollRoutes = require('./routes/payrollRoutes');
 const clientRoutes = require('./routes/clientRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const financeRoutes = require('./routes/financeRoutes');
 const attachmentRoutes = require('./routes/attachmentRoutes');
 
 // Initialize app
@@ -73,6 +74,7 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/finance', financeRoutes);
 app.use('/api/attachments', attachmentRoutes);
 
 // Health check

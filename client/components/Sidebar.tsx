@@ -13,29 +13,37 @@ import {
   FiSettings,
   FiLogOut,
 } from 'react-icons/fi';
+import usePermissions from '@/hooks/usePermissions';
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: FiHome },
-  { name: 'Teams', href: '/dashboard/teams', icon: FiUsers },
-  { name: 'Projects', href: '/dashboard/projects', icon: FiFolder },
-  { name: 'Tasks', href: '/dashboard/tasks', icon: FiCheckSquare },
-  { name: 'Clients', href: '/dashboard/clients', icon: FiUsers },
-  { name: 'Finance', href: '/dashboard/finance', icon: FiDollarSign },
-  { name: 'Products', href: '/dashboard/products', icon: FiShoppingBag },
-  { name: 'Sales', href: '/dashboard/sales', icon: FiShoppingBag },
-  { name: 'Payroll', href: '/dashboard/payroll', icon: FiDollarSign },
-  { name: 'Reports', href: '/dashboard/reports', icon: FiFileText },
-  { name: 'Settings', href: '/dashboard/settings', icon: FiSettings },
+  { name: 'Dashboard', href: '/dashboard', icon: FiHome, permission: null },
+  { name: 'Teams', href: '/dashboard/teams', icon: FiUsers, permission: 'teams.read' },
+  { name: 'Projects', href: '/dashboard/projects', icon: FiFolder, permission: 'projects.read' },
+  { name: 'Tasks', href: '/dashboard/tasks', icon: FiCheckSquare, permission: 'tasks.read' },
+  { name: 'Clients', href: '/dashboard/clients', icon: FiUsers, permission: 'clients.read' },
+  { name: 'Finance', href: '/dashboard/finance', icon: FiDollarSign, permission: 'finance.read' },
+  { name: 'Products', href: '/dashboard/products', icon: FiShoppingBag, permission: 'finance.read' },
+  { name: 'Sales', href: '/dashboard/sales', icon: FiShoppingBag, permission: 'finance.read' },
+  { name: 'Payroll', href: '/dashboard/payroll', icon: FiDollarSign, permission: 'payroll.read' },
+  { name: 'Reports', href: '/dashboard/reports', icon: FiFileText, permission: 'reports.read' },
+  { name: 'Settings', href: '/dashboard/settings', icon: FiSettings, permission: 'users.read' },
+  { name: 'Add Members', href: '/dashboard/founder/members', icon: FiUsers, permission: 'users.create' },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { hasPermission } = usePermissions();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/login';
   };
+
+  // Filter navigation based on permissions
+  const filteredNavigation = navigation.filter(item => 
+    !item.permission || hasPermission(item.permission)
+  );
 
   return (
     <div className="flex w-64 flex-col bg-primary-800 text-white">
@@ -44,7 +52,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 px-2 py-4">
-        {navigation.map((item) => {
+        {filteredNavigation.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
