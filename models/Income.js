@@ -29,6 +29,11 @@ const incomeSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  teamId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Team',
+    required: true
+  },
   description: {
     type: String
   },

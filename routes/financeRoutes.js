@@ -6,6 +6,7 @@ const Team = require('../models/Team');
 const Project = require('../models/Project');
 const Payroll = require('../models/Payroll');
 const { protect, authorize } = require('../middleware/auth');
+const { getBudgetWarnings, getProjectFinancialSummary } = require('../utils/budgetTracking');
 
 const router = express.Router();
 
@@ -35,7 +36,6 @@ router.get('/team-summary', authorize('finance.read'), async (req, res) => {
           {
             $match: {
               teamId: team._id,
-              status: 'approved',
               date: { $gte: startOfMonth, $lte: endOfMonth }
             }
           },
@@ -54,30 +54,6 @@ router.get('/team-summary', authorize('finance.read'), async (req, res) => {
             $match: {
               teamId: team._id,
               date: { $gte: startOfMonth, $lte: endOfMonth }
-            }
-          },
-          {
-            $lookup: {
-              from: 'users',
-              localField: 'receivedByUserId',
-              foreignField: '_id',
-              as: 'user'
-            }
-          },
-          {
-            $unwind: '$user'
-          },
-          {
-            $lookup: {
-              from: 'teams',
-              localField: 'user._id',
-              foreignField: 'members',
-              as: 'team'
-            }
-          },
-          {
-            $match: {
-              'team._id': team._id
             }
           },
           {
@@ -181,11 +157,13 @@ router.get('/project-summary', authorize('finance.read'), async (req, res) => {
     const projectFinancials = await Promise.all(
       projects.map(async (project) => {
         // Calculate project expenses for the month
+        // Since expenses are linked to teams, we'll get expenses from the project's team
+        const teamIdForQuery = project.teamId._id || project.teamId;
+        
         const projectExpenses = await Expense.aggregate([
           {
             $match: {
-              projectId: project._id,
-              status: 'approved',
+              teamId: teamIdForQuery,
               date: { $gte: startOfMonth, $lte: endOfMonth }
             }
           },
@@ -199,11 +177,11 @@ router.get('/project-summary', authorize('finance.read'), async (req, res) => {
         ]);
 
         // Calculate project income for the month
+        // Since income is linked to teams, we'll get income from the project's team
         const projectIncome = await Income.aggregate([
           {
             $match: {
-              sourceRefId: project._id,
-              sourceRefModel: 'Project',
+              teamId: teamIdForQuery,
               date: { $gte: startOfMonth, $lte: endOfMonth }
             }
           },
@@ -318,6 +296,48 @@ router.post('/reset-budgets', authorize('finance.update'), async (req, res) => {
     res.status(200).json({
       success: true,
       message: `Budget tracking reset for ${month}`
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// Get budget warnings for all projects
+router.get('/budget-warnings', authorize('finance.read'), async (req, res) => {
+  try {
+    const warnings = await getBudgetWarnings();
+    
+    res.json({
+      success: true,
+      data: warnings
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// Get project financial summary with budget tracking
+router.get('/project-summary/:projectId', authorize('finance.read'), async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const summary = await getProjectFinancialSummary(projectId);
+    
+    if (!summary) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: summary
     });
   } catch (error) {
     res.status(500).json({

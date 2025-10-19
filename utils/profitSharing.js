@@ -3,6 +3,7 @@ const Payout = require('../models/Payout');
 const User = require('../models/User');
 const Team = require('../models/Team');
 const Income = require('../models/Income');
+const Role = require('../models/Role');
 
 // Compute profit sharing based on income
 exports.computeProfitSharing = async (income) => {

@@ -9,7 +9,7 @@ import Button from '@/components/Button';
 import FormInput from '@/components/FormInput';
 import FormSelect from '@/components/FormSelect';
 import { showToast } from '@/lib/toast';
-import { FiEdit, FiTrash2, FiPlus, FiFolder, FiClock, FiDollarSign } from 'react-icons/fi';
+import { FiEdit, FiTrash2, FiPlus, FiFolder, FiClock, FiDollarSign, FiUsers } from 'react-icons/fi';
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState([]);
@@ -25,7 +25,9 @@ export default function ProjectsPage() {
     status: 'planned',
     teamId: '',
     ownerId: '',
+    projectMembers: [] as string[],
     budget: 0,
+    totalDealAmount: 0,
     startDate: '',
     endDate: '',
     priority: 'medium',
@@ -65,12 +67,30 @@ export default function ProjectsPage() {
     const loadingToast = showToast.loading(editingProject ? 'Updating project...' : 'Creating project...');
 
     try {
+      // Find founder user
+      const founder = users.find((user: any) => 
+        user.roleIds && user.roleIds.some((role: any) => role.key === 'FOUNDER')
+      );
+
+      // Prepare project data with automatic founder inclusion
+      const projectData = {
+        ...formData,
+        projectMembers: editingProject 
+          ? formData.projectMembers // Don't modify existing projects
+          : founder 
+            ? [...formData.projectMembers, (founder as any)._id] // Add founder to new projects
+            : formData.projectMembers
+      };
+
       if (editingProject) {
-        await projectAPI.update(editingProject._id, formData);
+        await projectAPI.update(editingProject._id, projectData);
         showToast.success('Project updated successfully!');
       } else {
-        await projectAPI.create(formData);
+        await projectAPI.create(projectData);
         showToast.success('Project created successfully!');
+        if (founder) {
+          showToast.success(`Founder automatically added to project members with 70% profit sharing`);
+        }
       }
       
       showToast.dismiss(loadingToast);
@@ -92,7 +112,9 @@ export default function ProjectsPage() {
       status: project.status,
       teamId: project.teamId?._id || project.teamId,
       ownerId: project.ownerId?._id || project.ownerId,
+      projectMembers: project.projectMembers?.map((member: any) => member._id || member) || [],
       budget: project.budget || 0,
+      totalDealAmount: project.totalDealAmount || 0,
       startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
       endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
       priority: project.priority,
@@ -125,7 +147,9 @@ export default function ProjectsPage() {
       status: 'planned',
       teamId: '',
       ownerId: '',
+      projectMembers: [],
       budget: 0,
+      totalDealAmount: 0,
       startDate: '',
       endDate: '',
       priority: 'medium',
@@ -219,6 +243,13 @@ export default function ProjectsPage() {
                         <span className="font-medium">Budget:</span>
                         <span className="ml-1">₹{project.budget?.toLocaleString()}</span>
                       </div>
+                      {project.totalDealAmount > 0 && (
+                        <div className="flex items-center text-gray-600">
+                          <FiDollarSign className="mr-2" />
+                          <span className="font-medium">Deal Amount:</span>
+                          <span className="ml-1">₹{project.totalDealAmount?.toLocaleString()}</span>
+                        </div>
+                      )}
                       {project.startDate && (
                         <div className="flex items-center text-gray-600">
                           <FiClock className="mr-2" />
@@ -234,6 +265,65 @@ export default function ProjectsPage() {
                         </div>
                       )}
                     </div>
+
+                    {/* Budget Utilization Status */}
+                    {project.budget > 0 && (
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+                          <span className="font-medium">Budget Status:</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            project.totalExpense > project.budget 
+                              ? 'bg-red-100 text-red-800' 
+                              : project.totalExpense > (project.budget * 0.8)
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {project.totalExpense > project.budget 
+                              ? 'Over Budget' 
+                              : project.totalExpense > (project.budget * 0.8)
+                              ? 'Near Limit'
+                              : 'Within Budget'
+                            }
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm text-gray-600">
+                          <span>Utilization: ₹{project.totalExpense?.toLocaleString() || 0} / ₹{project.budget?.toLocaleString()}</span>
+                          <span className="font-medium">
+                            {project.budget > 0 ? Math.round((project.totalExpense || 0) / project.budget * 100) : 0}%
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                          <div 
+                            className={`h-full transition-all ${
+                              project.totalExpense > project.budget 
+                                ? 'bg-red-500' 
+                                : project.totalExpense > (project.budget * 0.8)
+                                ? 'bg-yellow-500'
+                                : 'bg-green-500'
+                            }`}
+                            style={{ 
+                              width: `${Math.min((project.totalExpense || 0) / project.budget * 100, 100)}%` 
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {project.projectMembers && project.projectMembers.length > 0 && (
+                      <div className="mt-4">
+                        <div className="flex items-center text-gray-600 mb-2">
+                          <FiUsers className="mr-2" />
+                          <span className="font-medium">Project Members:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {project.projectMembers.map((member: any, index: number) => (
+                            <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {member.name || member}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {project.progress !== undefined && (
                       <div className="mt-4">
@@ -357,12 +447,50 @@ export default function ProjectsPage() {
               label="Team"
               required
               value={formData.teamId}
-              onChange={(e) => setFormData({ ...formData, teamId: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, teamId: e.target.value, projectMembers: [] })}
               options={teams.map((team: any) => ({
                 value: team._id,
                 label: team.name,
               }))}
             />
+
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Project Members (Optional)
+              </label>
+              <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+                {users
+                  .filter((user: any) => user.active)
+                  .map((user: any) => (
+                    <label key={user._id} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.projectMembers.includes(user._id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({
+                              ...formData,
+                              projectMembers: [...formData.projectMembers, user._id]
+                            });
+                          } else {
+                            setFormData({
+                              ...formData,
+                              projectMembers: formData.projectMembers.filter(id => id !== user._id)
+                            });
+                          }
+                        }}
+                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        {user.name} ({user.email})
+                      </span>
+                    </label>
+                  ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Select specific team members for this project. If none selected, all team members will be eligible for profit sharing.
+              </p>
+            </div>
 
             <FormSelect
               label="Project Owner"
@@ -381,6 +509,15 @@ export default function ProjectsPage() {
               min="0"
               value={formData.budget}
               onChange={(e) => setFormData({ ...formData, budget: Number(e.target.value) })}
+              placeholder="0"
+            />
+
+            <FormInput
+              label="Total Deal Amount (₹)"
+              type="number"
+              min="0"
+              value={formData.totalDealAmount}
+              onChange={(e) => setFormData({ ...formData, totalDealAmount: Number(e.target.value) })}
               placeholder="0"
             />
 

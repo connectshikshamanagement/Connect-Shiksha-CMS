@@ -39,7 +39,6 @@ router.get('/team/:teamId/:month', authorize('finance.read'), async (req, res) =
     // Get team expenses for the month
     const expenses = await Expense.find({
       teamId: team._id,
-      status: 'approved',
       date: { $gte: startOfMonth, $lte: endOfMonth }
     })
     .populate('submittedBy', 'name email')

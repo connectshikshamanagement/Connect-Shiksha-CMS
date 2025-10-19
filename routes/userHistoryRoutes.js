@@ -171,10 +171,7 @@ router.get('/:id/performance', async (req, res) => {
       },
       expenses: {
         total: expenses.length,
-        totalAmount: expenses.reduce((sum, e) => sum + e.amount, 0),
-        approved: expenses.filter(e => e.status === 'approved').length,
-        pending: expenses.filter(e => e.status === 'pending').length,
-        rejected: expenses.filter(e => e.status === 'rejected').length
+        totalAmount: expenses.reduce((sum, e) => sum + e.amount, 0)
       },
       payroll: {
         total: payroll.length,

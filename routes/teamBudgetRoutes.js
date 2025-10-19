@@ -35,7 +35,6 @@ router.get('/:teamId/budget', authorize('finance.read'), async (req, res) => {
             $match: {
               teamId: team._id,
               submittedBy: memberBudget.memberId,
-              status: 'approved',
               date: { $gte: startOfMonth, $lte: endOfMonth }
             }
           },
@@ -221,7 +220,6 @@ router.get('/:teamId/member/:memberId/budget-status', async (req, res) => {
         $match: {
           teamId: team._id,
           submittedBy: memberId,
-          status: 'approved',
           date: { $gte: startOfMonth, $lte: endOfMonth }
         }
       },

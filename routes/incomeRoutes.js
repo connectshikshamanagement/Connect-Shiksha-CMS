@@ -13,6 +13,7 @@ router.get('/', authorize('finance.read'), async (req, res) => {
     const income = await Income.find()
       .populate('receivedByUserId')
       .populate('clientId')
+      .populate('teamId')
       .sort('-date');
 
     res.status(200).json({
@@ -67,7 +68,8 @@ router
     try {
       const income = await Income.findById(req.params.id)
         .populate('receivedByUserId')
-        .populate('clientId');
+        .populate('clientId')
+        .populate('teamId');
 
       if (!income) {
         return res.status(404).json({

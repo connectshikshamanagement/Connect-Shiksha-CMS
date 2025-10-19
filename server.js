@@ -57,7 +57,7 @@ app.use(morgan('dev'));
 app.set('io', io);
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://connectshikshamanagement_db_user:9WBkyhQmDvMPkozp@cluster0.2w5toa1.mongodb.net/connect-shiksha-crm')
   .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
 

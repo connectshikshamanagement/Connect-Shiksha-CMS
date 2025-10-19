@@ -50,15 +50,6 @@ const expenseSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  approvedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  status: {
-    type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending'
-  },
   attachments: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Attachment'

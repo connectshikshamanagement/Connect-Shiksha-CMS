@@ -16,7 +16,6 @@ router.get('/', authorize('finance.read'), async (req, res) => {
 
     const expenses = await Expense.find(query)
       .populate('submittedBy')
-      .populate('approvedBy')
       .populate('projectId')
       .sort('-date');
 
@@ -60,7 +59,6 @@ router.post('/', async (req, res) => {
         {
           $match: {
             teamId: team._id,
-            status: 'approved',
             date: { $gte: startOfMonth, $lte: endOfMonth }
           }
         },
@@ -103,38 +101,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Approve/Reject expense
-router.patch('/:id/approve', authorize('finance.update'), async (req, res) => {
-  try {
-    const { status } = req.body; // 'approved' or 'rejected'
-
-    const expense = await Expense.findByIdAndUpdate(
-      req.params.id,
-      {
-        status,
-        approvedBy: req.user.id
-      },
-      { new: true, runValidators: true }
-    );
-
-    if (!expense) {
-      return res.status(404).json({
-        success: false,
-        message: 'Expense not found'
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: expense
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
 
 router
   .route('/:id')
@@ -142,7 +108,6 @@ router
     try {
       const expense = await Expense.findById(req.params.id)
         .populate('submittedBy')
-        .populate('approvedBy')
         .populate('projectId');
 
       if (!expense) {

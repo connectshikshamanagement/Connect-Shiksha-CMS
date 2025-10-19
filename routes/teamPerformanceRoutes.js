@@ -218,13 +218,7 @@ async function calculateFinancialMetrics(teamId, startDate, endDate) {
         _id: null,
         totalAmount: { $sum: '$amount' },
         count: { $sum: 1 },
-        avgAmount: { $avg: '$amount' },
-        approvedAmount: {
-          $sum: { $cond: [{ $eq: ['$status', 'approved'] }, '$amount', 0] }
-        },
-        pendingAmount: {
-          $sum: { $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0] }
-        }
+        avgAmount: { $avg: '$amount' }
       }
     }
   ]);

@@ -62,7 +62,6 @@ router.get('/team/:teamId', async (req, res) => {
       {
         $match: {
           teamId: team._id,
-          status: 'approved',
           date: { $gte: startOfMonth, $lte: endOfMonth }
         }
       },
@@ -149,7 +148,6 @@ router.get('/user/:userId', async (req, res) => {
       {
         $match: {
           submittedBy: userId,
-          status: 'approved',
           date: { $gte: startOfMonth, $lte: endOfMonth }
         }
       },
@@ -225,7 +223,6 @@ router.post('/', async (req, res) => {
             $match: {
               teamId: team._id,
               submittedBy: req.user.id,
-              status: 'approved',
               date: { $gte: startOfMonth, $lte: endOfMonth }
             }
           },
@@ -387,22 +384,7 @@ router.get('/analytics/:teamId', authorize('finance.read'), async (req, res) => 
         $group: {
           _id: null,
           totalExpenses: { $sum: '$amount' },
-          approvedExpenses: {
-            $sum: { $cond: [{ $eq: ['$status', 'approved'] }, '$amount', 0] }
-          },
-          pendingExpenses: {
-            $sum: { $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0] }
-          },
-          rejectedExpenses: {
-            $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, '$amount', 0] }
-          },
-          expenseCount: { $sum: 1 },
-          approvedCount: {
-            $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] }
-          },
-          pendingCount: {
-            $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
-          }
+          expenseCount: { $sum: 1 }
         }
       }
     ]);
@@ -419,13 +401,7 @@ router.get('/analytics/:teamId', authorize('finance.read'), async (req, res) => 
         $group: {
           _id: '$submittedBy',
           totalExpenses: { $sum: '$amount' },
-          approvedExpenses: {
-            $sum: { $cond: [{ $eq: ['$status', 'approved'] }, '$amount', 0] }
-          },
-          expenseCount: { $sum: 1 },
-          approvedCount: {
-            $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] }
-          }
+          expenseCount: { $sum: 1 }
         }
       },
       {
@@ -463,7 +439,6 @@ router.get('/analytics/:teamId', authorize('finance.read'), async (req, res) => 
       {
         $match: {
           teamId: team._id,
-          status: 'approved',
           date: { $gte: startDate, $lte: endDate }
         }
       },

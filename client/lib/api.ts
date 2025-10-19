@@ -73,8 +73,6 @@ export const expenseAPI = {
   getAll: () => api.get('/expenses'),
   create: (data: any) => api.post('/expenses', data),
   update: (id: string, data: any) => api.put(`/expenses/${id}`, data),
-  approve: (id: string, status: string) =>
-    api.patch(`/expenses/${id}/approve`, { status }),
   delete: (id: string) => api.delete(`/expenses/${id}`),
 };
 
@@ -182,6 +180,11 @@ export const enhancedExpenseAPI = {
   createExpense: (data: any) => api.post('/expenses', data),
   approveExpense: (expenseId: string, status: string) => api.patch(`/expenses/${expenseId}/approve`, { status }),
   getExpenseAnalytics: (teamId: string, params?: any) => api.get(`/expenses/analytics/${teamId}`, { params }),
+};
+
+export const budgetAPI = {
+  getBudgetWarnings: () => api.get('/finance/budget-warnings'),
+  getProjectSummary: (projectId: string) => api.get(`/finance/project-summary/${projectId}`),
 };
 
 export const teamPerformanceAPI = {

@@ -24,12 +24,21 @@ const projectSchema = new mongoose.Schema({
     ref: 'Team',
     required: [true, 'Please assign a team']
   },
+  projectMembers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   ownerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: [true, 'Please assign a project owner']
   },
   budget: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  totalDealAmount: {
     type: Number,
     default: 0,
     min: 0
