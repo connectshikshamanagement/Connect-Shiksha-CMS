@@ -8,6 +8,9 @@ interface Permission {
 }
 
 interface UserRole {
+  _id: string;
+  key: string;
+  name: string;
   permissions: {
     [key: string]: {
       create: boolean;
@@ -20,19 +23,84 @@ interface UserRole {
 
 export const usePermissions = () => {
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
+  const [userRole, setUserRole] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (user) {
-      try {
-        const userData = JSON.parse(user);
-        setUserRoles(userData.roleIds || []);
-      } catch (error) {
-        console.error('Error parsing user data:', error);
+    const loadUserData = async () => {
+      const user = localStorage.getItem('user');
+      
+      // Check if user has new role structure
+      let needsRefresh = false;
+      if (user) {
+        try {
+          const userData = JSON.parse(user);
+          const roles = userData.roleIds || [];
+          const hasNewRoles = roles.some((role: UserRole) => 
+            ['FOUNDER', 'TEAM_MANAGER', 'TEAM_MEMBER'].includes(role.key)
+          );
+          needsRefresh = !hasNewRoles;
+        } catch (error) {
+          needsRefresh = true;
+        }
+      } else {
+        needsRefresh = true;
       }
-    }
-    setLoading(false);
+
+      // Refresh user data if needed
+      if (needsRefresh) {
+        try {
+          const token = localStorage.getItem('token');
+          if (token) {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/me`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            });
+
+            if (response.ok) {
+              const userData = await response.json();
+              if (userData.success) {
+                localStorage.setItem('user', JSON.stringify(userData.data));
+                const roles = userData.data.roleIds || [];
+                setUserRoles(roles);
+                
+                // Set primary role
+                if (roles.length > 0) {
+                  const primaryRole = roles.find((role: UserRole) => role.key === 'FOUNDER') || 
+                                    roles.find((role: UserRole) => role.key === 'TEAM_MANAGER') || 
+                                    roles[0];
+                  setUserRole(primaryRole?.key || '');
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error refreshing user data:', error);
+        }
+      } else if (user) {
+        // Use existing user data
+        try {
+          const userData = JSON.parse(user);
+          const roles = userData.roleIds || [];
+          setUserRoles(roles);
+          
+          // Set primary role
+          if (roles.length > 0) {
+            const primaryRole = roles.find((role: UserRole) => role.key === 'FOUNDER') || 
+                              roles.find((role: UserRole) => role.key === 'TEAM_MANAGER') || 
+                              roles[0];
+            setUserRole(primaryRole?.key || '');
+          }
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+      
+      setLoading(false);
+    };
+
+    loadUserData();
   }, []);
 
   const hasPermission = (permission: string): boolean => {
@@ -62,13 +130,23 @@ export const usePermissions = () => {
     return hasPermission(`${resource}.delete`);
   };
 
+  // Role-based helper functions
+  const isFounder = userRole === 'FOUNDER';
+  const isManager = userRole === 'TEAM_MANAGER';
+  const isMember = userRole === 'TEAM_MEMBER';
+
   return {
     hasPermission,
     canAccess,
     canCreate,
     canUpdate,
     canDelete,
-    loading
+    loading,
+    userRole,
+    userRoles,
+    isFounder,
+    isManager,
+    isMember
   };
 };
 

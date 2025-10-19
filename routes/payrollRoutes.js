@@ -14,18 +14,29 @@ router.use(protect);
 // Get all payroll records
 router.get('/', authorize('finance.read'), async (req, res) => {
   try {
-    const { month, teamId, status } = req.query;
+    const { month, year, teamId, status } = req.query;
     
     let query = {};
-    if (month) query.month = month;
+    if (month && year) {
+      // Format: YYYY-MM (e.g., 2025-10)
+      query.month = `${year}-${month.toString().padStart(2, '0')}`;
+    } else if (month) {
+      query.month = month;
+    }
+    // If no month/year specified, show all records
     if (teamId) query.teamId = teamId;
     if (status) query.status = status;
+
+    console.log('Payroll query:', query);
 
     const payrolls = await Payroll.find(query)
       .populate('userId', 'name email')
       .populate('teamId', 'name category')
+      .populate('projectId', 'title')
       .populate('createdBy', 'name email')
       .sort('-createdAt');
+
+    console.log('Found payroll records:', payrolls.length);
 
     res.status(200).json({
       success: true,
@@ -33,6 +44,7 @@ router.get('/', authorize('finance.read'), async (req, res) => {
       data: payrolls
     });
   } catch (error) {
+    console.error('Payroll fetch error:', error);
     res.status(500).json({
       success: false,
       message: error.message

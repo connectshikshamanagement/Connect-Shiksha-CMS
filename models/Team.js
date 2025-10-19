@@ -83,5 +83,32 @@ const teamSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Pre-save hook to automatically add founder to all teams
+teamSchema.pre('save', async function(next) {
+  try {
+    const User = require('./User');
+    const Role = require('./Role');
+    
+    // Find the founder
+    const founderRole = await Role.findOne({ key: 'FOUNDER' });
+    if (!founderRole) return next();
+    
+    const founder = await User.findOne({ 
+      roleIds: { $in: [founderRole._id] },
+      active: true 
+    });
+    
+    if (founder && !this.members.includes(founder._id)) {
+      this.members.push(founder._id);
+      console.log(`✅ Auto-added founder to team: ${this.name}`);
+    }
+    
+    next();
+  } catch (error) {
+    console.error('Error auto-adding founder to team:', error);
+    next(error);
+  }
+});
+
 module.exports = mongoose.model('Team', teamSchema);
 

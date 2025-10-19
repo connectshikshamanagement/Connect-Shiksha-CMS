@@ -27,12 +27,12 @@ const navigation = [
   { name: 'Payroll', href: '/dashboard/payroll', icon: FiDollarSign, permission: 'payroll.read' },
   { name: 'Reports', href: '/dashboard/reports', icon: FiFileText, permission: 'reports.read' },
   { name: 'Settings', href: '/dashboard/settings', icon: FiSettings, permission: 'users.read' },
-  { name: 'Add Members', href: '/dashboard/founder/members', icon: FiUsers, permission: 'users.create' },
+  { name: 'Members', href: '/dashboard/members', icon: FiUsers, permission: 'users.create', role: 'FOUNDER' },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, userRole } = usePermissions();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -40,10 +40,12 @@ export default function Sidebar() {
     window.location.href = '/login';
   };
 
-  // Filter navigation based on permissions
-  const filteredNavigation = navigation.filter(item => 
-    !item.permission || hasPermission(item.permission)
-  );
+  // Filter navigation based on permissions and role
+  const filteredNavigation = navigation.filter(item => {
+    const hasPermissionAccess = !item.permission || hasPermission(item.permission);
+    const hasRoleAccess = !item.role || userRole === item.role;
+    return hasPermissionAccess && hasRoleAccess;
+  });
 
   return (
     <div className="flex w-64 flex-col bg-primary-800 text-white">

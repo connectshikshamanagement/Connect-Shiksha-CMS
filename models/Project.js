@@ -89,5 +89,32 @@ const projectSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Pre-save hook to automatically add founder to all projects
+projectSchema.pre('save', async function(next) {
+  try {
+    const User = require('./User');
+    const Role = require('./Role');
+    
+    // Find the founder
+    const founderRole = await Role.findOne({ key: 'FOUNDER' });
+    if (!founderRole) return next();
+    
+    const founder = await User.findOne({ 
+      roleIds: { $in: [founderRole._id] },
+      active: true 
+    });
+    
+    if (founder && !this.projectMembers.includes(founder._id)) {
+      this.projectMembers.push(founder._id);
+      console.log(`✅ Auto-added founder to project: ${this.title}`);
+    }
+    
+    next();
+  } catch (error) {
+    console.error('Error auto-adding founder to project:', error);
+    next(error);
+  }
+});
+
 module.exports = mongoose.model('Project', projectSchema);
 

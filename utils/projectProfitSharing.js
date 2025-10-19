@@ -1,162 +1,183 @@
 const Project = require('../models/Project');
-const Payout = require('../models/Payout');
 const User = require('../models/User');
-const Team = require('../models/Team');
+const Role = require('../models/Role');
+const Payroll = require('../models/Payroll');
 const Income = require('../models/Income');
 const Expense = require('../models/Expense');
-const Role = require('../models/Role');
 
-// Compute project-based profit sharing
+// Compute project-based profit sharing (70% Founder, 30% shared among eligible members)
 exports.computeProjectProfitSharing = async (projectId) => {
   try {
-    console.log(`🔄 Computing project-based profit sharing for project: ${projectId}`);
+    console.log(`🔄 Computing profit sharing for project: ${projectId}`);
 
-    // Get project details
+    // Find project with related data
     const project = await Project.findById(projectId)
-      .populate('teamId', 'name members')
-      .populate('ownerId', 'name');
+      .populate('teamId')
+      .populate('projectMembers');
 
     if (!project) {
-      console.log(`❌ Project not found: ${projectId}`);
-      return;
+      throw new Error('Project not found');
     }
 
-    console.log(`📊 Project: ${project.title} (Team: ${project.teamId?.name})`);
-
-    // Calculate project profit = Total Income - Total Expenses
-    const projectIncome = await Income.find({
-      sourceRefId: project._id,
-      sourceRefModel: 'Project',
-      profitShared: { $ne: true }
+    // Get all income and expense records for this project
+    const incomeRecords = await Income.find({ 
+      sourceRefId: projectId,
+      sourceRefModel: 'Project'
     });
 
-    console.log(`📊 Found ${projectIncome.length} income records for project ${project.title}:`);
-    projectIncome.forEach(income => {
-      console.log(`   - ${income.sourceType}: ₹${income.amount.toLocaleString()}`);
+    const expenseRecords = await Expense.find({ 
+      projectId: projectId 
     });
 
-    const projectExpenses = await Expense.find({
-      projectId: projectId
-    });
+    // Calculate project profit
+    const totalIncome = incomeRecords.reduce((sum, record) => sum + record.amount, 0);
+    const totalExpense = expenseRecords.reduce((sum, record) => sum + record.amount, 0);
+    const profit = totalIncome - totalExpense;
 
-    const totalIncome = projectIncome.reduce((sum, income) => sum + income.amount, 0);
-    const totalExpenses = projectExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    
-    // Profit sharing based ONLY on actual income minus expenses (not budget or deal amount)
-    const projectProfit = totalIncome - totalExpenses;
+    console.log(`📊 Project ${project.title}: Income: ₹${totalIncome}, Expense: ₹${totalExpense}, Profit: ₹${profit}`);
 
-    console.log(`💰 Project Financials:`);
-    console.log(`   Total Income: ₹${totalIncome.toLocaleString()}`);
-    console.log(`   Total Expenses: ₹${totalExpenses.toLocaleString()}`);
-    console.log(`   Project Profit (Income - Expenses): ₹${projectProfit.toLocaleString()}`);
-    
-    // Show deal amount and budget for reference only (not used in profit calculation)
-    if (project.totalDealAmount > 0) {
-      console.log(`   Deal Amount (Reference): ₹${project.totalDealAmount.toLocaleString()}`);
-      console.log(`   Deal Collection: ${Math.round((totalIncome / project.totalDealAmount) * 100)}%`);
-    }
-    if (project.budget > 0) {
-      console.log(`   Budget (Reference): ₹${project.budget.toLocaleString()}`);
-      console.log(`   Budget Utilization: ${Math.round((totalExpenses / project.budget) * 100)}%`);
+    if (profit <= 0) {
+      console.log('⚠️ No profit to distribute');
+      return { profit, founderShare: 0, sharePerPerson: 0, eligibleCount: 0 };
     }
 
-    if (projectProfit <= 0) {
-      console.log(`⚠️ No profit to distribute for project: ${project.title}`);
-      return;
-    }
+    // Get role IDs
+    const founderRole = await Role.findOne({ key: 'FOUNDER' });
+    const managerRole = await Role.findOne({ key: 'TEAM_MANAGER' });
+    const memberRole = await Role.findOne({ key: 'TEAM_MEMBER' });
 
-    // Get project-specific members (if any) or fall back to team members
-    let projectMembers = [];
-    
-    if (project.projectMembers && project.projectMembers.length > 0) {
-      // Use project-specific members
-      projectMembers = await User.find({
-        _id: { $in: project.projectMembers },
-        active: true
-      });
-      console.log(`👥 Project Members (${projectMembers.length}):`);
-    } else {
-      // Fall back to team members
-      projectMembers = await User.find({
-        _id: { $in: project.teamId.members },
-        active: true
-      });
-      console.log(`👥 Team Members (${projectMembers.length}):`);
-    }
+    // Calculate shares
+    const founderShare = profit * 0.7;
+    const remainingPool = profit * 0.3;
 
-    projectMembers.forEach(member => {
-      console.log(`   - ${member.name} (${member.email})`);
-    });
+    // Find eligible users
+    const eligibleUsers = [];
 
-    if (projectMembers.length === 0) {
-      console.log(`❌ No active project members found for project: ${project.title}`);
-      return;
-    }
-
-    // Get Founder user
+    // Add founder
     const founder = await User.findOne({ 
-      roleIds: { $elemMatch: { $exists: true } },
-      active: true
-    }).populate('roleIds');
+      roleIds: { $in: [founderRole._id] },
+      active: true 
+    });
 
-    const founderRole = founder?.roleIds?.find(role => role.key === 'FOUNDER');
-    const founderUser = founderRole ? founder : null;
-
-    if (!founderUser) {
-      console.log(`❌ Founder not found for project: ${project.title}`);
-      return;
+    if (founder) {
+      eligibleUsers.push({
+        user: founder,
+        shareAmount: founderShare,
+        description: `70% CS Profit from ${project.title}`,
+        isFounder: true
+      });
     }
 
-    // Calculate profit distribution: 70% to Founder, 30% to project members
-    const founderShare = (projectProfit * 70) / 100;
-    const projectMembersShare = (projectProfit * 30) / 100;
-    const profitPerMember = projectMembersShare / projectMembers.length;
-    
+    // Add eligible team managers (all active managers)
+    const eligibleManagers = await User.find({
+      roleIds: { $in: [managerRole._id] },
+      active: true
+    });
+
+    eligibleManagers.forEach(manager => {
+      eligibleUsers.push({
+        user: manager,
+        shareAmount: 0, // Will be calculated after counting all eligible
+        description: `Team Manager Share from ${project.title}`,
+        isFounder: false,
+        isManager: true
+      });
+    });
+
+    // Add eligible team members (only those assigned to this project)
+    const eligibleMembers = await User.find({
+      _id: { $in: project.projectMembers },
+      roleIds: { $in: [memberRole._id] },
+      active: true
+    });
+
+    eligibleMembers.forEach(member => {
+      eligibleUsers.push({
+        user: member,
+        shareAmount: 0, // Will be calculated after counting all eligible
+        description: `Team Member Share from ${project.title}`,
+        isFounder: false,
+        isManager: false
+      });
+    });
+
+    // Calculate equal share for non-founder eligible users
+    const nonFounderCount = eligibleUsers.filter(u => !u.isFounder).length;
+    const sharePerPerson = nonFounderCount > 0 ? remainingPool / nonFounderCount : 0;
+
+    // Update share amounts for non-founder users
+    eligibleUsers.forEach(eligibleUser => {
+      if (!eligibleUser.isFounder) {
+        eligibleUser.shareAmount = sharePerPerson;
+      }
+    });
+
+    console.log(`👥 Eligible users: ${eligibleUsers.length} (Founder: 1, Others: ${nonFounderCount})`);
+
+    // Create payroll records
     const currentDate = new Date();
     const month = currentDate.getMonth() + 1;
     const year = currentDate.getFullYear();
 
-    console.log(`💸 Profit Distribution:`);
-    console.log(`   Total Profit: ₹${projectProfit.toLocaleString()}`);
-    console.log(`   Founder (70%): ₹${founderShare.toLocaleString()}`);
-    console.log(`   Project Members (30%): ₹${projectMembersShare.toLocaleString()}`);
-    console.log(`   Per Project Member: ₹${profitPerMember.toLocaleString()}`);
+    const payrollRecords = [];
 
-    // Create payout for Founder
-    await this.addToPayout(founderUser._id.toString(), month, year, {
-      sourceType: `Project: ${project.title}`,
-      sourceId: project._id,
-      amount: founderShare,
-      percentage: 70,
-      description: `Founder share from ${project.title} (70%)`
-    });
-    console.log(`   ✅ Founder: ₹${founderShare.toLocaleString()}`);
-
-    // Create payouts for each project member
-    for (const member of projectMembers) {
-      await this.addToPayout(member._id.toString(), month, year, {
-        sourceType: `Project: ${project.title}`,
-        sourceId: project._id,
-        amount: profitPerMember,
-        percentage: (30 / projectMembers.length),
-        description: `Project member share from ${project.title} (30% ÷ ${projectMembers.length} members)`
+    for (const eligibleUser of eligibleUsers) {
+      // Check if payroll record already exists for this user/month
+      let existingPayroll = await Payroll.findOne({
+        userId: eligibleUser.user._id,
+        month: `${year}-${month.toString().padStart(2, '0')}`,
+        projectId: projectId
       });
 
-      console.log(`   ✅ ${member.name}: ₹${profitPerMember.toLocaleString()}`);
+      if (existingPayroll) {
+        // Replace existing record instead of adding to it
+        existingPayroll.profitShare = eligibleUser.shareAmount;
+        existingPayroll.description = eligibleUser.description;
+        await existingPayroll.save();
+        console.log(`📝 Updated payroll for ${eligibleUser.user.name}: ₹${eligibleUser.shareAmount}`);
+      } else {
+        // Create new payroll record
+        const userSalary = eligibleUser.user.salary || 0;
+        
+        const newPayroll = new Payroll({
+          userId: eligibleUser.user._id,
+          teamId: project.teamId._id,
+          projectId: projectId,
+          month: `${year}-${month.toString().padStart(2, '0')}`,
+          year: year,
+          baseSalary: userSalary,
+          profitShare: eligibleUser.shareAmount,
+          bonuses: 0,
+          deductions: 0,
+          status: 'pending',
+          description: eligibleUser.description,
+          createdBy: founder ? founder._id : eligibleUser.user._id
+        });
+
+        await newPayroll.save();
+        payrollRecords.push(newPayroll);
+        console.log(`✅ Created payroll for ${eligibleUser.user.name}: ₹${eligibleUser.shareAmount}`);
+      }
     }
 
-    // Mark all project income as profit shared
-    for (const income of projectIncome) {
-      await Income.findByIdAndUpdate(income._id, { profitShared: true });
-    }
+    // Mark income records as profit shared
+    await Income.updateMany(
+      { _id: { $in: incomeRecords.map(r => r._id) } },
+      { profitShared: true }
+    );
 
-    // Update project financials
-    await Project.findByIdAndUpdate(projectId, {
-      totalIncome: project.totalIncome + totalIncome,
-      totalExpense: project.totalExpense + totalExpenses
-    });
+    console.log(`🎉 Profit sharing completed for project: ${project.title}`);
+    console.log(`💰 Founder share: ₹${founderShare}`);
+    console.log(`👥 Share per person (${nonFounderCount}): ₹${sharePerPerson}`);
 
-    console.log(`✅ Project profit sharing completed for: ${project.title}`);
+    return {
+      project: project.title,
+      profit,
+      founderShare,
+      sharePerPerson,
+      eligibleCount: eligibleUsers.length,
+      payrollRecords: payrollRecords.length
+    };
 
   } catch (error) {
     console.error('❌ Error computing project profit sharing:', error);
@@ -164,104 +185,71 @@ exports.computeProjectProfitSharing = async (projectId) => {
   }
 };
 
-// Add or update payout for a user
-exports.addToPayout = async (userId, month, year, shareDetail) => {
-  try {
-    // Find existing payout or create new
-    let payout = await Payout.findOne({ userId, month, year });
-
-    if (payout) {
-      // Add to existing payout
-      payout.shares.push(shareDetail);
-      await payout.save(); // This will trigger pre-save to recalculate totals
-    } else {
-      // Get user's base salary
-      const user = await User.findById(userId);
-      
-      // Create new payout
-      payout = await Payout.create({
-        userId,
-        month,
-        year,
-        baseSalary: user.salary || 0,
-        shares: [shareDetail],
-        status: 'pending'
-      });
-    }
-
-    return payout;
-  } catch (error) {
-    console.error('Error adding to payout:', error);
-    throw error;
-  }
-};
-
-// Compute profit sharing for all projects
-exports.computeAllProjectProfitSharing = async () => {
-  try {
-    console.log('🔄 Computing profit sharing for all projects...');
-
-    // Get all active projects
-    const projects = await Project.find({
-      status: { $in: ['active', 'completed'] }
-    }).populate('teamId', 'name members');
-
-    console.log(`📊 Found ${projects.length} projects to process`);
-
-    for (const project of projects) {
-      await this.computeProjectProfitSharing(project._id);
-    }
-
-    console.log('✅ All project profit sharing completed');
-
-  } catch (error) {
-    console.error('❌ Error computing all project profit sharing:', error);
-    throw error;
-  }
-};
-
 // Get project profit summary
 exports.getProjectProfitSummary = async (projectId) => {
   try {
-    const project = await Project.findById(projectId)
-      .populate('teamId', 'name members')
-      .populate('ownerId', 'name');
-
+    const project = await Project.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
     }
 
-    // Calculate project financials
-    const projectIncome = await Income.find({
-      teamId: project.teamId._id
+    const incomeRecords = await Income.find({ 
+      sourceRefId: projectId,
+      sourceRefModel: 'Project'
     });
 
-    const projectExpenses = await Expense.find({
-      projectId: projectId
+    const expenseRecords = await Expense.find({ 
+      projectId: projectId 
     });
 
-    const totalIncome = projectIncome.reduce((sum, income) => sum + income.amount, 0);
-    const totalExpenses = projectExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const projectProfit = totalIncome - totalExpenses;
+    const totalIncome = incomeRecords.reduce((sum, record) => sum + record.amount, 0);
+    const totalExpense = expenseRecords.reduce((sum, record) => sum + record.amount, 0);
+    const profit = totalIncome - totalExpense;
 
     return {
-      project: {
-        id: project._id,
-        title: project.title,
-        team: project.teamId.name,
-        owner: project.ownerId.name
-      },
-      financials: {
-        totalIncome,
-        totalExpenses,
-        projectProfit
-      },
-      incomeCount: projectIncome.length,
-      expenseCount: projectExpenses.length
+      project: project.title,
+      totalIncome,
+      totalExpense,
+      profit,
+      incomeCount: incomeRecords.length,
+      expenseCount: expenseRecords.length
     };
 
   } catch (error) {
-    console.error('Error getting project profit summary:', error);
+    console.error('❌ Error getting project profit summary:', error);
+    throw error;
+  }
+};
+
+// Trigger profit sharing for all active projects
+exports.computeAllProjectsProfitSharing = async () => {
+  try {
+    console.log('🚀 Computing profit sharing for all active projects...');
+
+    const activeProjects = await Project.find({ 
+      status: { $in: ['active', 'completed'] } 
+    });
+
+    const results = [];
+
+    for (const project of activeProjects) {
+      try {
+        const result = await exports.computeProjectProfitSharing(project._id);
+        results.push(result);
+      } catch (error) {
+        console.error(`❌ Error processing project ${project.title}:`, error);
+        results.push({
+          project: project.title,
+          error: error.message
+        });
+      }
+    }
+
+    console.log(`✅ Completed profit sharing for ${results.length} projects`);
+    return results;
+
+  } catch (error) {
+    console.error('❌ Error computing all projects profit sharing:', error);
     throw error;
   }
 };

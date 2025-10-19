@@ -12,6 +12,31 @@ const router = express.Router();
 
 router.use(protect); // All routes require authentication
 
+// Get current user data
+router.get('/me', async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id).populate('roleIds');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 router
   .route('/')
   .get(getUsers)

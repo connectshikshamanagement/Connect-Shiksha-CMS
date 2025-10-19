@@ -6,7 +6,7 @@ interface FormSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string;
   error?: string;
   required?: boolean;
-  options: { value: string; label: string }[];
+  options?: { value: string; label: string }[];
 }
 
 export default function FormSelect({
@@ -15,6 +15,7 @@ export default function FormSelect({
   required,
   options,
   className = '',
+  children,
   ...props
 }: FormSelectProps) {
   return (
@@ -29,12 +30,16 @@ export default function FormSelect({
         } px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 ${className}`}
         {...props}
       >
-        <option value="">Select {label}</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
+        {children || (
+          <>
+            <option value="">Select {label}</option>
+            {options?.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </>
+        )}
       </select>
       {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
     </div>
