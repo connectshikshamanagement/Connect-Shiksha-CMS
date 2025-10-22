@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { payoutAPI, advancePaymentAPI, incomeAPI, expenseAPI, projectAPI } from '@/lib/api';
+import { payoutAPI, advancePaymentAPI, incomeAPI, expenseAPI, projectAPI, teamMemberFinanceAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import Button from '@/components/Button';
@@ -40,6 +40,7 @@ export default function PayrollPage() {
   const [incomeFormData, setIncomeFormData] = useState({
     amount: '',
     source: '',
+    sourceType: 'Product Sales',
     description: '',
     projectId: '',
     date: new Date().toISOString().split('T')[0]
@@ -47,7 +48,7 @@ export default function PayrollPage() {
 
   const [expenseFormData, setExpenseFormData] = useState({
     amount: '',
-    category: '',
+    category: 'Other',
     description: '',
     projectId: '',
     date: new Date().toISOString().split('T')[0]
@@ -258,9 +259,17 @@ export default function PayrollPage() {
 
   const fetchUserProjects = async () => {
     try {
-      const response = await projectAPI.getAll();
-      if (response.data.success) {
-        setUserProjects(response.data.data);
+      // Use team member finance API for team members, regular API for founders/managers
+      if (isMember) {
+        const response = await teamMemberFinanceAPI.getMyProjects();
+        if (response.data.success) {
+          setUserProjects(response.data.data);
+        }
+      } else {
+        const response = await projectAPI.getAll();
+        if (response.data.success) {
+          setUserProjects(response.data.data);
+        }
       }
     } catch (error) {
       console.error('Error fetching user projects:', error);
@@ -293,7 +302,7 @@ export default function PayrollPage() {
   const handleIncomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!incomeFormData.amount || !incomeFormData.source || !incomeFormData.projectId) {
+    if (!incomeFormData.amount || !incomeFormData.source || !incomeFormData.sourceType || !incomeFormData.projectId) {
       showToast.error('Please fill in all required fields');
       return;
     }
@@ -301,10 +310,16 @@ export default function PayrollPage() {
     const loadingToast = showToast.loading('Adding income entry...');
 
     try {
-      await incomeAPI.create(incomeFormData);
+      // Use team member finance API for team members, regular API for founders/managers
+      if (isMember) {
+        await teamMemberFinanceAPI.addProjectIncome(incomeFormData);
+      } else {
+        await incomeAPI.create(incomeFormData);
+      }
+      
       showToast.success('Income entry added successfully!');
       setShowIncomeModal(false);
-      setIncomeFormData({ amount: '', source: '', description: '', projectId: '', date: new Date().toISOString().split('T')[0] });
+      setIncomeFormData({ amount: '', source: '', sourceType: 'Product Sales', description: '', projectId: '', date: new Date().toISOString().split('T')[0] });
       fetchPayouts(); // Refresh data
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to add income entry');
@@ -324,10 +339,16 @@ export default function PayrollPage() {
     const loadingToast = showToast.loading('Adding expense entry...');
 
     try {
-      await expenseAPI.create(expenseFormData);
+      // Use team member finance API for team members, regular API for founders/managers
+      if (isMember) {
+        await teamMemberFinanceAPI.addProjectExpense(expenseFormData);
+      } else {
+        await expenseAPI.create(expenseFormData);
+      }
+      
       showToast.success('Expense entry added successfully!');
       setShowExpenseModal(false);
-      setExpenseFormData({ amount: '', category: '', description: '', projectId: '', date: new Date().toISOString().split('T')[0] });
+      setExpenseFormData({ amount: '', category: 'Other', description: '', projectId: '', date: new Date().toISOString().split('T')[0] });
       fetchPayouts(); // Refresh data
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to add expense entry');
@@ -1069,6 +1090,21 @@ export default function PayrollPage() {
                 />
 
                 <FormSelect
+                  label="Source Type"
+                  required
+                  value={incomeFormData.sourceType}
+                  onChange={(e) => setIncomeFormData({ ...incomeFormData, sourceType: e.target.value })}
+                  options={[
+                    { value: 'Coaching', label: 'Coaching' },
+                    { value: 'Paid Workshops', label: 'Paid Workshops' },
+                    { value: 'Guest Lectures', label: 'Guest Lectures' },
+                    { value: 'Product Sales', label: 'Product Sales' },
+                    { value: 'Online Courses', label: 'Online Courses' },
+                    { value: 'Other', label: 'Other' },
+                  ]}
+                />
+
+                <FormSelect
                   label="Project"
                   required
                   value={incomeFormData.projectId}
@@ -1140,12 +1176,16 @@ export default function PayrollPage() {
                   value={expenseFormData.category}
                   onChange={(e) => setExpenseFormData({ ...expenseFormData, category: e.target.value })}
                   options={[
-                    { value: 'travel', label: 'Travel' },
-                    { value: 'equipment', label: 'Equipment' },
-                    { value: 'marketing', label: 'Marketing' },
-                    { value: 'office', label: 'Office Supplies' },
-                    { value: 'software', label: 'Software' },
-                    { value: 'other', label: 'Other' },
+                    { value: 'Rent', label: 'Rent' },
+                    { value: 'Utilities', label: 'Utilities' },
+                    { value: 'Logistics', label: 'Logistics' },
+                    { value: 'Salaries', label: 'Salaries' },
+                    { value: 'Marketing', label: 'Marketing' },
+                    { value: 'Manufacturing', label: 'Manufacturing' },
+                    { value: 'Production', label: 'Production' },
+                    { value: 'Travel', label: 'Travel' },
+                    { value: 'Office Supplies', label: 'Office Supplies' },
+                    { value: 'Other', label: 'Other' },
                   ]}
                 />
 

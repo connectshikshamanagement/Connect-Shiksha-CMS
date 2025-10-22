@@ -13,6 +13,7 @@ import {
   FiSettings,
   FiLogOut,
   FiCreditCard,
+  FiClock,
 } from 'react-icons/fi';
 import usePermissions from '@/hooks/usePermissions';
 
@@ -27,7 +28,8 @@ const navigation = [
   { name: 'Sales', href: '/dashboard/sales', icon: FiShoppingBag, permission: 'finance.read' },
   { name: 'Payroll', href: '/dashboard/payroll', icon: FiDollarSign, permission: 'payroll.read' },
   { name: 'Advance Payments', href: '/dashboard/advance-payments', icon: FiCreditCard, permission: 'payroll.read', role: 'FOUNDER' },
-  { name: 'My Advance Payments', href: '/dashboard/my-advance-payments', icon: FiCreditCard, permission: 'payroll.read', role: 'TEAM_MEMBER' },
+  { name: 'My Advance Payments', href: '/dashboard/my-advance-payments', icon: FiCreditCard, permission: null, role: 'TEAM_MEMBER' },
+  { name: 'My Finance History', href: '/dashboard/finance-history', icon: FiClock, permission: null, role: 'TEAM_MEMBER' },
   { name: 'Reports', href: '/dashboard/reports', icon: FiFileText, permission: 'reports.read' },
   { name: 'Settings', href: '/dashboard/settings', icon: FiSettings, permission: 'users.read' },
   { name: 'Members', href: '/dashboard/members', icon: FiUsers, permission: 'users.create', role: 'FOUNDER' },

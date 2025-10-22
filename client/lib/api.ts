@@ -149,6 +149,14 @@ export const advancePaymentAPI = {
   getStats: () => api.get('/advance-payments/stats'),
 };
 
+export const teamMemberFinanceAPI = {
+  addProjectIncome: (data: any) => api.post('/team-member-finance/project-income', data),
+  addProjectExpense: (data: any) => api.post('/team-member-finance/project-expense', data),
+  getMyProjects: () => api.get('/team-member-finance/my-projects'),
+  getMyIncomeHistory: (params?: any) => api.get('/team-member-finance/my-income-history', { params }),
+  getMyExpenseHistory: (params?: any) => api.get('/team-member-finance/my-expense-history', { params }),
+};
+
 export const financeAPI = {
   getTeamSummary: (params?: any) => api.get('/finance/team-summary', { params }),
   getProjectSummary: (params?: any) => api.get('/finance/project-summary', { params }),
