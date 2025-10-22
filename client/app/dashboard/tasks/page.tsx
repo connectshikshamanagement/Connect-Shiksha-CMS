@@ -1,175 +1,117 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { taskAPI, projectAPI, userAPI } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { taskAPI, projectAPI, userAPI, teamAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import FormInput from '@/components/FormInput';
 import FormSelect from '@/components/FormSelect';
+import TaskList from '@/components/tasks/TaskList';
 import { showToast } from '@/lib/toast';
-import { FiPlus, FiEdit, FiTrash2, FiClock, FiUser, FiMessageSquare } from 'react-icons/fi';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useTaskSocketEvents } from '@/hooks/useTaskSocketEvents';
+import { FiPlus, FiSearch, FiFilter, FiCalendar, FiUsers, FiFolder, FiCheckCircle } from 'react-icons/fi';
 
-function SortableTask({ task, onEdit, onDelete }: any) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task._id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  const getPriorityColor = (priority: string) => {
-    const colors: any = {
-      low: 'border-gray-300 bg-gray-50',
-      medium: 'border-yellow-300 bg-yellow-50',
-      high: 'border-orange-300 bg-orange-50',
-      urgent: 'border-red-300 bg-red-50',
-    };
-    return colors[priority] || 'border-gray-300 bg-gray-50';
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={`cursor-move rounded-lg border-l-4 bg-white p-4 shadow-sm transition hover:shadow-md ${getPriorityColor(task.priority)}`}
-    >
-      <div className="flex items-start justify-between">
-        <h4 className="flex-1 font-medium text-gray-900">{task.title}</h4>
-        <div className="flex gap-1">
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
-            className="rounded p-1 hover:bg-gray-100"
-          >
-            <FiEdit className="h-4 w-4 text-gray-600" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(task._id); }}
-            className="rounded p-1 hover:bg-red-100"
-          >
-            <FiTrash2 className="h-4 w-4 text-red-600" />
-          </button>
-        </div>
-      </div>
-
-      {task.description && (
-        <p className="mt-2 text-sm text-gray-600 line-clamp-2">{task.description}</p>
-      )}
-      
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
-        <span className="capitalize flex items-center">
-          <span className={`mr-1 h-2 w-2 rounded-full ${
-            task.priority === 'urgent' ? 'bg-red-500' :
-            task.priority === 'high' ? 'bg-orange-500' :
-            task.priority === 'medium' ? 'bg-yellow-500' : 'bg-gray-500'
-          }`}></span>
-          {task.priority}
-        </span>
-        {task.assigneeIds?.length > 0 && (
-          <span className="flex items-center">
-            <FiUser className="mr-1" />
-            {task.assigneeIds.length} assigned
-          </span>
-        )}
-        {task.dueDate && (
-          <span className="flex items-center">
-            <FiClock className="mr-1" />
-            {new Date(task.dueDate).toLocaleDateString()}
-          </span>
-        )}
-        {task.comments?.length > 0 && (
-          <span className="flex items-center">
-            <FiMessageSquare className="mr-1" />
-            {task.comments.length}
-          </span>
-        )}
-      </div>
-    </div>
-  );
+interface Task {
+  _id: string;
+  title: string;
+  description?: string;
+  status: 'todo' | 'in_progress' | 'review' | 'done';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  progress: number;
+  deadline: string;
+  assignedTo: Array<{ _id: string; name: string; email: string }>;
+  assignedBy: { _id: string; name: string; email: string };
+  teamId: { _id: string; name: string; category: string };
+  projectId?: { _id: string; title: string };
+  notes: Array<{ userId: { name: string }; text: string; createdAt: string }>;
+  createdAt: string;
 }
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<any>({
-    todo: [],
-    in_progress: [],
-    review: [],
-    done: []
-  });
+  const router = useRouter();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [editingTask, setEditingTask] = useState<any>(null);
-  const [formData, setFormData] = useState({
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'todo' | 'in_progress' | 'review' | 'done'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({
+    teamId: '',
     projectId: '',
-    title: '',
-    description: '',
-    status: 'todo',
-    assigneeIds: [] as string[],
-    priority: 'medium',
-    dueDate: '',
-    estimatedHours: 0,
-    tags: '',
+    priority: '',
+    status: ''
   });
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const { userRole, isFounder, isManager, isMember } = usePermissions();
+
+  // Real-time socket events
+  useTaskSocketEvents({
+    onTaskCreated: (newTask) => {
+      setTasks(prev => [...prev, newTask]);
+    },
+    onTaskUpdated: (updatedTask) => {
+      setTasks(prev => prev.map(task => 
+        task._id === updatedTask._id ? updatedTask : task
+      ));
+    },
+    onTaskDeleted: (taskId) => {
+      setTasks(prev => prev.filter(task => task._id !== taskId));
+    },
+    onTaskStatusChanged: (data) => {
+      setTasks(prev => prev.map(task => 
+        task._id === data.taskId ? { ...task, status: data.status } : task
+      ));
+    },
+    userId: typeof window !== 'undefined' ? localStorage.getItem('userId') || undefined : undefined,
+  });
+
+  const formData = {
+    title: '',
+    description: '',
+    teamId: '',
+    projectId: '',
+    assignedTo: [] as string[],
+    priority: 'medium' as const,
+    deadline: '',
+  };
+
+  const [taskFormData, setTaskFormData] = useState(formData);
+  const [bulkTasks, setBulkTasks] = useState<Array<{id: string, title: string, description: string}>>([]);
+  const [showBulkMode, setShowBulkMode] = useState(false);
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
     fetchData();
-  }, []);
+  }, [router]);
 
   const fetchData = async () => {
     try {
-      const [tasksRes, projectsRes, usersRes] = await Promise.all([
+      const [tasksRes, projectsRes, teamsRes, usersRes] = await Promise.all([
         taskAPI.getAll(),
         projectAPI.getAll(),
+        teamAPI.getAll(),
         userAPI.getAll()
       ]);
       
       if (tasksRes.data.success) {
-        const allTasks = tasksRes.data.data;
-        const grouped = {
-          todo: allTasks.filter((t: any) => t.status === 'todo'),
-          in_progress: allTasks.filter((t: any) => t.status === 'in_progress'),
-          review: allTasks.filter((t: any) => t.status === 'review'),
-          done: allTasks.filter((t: any) => t.status === 'done'),
-        };
-        setTasks(grouped);
+        setTasks(tasksRes.data.data);
+        setFilteredTasks(tasksRes.data.data);
       }
       if (projectsRes.data.success) setProjects(projectsRes.data.data);
+      if (teamsRes.data.success) setTeams(teamsRes.data.data);
       if (usersRes.data.success) setUsers(usersRes.data.data);
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to fetch data');
@@ -178,54 +120,52 @@ export default function TasksPage() {
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
+  // Filter tasks based on active tab, search, and filters
+  useEffect(() => {
+    let filtered = tasks;
 
-    if (!over) return;
-
-    const taskId = active.id as string;
-    const newStatus = over.id as string;
-
-    // Find the task being dragged
-    let task: any = null;
-    let oldStatus = '';
-
-    for (const [status, taskList] of Object.entries(tasks)) {
-      const found = (taskList as any[]).find((t: any) => t._id === taskId);
-      if (found) {
-        task = found;
-        oldStatus = status;
-        break;
-      }
+    // Filter by tab
+    if (activeTab !== 'all') {
+      filtered = filtered.filter(task => task.status === activeTab);
     }
 
-    if (!task || oldStatus === newStatus) return;
-
-    // Optimistically update UI
-    const updatedTasks = { ...tasks };
-    updatedTasks[oldStatus as keyof typeof tasks] = updatedTasks[oldStatus as keyof typeof tasks].filter((t: any) => t._id !== taskId);
-    updatedTasks[newStatus as keyof typeof tasks] = [...updatedTasks[newStatus as keyof typeof tasks], { ...task, status: newStatus }];
-    setTasks(updatedTasks);
-
-    // Update on backend
-    const loadingToast = showToast.loading('Updating task status...');
-
-    try {
-      await taskAPI.updateStatus(taskId, newStatus);
-      showToast.dismiss(loadingToast);
-      showToast.success(`Task moved to ${newStatus.replace('_', ' ')}!`);
-    } catch (error: any) {
-      showToast.dismiss(loadingToast);
-      showToast.error(error.response?.data?.message || 'Failed to update task');
-      // Revert on error
-      fetchData();
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(task =>
+        task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.teamId.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.projectId?.title.toLowerCase().includes(searchTerm.toLowerCase())
+      );
     }
-  };
+
+    // Filter by team
+    if (filters.teamId) {
+      filtered = filtered.filter(task => task.teamId._id === filters.teamId);
+    }
+
+    // Filter by project
+    if (filters.projectId) {
+      filtered = filtered.filter(task => task.projectId?._id === filters.projectId);
+    }
+
+    // Filter by priority
+    if (filters.priority) {
+      filtered = filtered.filter(task => task.priority === filters.priority);
+    }
+
+    // Filter by status
+    if (filters.status) {
+      filtered = filtered.filter(task => task.status === filters.status);
+    }
+
+    setFilteredTasks(filtered);
+  }, [tasks, activeTab, searchTerm, filters]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.projectId || !formData.title) {
+    if (!taskFormData.teamId || !taskFormData.assignedTo.length || !taskFormData.deadline) {
       showToast.error('Please fill in all required fields');
       return;
     }
@@ -233,17 +173,33 @@ export default function TasksPage() {
     const loadingToast = showToast.loading(editingTask ? 'Updating task...' : 'Creating task...');
 
     try {
-      const submitData = {
-        ...formData,
-        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
-      };
+      if (showBulkMode && bulkTasks.length > 0) {
+        // Create multiple tasks
+        const tasksToCreate = bulkTasks.map(task => ({
+          ...taskFormData,
+          title: task.title,
+          description: task.description,
+        }));
 
-      if (editingTask) {
-        await taskAPI.update(editingTask._id, submitData);
-        showToast.success('Task updated successfully!');
+        const promises = tasksToCreate.map(taskData => taskAPI.create(taskData));
+        await Promise.all(promises);
+        
+        showToast.success(`${bulkTasks.length} tasks created successfully!`);
+        setBulkTasks([]);
       } else {
-        await taskAPI.create(submitData);
-        showToast.success('Task created successfully!');
+        // Create single task
+        if (!taskFormData.title) {
+          showToast.error('Please provide a task title');
+          return;
+        }
+
+        if (editingTask) {
+          await taskAPI.update(editingTask._id, taskFormData);
+          showToast.success('Task updated successfully!');
+        } else {
+          await taskAPI.create(taskFormData);
+          showToast.success('Task created successfully!');
+        }
       }
       
       showToast.dismiss(loadingToast);
@@ -256,18 +212,16 @@ export default function TasksPage() {
     }
   };
 
-  const handleEdit = (task: any) => {
+  const handleEdit = (task: Task) => {
     setEditingTask(task);
-    setFormData({
-      projectId: task.projectId?._id || task.projectId,
+    setTaskFormData({
       title: task.title,
       description: task.description || '',
-      status: task.status,
-      assigneeIds: task.assigneeIds?.map((a: any) => a._id || a) || [],
+      teamId: task.teamId._id,
+      projectId: task.projectId?._id || '',
+      assignedTo: task.assignedTo.map(user => user._id),
       priority: task.priority,
-      dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
-      estimatedHours: task.estimatedHours || 0,
-      tags: task.tags?.join(', ') || '',
+      deadline: new Date(task.deadline).toISOString().split('T')[0],
     });
     setShowModal(true);
   };
@@ -288,53 +242,58 @@ export default function TasksPage() {
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      projectId: '',
-      title: '',
-      description: '',
-      status: 'todo',
-      assigneeIds: [],
-      priority: 'medium',
-      dueDate: '',
-      estimatedHours: 0,
-      tags: '',
-    });
-    setEditingTask(null);
+  const handleUpdateProgress = async (taskId: string, progress: number, note?: string, status?: string) => {
+    try {
+      await taskAPI.updateProgress(taskId, { progress, note, status });
+      fetchData(); // Refresh tasks
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to update task');
+    }
   };
 
-  const Column = ({ title, status, tasks: columnTasks, icon }: any) => (
-    <div className="flex-1 rounded-lg bg-gray-100 p-4 min-w-[280px]">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 font-semibold text-gray-700">
-          <span>{icon}</span>
-          {title}
-        </h3>
-        <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium">
-          {columnTasks.length}
-        </span>
-      </div>
+  const resetForm = () => {
+    setTaskFormData(formData);
+    setEditingTask(null);
+    setBulkTasks([]);
+    setShowBulkMode(false);
+  };
 
-      <SortableContext items={columnTasks.map((t: any) => t._id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-3 min-h-[200px]">
-          {columnTasks.map((task: any) => (
-            <SortableTask
-              key={task._id}
-              task={task}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          ))}
+  // Bulk task management functions
+  const addBulkTask = () => {
+    const newTask = {
+      id: Date.now().toString(),
+      title: '',
+      description: ''
+    };
+    setBulkTasks([...bulkTasks, newTask]);
+  };
 
-          {columnTasks.length === 0 && (
-            <div className="rounded-lg border-2 border-dashed border-gray-300 p-6 text-center text-sm text-gray-400">
-              Drop tasks here
-            </div>
-          )}
-        </div>
-      </SortableContext>
-    </div>
-  );
+  const removeBulkTask = (id: string) => {
+    setBulkTasks(bulkTasks.filter(task => task.id !== id));
+  };
+
+  const updateBulkTask = (id: string, field: 'title' | 'description', value: string) => {
+    setBulkTasks(bulkTasks.map(task => 
+      task.id === id ? { ...task, [field]: value } : task
+    ));
+  };
+
+  const isAssignedToUser = (task: Task) => {
+    if (typeof window === 'undefined') return false;
+    return task.assignedTo.some(user => user._id === localStorage.getItem('userId'));
+  };
+
+  const getTabCounts = () => {
+    return {
+      all: tasks.length,
+      todo: tasks.filter(t => t.status === 'todo').length,
+      in_progress: tasks.filter(t => t.status === 'in_progress').length,
+      review: tasks.filter(t => t.status === 'review').length,
+      done: tasks.filter(t => t.status === 'done').length,
+    };
+  };
+
+  const tabCounts = getTabCounts();
 
   if (loading) {
     return (
@@ -357,61 +316,137 @@ export default function TasksPage() {
       <div className="flex-1 overflow-auto">
         <Header title="Tasks" />
 
-        <div className="p-8">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800">Task Management (Kanban)</h2>
-              <p className="mt-1 text-sm text-gray-600">Drag tasks between columns to update their status</p>
+        <div className="p-6">
+          {/* Header */}
+          <div className="mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">Task Management</h2>
+                <p className="mt-1 text-sm text-gray-600">Manage and track your team's tasks</p>
+              </div>
+              {(isFounder || isManager) && (
+                <div className="flex gap-2">
+                  <Button onClick={() => { resetForm(); setShowModal(true); }}>
+                    <FiPlus className="mr-2" />
+                    Add Task
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => { resetForm(); setShowBulkMode(true); setShowModal(true); }}
+                  >
+                    <FiPlus className="mr-2" />
+                    Bulk Create
+                  </Button>
+                </div>
+              )}
             </div>
-            <Button onClick={() => { resetForm(); setShowModal(true); }}>
-              <FiPlus className="mr-2" />
-              Add Task
-            </Button>
           </div>
 
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="flex gap-4 overflow-x-auto pb-4">
-              <div id="todo" className="flex-1 min-w-[280px]">
-                <Column
-                  title="To Do"
-                  status="todo"
-                  tasks={tasks.todo}
-                  icon="📋"
-                />
+          {/* Search and Filters */}
+          <div className="mb-6 bg-white rounded-lg shadow-sm p-4">
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Search */}
+              <div className="flex-1">
+                <div className="relative">
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search tasks..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
               </div>
 
-              <div id="in_progress" className="flex-1 min-w-[280px]">
-                <Column
-                  title="In Progress"
-                  status="in_progress"
-                  tasks={tasks.in_progress}
-                  icon="🔄"
-                />
-              </div>
+              {/* Filters */}
+              <div className="flex flex-wrap gap-3">
+                <select
+                  value={filters.teamId}
+                  onChange={(e) => setFilters({ ...filters, teamId: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Teams</option>
+                  {teams.map((team: any) => (
+                    <option key={team._id} value={team._id}>{team.name}</option>
+                  ))}
+                </select>
 
-              <div id="review" className="flex-1 min-w-[280px]">
-                <Column
-                  title="Review"
-                  status="review"
-                  tasks={tasks.review}
-                  icon="👀"
-                />
-              </div>
+                <select
+                  value={filters.projectId}
+                  onChange={(e) => setFilters({ ...filters, projectId: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Projects</option>
+                  {projects.map((project: any) => (
+                    <option key={project._id} value={project._id}>{project.title}</option>
+                  ))}
+                </select>
 
-              <div id="done" className="flex-1 min-w-[280px]">
-                <Column
-                  title="Done"
-                  status="done"
-                  tasks={tasks.done}
-                  icon="✅"
-                />
+                <select
+                  value={filters.priority}
+                  onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Priorities</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+
+                <button
+                  onClick={() => setFilters({ teamId: '', projectId: '', priority: '', status: '' })}
+                  className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+                >
+                  Clear Filters
+                </button>
               </div>
             </div>
-          </DndContext>
+          </div>
+
+          {/* Task Tabs */}
+          <div className="mb-6">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'all', label: 'All Tasks', icon: FiFolder },
+                { key: 'todo', label: 'To Do', icon: FiCalendar },
+                { key: 'in_progress', label: 'In Progress', icon: FiUsers },
+                { key: 'review', label: 'Review', icon: FiFilter },
+                { key: 'done', label: 'Done', icon: FiPlus },
+              ].map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key as any)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    activeTab === key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                  <span className={`px-2 py-1 rounded-full text-xs ${
+                    activeTab === key ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {tabCounts[key as keyof typeof tabCounts]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Task List */}
+          <div className="bg-white rounded-lg shadow-sm">
+            <TaskList
+              tasks={filteredTasks}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onUpdateProgress={handleUpdateProgress}
+              userRole={userRole}
+              isAssignedToUser={isAssignedToUser}
+            />
+          </div>
         </div>
       </div>
 
@@ -422,51 +457,41 @@ export default function TasksPage() {
           setShowModal(false);
           resetForm();
         }}
-        title={editingTask ? 'Edit Task' : 'Create New Task'}
+        title={editingTask ? 'Edit Task' : showBulkMode ? 'Bulk Create Tasks' : 'Create New Task'}
         size="lg"
       >
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <FormInput
-                label="Task Title"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="e.g., Design workshop materials"
-              />
-            </div>
-
+          {/* Common Fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <FormSelect
-              label="Project"
+              label="Team"
               required
-              value={formData.projectId}
-              onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
-              options={projects.map((project: any) => ({
-                value: project._id,
-                label: project.title,
+              value={taskFormData.teamId}
+              onChange={(e) => setTaskFormData({ ...taskFormData, teamId: e.target.value })}
+              options={teams.map((team: any) => ({
+                value: team._id,
+                label: team.name,
               }))}
             />
 
             <FormSelect
-              label="Status"
-              required
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              label="Project (Optional)"
+              value={taskFormData.projectId}
+              onChange={(e) => setTaskFormData({ ...taskFormData, projectId: e.target.value })}
               options={[
-                { value: 'todo', label: 'To Do' },
-                { value: 'in_progress', label: 'In Progress' },
-                { value: 'review', label: 'Review' },
-                { value: 'done', label: 'Done' },
-                { value: 'blocked', label: 'Blocked' },
+                { value: '', label: 'No Project' },
+                ...projects.map((project: any) => ({
+                  value: project._id,
+                  label: project.title,
+                }))
               ]}
             />
 
             <FormSelect
               label="Priority"
               required
-              value={formData.priority}
-              onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+              value={taskFormData.priority}
+              onChange={(e) => setTaskFormData({ ...taskFormData, priority: e.target.value as any })}
               options={[
                 { value: 'low', label: 'Low' },
                 { value: 'medium', label: 'Medium' },
@@ -476,70 +501,136 @@ export default function TasksPage() {
             />
 
             <FormInput
-              label="Due Date"
+              label="Deadline"
               type="date"
-              value={formData.dueDate}
-              onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+              required
+              value={taskFormData.deadline}
+              onChange={(e) => setTaskFormData({ ...taskFormData, deadline: e.target.value })}
             />
-
-            <FormInput
-              label="Estimated Hours"
-              type="number"
-              min="0"
-              value={formData.estimatedHours}
-              onChange={(e) => setFormData({ ...formData, estimatedHours: Number(e.target.value) })}
-              placeholder="0"
-            />
-
-            <FormInput
-              label="Tags (comma-separated)"
-              value={formData.tags}
-              onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-              placeholder="design, urgent, review"
-            />
-
-            <div className="col-span-2">
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Assignees
-              </label>
-              <select
-                multiple
-                value={formData.assigneeIds}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions, option => option.value);
-                  setFormData({ ...formData, assigneeIds: selected });
-                }}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                size={4}
-              >
-                {users.map((user: any) => (
-                  <option key={user._id} value={user._id}>
-                    {user.name} - {user.email}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-gray-500">Hold Ctrl/Cmd to select multiple assignees</p>
-            </div>
-
-            <div className="col-span-2">
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Description
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                placeholder="Detailed description of the task..."
-              />
-            </div>
-
-            <div className="col-span-2 rounded bg-blue-50 p-3 text-sm text-blue-800">
-              <strong>💡 Tip:</strong> You can drag tasks between columns on the Kanban board to change their status!
-            </div>
           </div>
 
-          <div className="mt-6 flex justify-end gap-3">
+          {/* Member Assignment */}
+          <div className="mb-6">
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Assign To Members (Required)
+            </label>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-3">
+              {users.map((user: any) => (
+                <label key={user._id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                  <input
+                    type="checkbox"
+                    checked={taskFormData.assignedTo.includes(user._id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setTaskFormData({
+                          ...taskFormData,
+                          assignedTo: [...taskFormData.assignedTo, user._id]
+                        });
+                      } else {
+                        setTaskFormData({
+                          ...taskFormData,
+                          assignedTo: taskFormData.assignedTo.filter(id => id !== user._id)
+                        });
+                      }
+                    }}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">{user.name}</span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Selected: {taskFormData.assignedTo.length} member(s)
+            </p>
+          </div>
+
+          {/* Single Task Mode */}
+          {!showBulkMode && (
+            <div className="mb-6">
+              <FormInput
+                label="Task Title"
+                required
+                value={taskFormData.title}
+                onChange={(e) => setTaskFormData({ ...taskFormData, title: e.target.value })}
+                placeholder="e.g., Design workshop materials"
+              />
+              
+              <div className="mt-4">
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Description
+                </label>
+                <textarea
+                  value={taskFormData.description}
+                  onChange={(e) => setTaskFormData({ ...taskFormData, description: e.target.value })}
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="Detailed description of the task..."
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Bulk Task Mode */}
+          {showBulkMode && (
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-800">Tasks to Create</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addBulkTask}
+                >
+                  <FiPlus className="mr-1" />
+                  Add Task
+                </Button>
+              </div>
+
+              <div className="space-y-4 max-h-60 overflow-y-auto">
+                {bulkTasks.map((task, index) => (
+                  <div key={task.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-medium text-gray-800">Task {index + 1}</h4>
+                      <button
+                        type="button"
+                        onClick={() => removeBulkTask(task.id)}
+                        className="text-red-600 hover:text-red-800 text-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        placeholder="Task title..."
+                        value={task.title}
+                        onChange={(e) => updateBulkTask(task.id, 'title', e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      />
+                      
+                      <textarea
+                        placeholder="Task description..."
+                        value={task.description}
+                        onChange={(e) => updateBulkTask(task.id, 'description', e.target.value)}
+                        rows={2}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {bulkTasks.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <FiPlus className="mx-auto mb-2 h-8 w-8" />
+                  <p>No tasks added yet. Click "Add Task" to get started.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
             <Button
               type="button"
               variant="outline"
@@ -551,7 +642,7 @@ export default function TasksPage() {
               Cancel
             </Button>
             <Button type="submit">
-              {editingTask ? 'Update Task' : 'Create Task'}
+              {editingTask ? 'Update Task' : showBulkMode ? `Create ${bulkTasks.length} Tasks` : 'Create Task'}
             </Button>
           </div>
         </form>

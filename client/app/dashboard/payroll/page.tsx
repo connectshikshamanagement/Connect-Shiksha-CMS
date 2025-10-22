@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { payoutAPI } from '@/lib/api';
+import { payoutAPI, advancePaymentAPI, incomeAPI, expenseAPI, projectAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import Button from '@/components/Button';
+import Modal from '@/components/Modal';
+import FormInput from '@/components/FormInput';
+import FormSelect from '@/components/FormSelect';
 import { showToast } from '@/lib/toast';
 import { usePermissions } from '@/hooks/usePermissions';
-import { FiDownload, FiCheck, FiDollarSign, FiUsers, FiTrendingUp, FiFilter, FiRefreshCw } from 'react-icons/fi';
+import { FiDownload, FiCheck, FiDollarSign, FiUsers, FiTrendingUp, FiFilter, FiRefreshCw, FiPlus, FiMinus, FiCreditCard } from 'react-icons/fi';
 
 export default function PayrollPage() {
   const [payouts, setPayouts] = useState([]);
@@ -20,7 +23,35 @@ export default function PayrollPage() {
   const [selectedTeam, setSelectedTeam] = useState('');
   const [analytics, setAnalytics] = useState<any>(null);
   const [financialSummary, setFinancialSummary] = useState<any>(null);
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [userProjects, setUserProjects] = useState([]);
   const { userRole, isFounder, isManager, isMember } = usePermissions();
+
+  // Form data states
+  const [advanceFormData, setAdvanceFormData] = useState({
+    amount: '',
+    reason: '',
+    projectId: '',
+    deductedFrom: 'profit_share'
+  });
+
+  const [incomeFormData, setIncomeFormData] = useState({
+    amount: '',
+    source: '',
+    description: '',
+    projectId: '',
+    date: new Date().toISOString().split('T')[0]
+  });
+
+  const [expenseFormData, setExpenseFormData] = useState({
+    amount: '',
+    category: '',
+    description: '',
+    projectId: '',
+    date: new Date().toISOString().split('T')[0]
+  });
 
   useEffect(() => {
     // Debug current user
@@ -32,6 +63,9 @@ export default function PayrollPage() {
     if (isFounder || isManager) {
       fetchAnalytics();
       fetchFinancialSummary();
+    }
+    if (isMember) {
+      fetchUserProjects();
     }
   }, [selectedMonth, selectedYear, selectedProject, selectedTeam, userRole]);
 
@@ -222,6 +256,86 @@ export default function PayrollPage() {
     }
   };
 
+  const fetchUserProjects = async () => {
+    try {
+      const response = await projectAPI.getAll();
+      if (response.data.success) {
+        setUserProjects(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching user projects:', error);
+    }
+  };
+
+  // Form submission handlers
+  const handleAdvancePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!advanceFormData.amount || !advanceFormData.reason) {
+      showToast.error('Please fill in all required fields');
+      return;
+    }
+
+    const loadingToast = showToast.loading('Submitting advance payment request...');
+
+    try {
+      await advancePaymentAPI.create(advanceFormData);
+      showToast.success('Advance payment request submitted successfully!');
+      setShowAdvanceModal(false);
+      setAdvanceFormData({ amount: '', reason: '', projectId: '', deductedFrom: 'profit_share' });
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Failed to submit request');
+    } finally {
+      showToast.dismiss(loadingToast);
+    }
+  };
+
+  const handleIncomeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!incomeFormData.amount || !incomeFormData.source || !incomeFormData.projectId) {
+      showToast.error('Please fill in all required fields');
+      return;
+    }
+
+    const loadingToast = showToast.loading('Adding income entry...');
+
+    try {
+      await incomeAPI.create(incomeFormData);
+      showToast.success('Income entry added successfully!');
+      setShowIncomeModal(false);
+      setIncomeFormData({ amount: '', source: '', description: '', projectId: '', date: new Date().toISOString().split('T')[0] });
+      fetchPayouts(); // Refresh data
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Failed to add income entry');
+    } finally {
+      showToast.dismiss(loadingToast);
+    }
+  };
+
+  const handleExpenseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!expenseFormData.amount || !expenseFormData.category || !expenseFormData.projectId) {
+      showToast.error('Please fill in all required fields');
+      return;
+    }
+
+    const loadingToast = showToast.loading('Adding expense entry...');
+
+    try {
+      await expenseAPI.create(expenseFormData);
+      showToast.success('Expense entry added successfully!');
+      setShowExpenseModal(false);
+      setExpenseFormData({ amount: '', category: '', description: '', projectId: '', date: new Date().toISOString().split('T')[0] });
+      fetchPayouts(); // Refresh data
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Failed to add expense entry');
+    } finally {
+      showToast.dismiss(loadingToast);
+    }
+  };
+
   const handleExportPDF = async () => {
     const loadingToast = showToast.loading('Generating PDF report...');
 
@@ -318,6 +432,22 @@ export default function PayrollPage() {
                 <FiDownload className="mr-2" />
                 Export PDF
               </Button>
+                </>
+              )}
+              {isMember && (
+                <>
+                  <Button variant="outline" onClick={() => setShowAdvanceModal(true)}>
+                    <FiCreditCard className="mr-2" />
+                    Request Advance
+                  </Button>
+                  <Button variant="success" onClick={() => setShowIncomeModal(true)}>
+                    <FiPlus className="mr-2" />
+                    Add Income
+                  </Button>
+                  <Button variant="danger" onClick={() => setShowExpenseModal(true)}>
+                    <FiMinus className="mr-2" />
+                    Add Expense
+                  </Button>
                 </>
               )}
             </div>
@@ -840,6 +970,232 @@ export default function PayrollPage() {
               </ul>
             </div>
           )}
+
+          {/* Advance Payment Request Modal */}
+          <Modal
+            isOpen={showAdvanceModal}
+            onClose={() => setShowAdvanceModal(false)}
+            title="Request Advance Payment"
+            size="md"
+          >
+            <form onSubmit={handleAdvancePaymentSubmit}>
+              <div className="space-y-4">
+                <FormInput
+                  label="Amount (₹)"
+                  type="number"
+                  required
+                  value={advanceFormData.amount}
+                  onChange={(e) => setAdvanceFormData({ ...advanceFormData, amount: e.target.value })}
+                  placeholder="Enter amount"
+                />
+
+                <FormSelect
+                  label="Project (Optional)"
+                  value={advanceFormData.projectId}
+                  onChange={(e) => setAdvanceFormData({ ...advanceFormData, projectId: e.target.value })}
+                  options={[
+                    { value: '', label: 'No specific project' },
+                    ...userProjects.map((project: any) => ({
+                      value: project._id,
+                      label: project.title,
+                    }))
+                  ]}
+                />
+
+                <FormSelect
+                  label="Deduct From"
+                  value={advanceFormData.deductedFrom}
+                  onChange={(e) => setAdvanceFormData({ ...advanceFormData, deductedFrom: e.target.value })}
+                  options={[
+                    { value: 'profit_share', label: 'Profit Share' },
+                    { value: 'future_salary', label: 'Future Salary' },
+                  ]}
+                />
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Reason *
+                  </label>
+                  <textarea
+                    required
+                    value={advanceFormData.reason}
+                    onChange={(e) => setAdvanceFormData({ ...advanceFormData, reason: e.target.value })}
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    placeholder="Please provide a reason for the advance payment request..."
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowAdvanceModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  Submit Request
+                </Button>
+              </div>
+            </form>
+          </Modal>
+
+          {/* Add Income Modal */}
+          <Modal
+            isOpen={showIncomeModal}
+            onClose={() => setShowIncomeModal(false)}
+            title="Add Income Entry"
+            size="md"
+          >
+            <form onSubmit={handleIncomeSubmit}>
+              <div className="space-y-4">
+                <FormInput
+                  label="Amount (₹)"
+                  type="number"
+                  required
+                  value={incomeFormData.amount}
+                  onChange={(e) => setIncomeFormData({ ...incomeFormData, amount: e.target.value })}
+                  placeholder="Enter amount"
+                />
+
+                <FormInput
+                  label="Source"
+                  required
+                  value={incomeFormData.source}
+                  onChange={(e) => setIncomeFormData({ ...incomeFormData, source: e.target.value })}
+                  placeholder="e.g., Client Payment, Product Sale"
+                />
+
+                <FormSelect
+                  label="Project"
+                  required
+                  value={incomeFormData.projectId}
+                  onChange={(e) => setIncomeFormData({ ...incomeFormData, projectId: e.target.value })}
+                  options={userProjects.map((project: any) => ({
+                    value: project._id,
+                    label: project.title,
+                  }))}
+                />
+
+                <FormInput
+                  label="Date"
+                  type="date"
+                  required
+                  value={incomeFormData.date}
+                  onChange={(e) => setIncomeFormData({ ...incomeFormData, date: e.target.value })}
+                />
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Description
+                  </label>
+                  <textarea
+                    value={incomeFormData.description}
+                    onChange={(e) => setIncomeFormData({ ...incomeFormData, description: e.target.value })}
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    placeholder="Additional details about this income..."
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowIncomeModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  Add Income
+                </Button>
+              </div>
+            </form>
+          </Modal>
+
+          {/* Add Expense Modal */}
+          <Modal
+            isOpen={showExpenseModal}
+            onClose={() => setShowExpenseModal(false)}
+            title="Add Expense Entry"
+            size="md"
+          >
+            <form onSubmit={handleExpenseSubmit}>
+              <div className="space-y-4">
+                <FormInput
+                  label="Amount (₹)"
+                  type="number"
+                  required
+                  value={expenseFormData.amount}
+                  onChange={(e) => setExpenseFormData({ ...expenseFormData, amount: e.target.value })}
+                  placeholder="Enter amount"
+                />
+
+                <FormSelect
+                  label="Category"
+                  required
+                  value={expenseFormData.category}
+                  onChange={(e) => setExpenseFormData({ ...expenseFormData, category: e.target.value })}
+                  options={[
+                    { value: 'travel', label: 'Travel' },
+                    { value: 'equipment', label: 'Equipment' },
+                    { value: 'marketing', label: 'Marketing' },
+                    { value: 'office', label: 'Office Supplies' },
+                    { value: 'software', label: 'Software' },
+                    { value: 'other', label: 'Other' },
+                  ]}
+                />
+
+                <FormSelect
+                  label="Project"
+                  required
+                  value={expenseFormData.projectId}
+                  onChange={(e) => setExpenseFormData({ ...expenseFormData, projectId: e.target.value })}
+                  options={userProjects.map((project: any) => ({
+                    value: project._id,
+                    label: project.title,
+                  }))}
+                />
+
+                <FormInput
+                  label="Date"
+                  type="date"
+                  required
+                  value={expenseFormData.date}
+                  onChange={(e) => setExpenseFormData({ ...expenseFormData, date: e.target.value })}
+                />
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Description
+                  </label>
+                  <textarea
+                    value={expenseFormData.description}
+                    onChange={(e) => setExpenseFormData({ ...expenseFormData, description: e.target.value })}
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    placeholder="Additional details about this expense..."
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowExpenseModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  Add Expense
+                </Button>
+              </div>
+            </form>
+          </Modal>
       </div>
     </div>
   );

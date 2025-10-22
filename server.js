@@ -35,7 +35,7 @@ const teamBudgetRoutes = require('./routes/teamBudgetRoutes');
 const enhancedTaskRoutes = require('./routes/enhancedTaskRoutes');
 const enhancedExpenseRoutes = require('./routes/enhancedExpenseRoutes');
 const teamPerformanceRoutes = require('./routes/teamPerformanceRoutes');
-const attachmentRoutes = require('./routes/attachmentRoutes');
+const advancePaymentRoutes = require('./routes/advancePaymentRoutes');
 
 // Initialize app
 const app = express();
@@ -87,7 +87,7 @@ app.use('/api/teams', teamBudgetRoutes);
 app.use('/api/tasks', enhancedTaskRoutes);
 app.use('/api/expenses', enhancedExpenseRoutes);
 app.use('/api/teams', teamPerformanceRoutes);
-app.use('/api/attachments', attachmentRoutes);
+app.use('/api/advance-payments', advancePaymentRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

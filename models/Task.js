@@ -28,46 +28,32 @@ const checklistItemSchema = new mongoose.Schema({
 });
 
 const taskSchema = new mongoose.Schema({
-  projectId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Project'
+  title: {
+    type: String,
+    required: [true, 'Task title is required'],
+    trim: true
+  },
+  description: {
+    type: String
   },
   teamId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Team',
     required: [true, 'Please assign a team']
   },
-  title: {
-    type: String,
-    required: [true, 'Please provide a task title'],
-    trim: true
+  projectId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Project'
   },
-  description: {
-    type: String
-  },
-  status: {
-    type: String,
-    enum: ['todo', 'in_progress', 'review', 'done', 'blocked'],
-    default: 'todo'
-  },
-  assignedTo: {
+  assignedTo: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: [true, 'Please assign task to a member']
-  },
+  }],
   assignedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
-  },
-  assigneeIds: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  priority: {
-    type: String,
-    enum: ['low', 'medium', 'high', 'urgent'],
-    default: 'medium'
+    required: [true, 'Assigned By is required']
   },
   deadline: {
     type: Date,
@@ -79,17 +65,41 @@ const taskSchema = new mongoose.Schema({
     max: 100,
     default: 0
   },
+  status: {
+    type: String,
+    enum: ['todo', 'in_progress', 'review', 'done'],
+    default: 'todo'
+  },
+  priority: {
+    type: String,
+    enum: ['low', 'medium', 'high', 'urgent'],
+    default: 'medium'
+  },
+  notes: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    text: {
+      type: String,
+      required: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   estimatedHours: {
     type: Number,
-    min: 0
+    min: 0,
+    default: 0
   },
   actualHours: {
     type: Number,
     min: 0,
     default: 0
   },
-  comments: [commentSchema],
-  checklist: [checklistItemSchema],
   tags: [{
     type: String,
     trim: true

@@ -12,6 +12,7 @@ import {
   FiFileText,
   FiSettings,
   FiLogOut,
+  FiCreditCard,
 } from 'react-icons/fi';
 import usePermissions from '@/hooks/usePermissions';
 
@@ -25,6 +26,8 @@ const navigation = [
   { name: 'Products', href: '/dashboard/products', icon: FiShoppingBag, permission: 'finance.read' },
   { name: 'Sales', href: '/dashboard/sales', icon: FiShoppingBag, permission: 'finance.read' },
   { name: 'Payroll', href: '/dashboard/payroll', icon: FiDollarSign, permission: 'payroll.read' },
+  { name: 'Advance Payments', href: '/dashboard/advance-payments', icon: FiCreditCard, permission: 'payroll.read', role: 'FOUNDER' },
+  { name: 'My Advance Payments', href: '/dashboard/my-advance-payments', icon: FiCreditCard, permission: 'payroll.read', role: 'TEAM_MEMBER' },
   { name: 'Reports', href: '/dashboard/reports', icon: FiFileText, permission: 'reports.read' },
   { name: 'Settings', href: '/dashboard/settings', icon: FiSettings, permission: 'users.read' },
   { name: 'Members', href: '/dashboard/members', icon: FiUsers, permission: 'users.create', role: 'FOUNDER' },
@@ -32,7 +35,7 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { hasPermission, userRole } = usePermissions();
+  const { hasPermission, userRole, loading } = usePermissions();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -42,6 +45,9 @@ export default function Sidebar() {
 
   // Filter navigation based on permissions and role
   const filteredNavigation = navigation.filter(item => {
+    // Don't show navigation items while permissions are loading
+    if (loading) return false;
+    
     const hasPermissionAccess = !item.permission || hasPermission(item.permission);
     const hasRoleAccess = !item.role || userRole === item.role;
     
@@ -60,23 +66,29 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 px-2 py-4">
-        {filteredNavigation.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`flex items-center space-x-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-primary-700 text-white'
-                  : 'text-primary-100 hover:bg-primary-700 hover:text-white'
-              }`}
-            >
-              <item.icon className="h-5 w-5" />
-              <span>{item.name}</span>
-            </Link>
-          );
-        })}
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-primary-200">Loading...</div>
+          </div>
+        ) : (
+          filteredNavigation.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex items-center space-x-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-primary-700 text-white'
+                    : 'text-primary-100 hover:bg-primary-700 hover:text-white'
+                }`}
+              >
+                <item.icon className="h-5 w-5" />
+                <span>{item.name}</span>
+              </Link>
+            );
+          })
+        )}
       </nav>
 
       <div className="border-t border-primary-700 p-4">

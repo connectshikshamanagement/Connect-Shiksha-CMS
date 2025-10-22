@@ -57,6 +57,8 @@ export const taskAPI = {
   update: (id: string, data: any) => api.put(`/tasks/${id}`, data),
   updateStatus: (id: string, status: string) =>
     api.patch(`/tasks/${id}/status`, { status }),
+  updateProgress: (id: string, data: { progress: number; note?: string; status?: string }) =>
+    api.patch(`/tasks/${id}/progress`, data),
   addComment: (id: string, text: string) =>
     api.post(`/tasks/${id}/comments`, { text }),
   delete: (id: string) => api.delete(`/tasks/${id}`),
@@ -136,6 +138,15 @@ export const payrollAPI = {
   update: (id: string, data: any) => api.put(`/payroll/${id}`, data),
   markPaid: (id: string, data: any) => api.patch(`/payroll/${id}/pay`, data),
   delete: (id: string) => api.delete(`/payroll/${id}`),
+};
+
+export const advancePaymentAPI = {
+  getAll: () => api.get('/advance-payments'),
+  getMyRequests: () => api.get('/advance-payments/my-requests'),
+  create: (data: any) => api.post('/advance-payments', data),
+  updateStatus: (id: string, data: { status: string; reviewNotes?: string }) => 
+    api.patch(`/advance-payments/${id}/status`, data),
+  getStats: () => api.get('/advance-payments/stats'),
 };
 
 export const financeAPI = {
