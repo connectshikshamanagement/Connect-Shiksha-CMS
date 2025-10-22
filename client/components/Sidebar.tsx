@@ -44,6 +44,12 @@ export default function Sidebar() {
   const filteredNavigation = navigation.filter(item => {
     const hasPermissionAccess = !item.permission || hasPermission(item.permission);
     const hasRoleAccess = !item.role || userRole === item.role;
+    
+    // Hide clients tab for team members
+    if (item.name === 'Clients' && userRole === 'TEAM_MEMBER') {
+      return false;
+    }
+    
     return hasPermissionAccess && hasRoleAccess;
   });
 

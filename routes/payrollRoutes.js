@@ -3,6 +3,9 @@ const Payroll = require('../models/Payroll');
 const Payout = require('../models/Payout');
 const User = require('../models/User');
 const Team = require('../models/Team');
+const Project = require('../models/Project');
+const Income = require('../models/Income');
+const Expense = require('../models/Expense');
 const { protect, authorize } = require('../middleware/auth');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
@@ -31,17 +34,68 @@ router.get('/', authorize('finance.read'), async (req, res) => {
 
     const payrolls = await Payroll.find(query)
       .populate('userId', 'name email')
-      .populate('teamId', 'name category')
-      .populate('projectId', 'title')
+      .populate('teamId', 'name category monthlyBudget')
+      .populate('projectId', 'title allocatedBudget')
       .populate('createdBy', 'name email')
       .sort('-createdAt');
 
     console.log('Found payroll records:', payrolls.length);
 
+    // Add project financial data to each payroll record
+    const payrollsWithFinancials = await Promise.all(
+      payrolls.map(async (payroll) => {
+        let projectIncome = 0;
+        let projectExpenses = 0;
+        let projectBudget = 0;
+
+        // If payroll has a projectId, get project-specific data
+        if (payroll.projectId) {
+          // Get project income (using sourceRefId and sourceRefModel)
+          const incomes = await Income.find({ 
+            sourceRefId: payroll.projectId._id,
+            sourceRefModel: 'Project'
+          });
+          projectIncome = incomes.reduce((sum, income) => sum + income.amount, 0);
+
+          // Get project expenses (using projectId)
+          const expenses = await Expense.find({ 
+            projectId: payroll.projectId._id 
+          });
+          projectExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+          // Get project budget
+          projectBudget = payroll.projectId.allocatedBudget || 0;
+        } else {
+          // If no projectId, get team-level data as fallback
+          // Get team income
+          const teamIncomes = await Income.find({ 
+            teamId: payroll.teamId._id 
+          });
+          projectIncome = teamIncomes.reduce((sum, income) => sum + income.amount, 0);
+
+          // Get team expenses
+          const teamExpenses = await Expense.find({ 
+            teamId: payroll.teamId._id 
+          });
+          projectExpenses = teamExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+          // Get team budget
+          projectBudget = payroll.teamId.monthlyBudget || 0;
+        }
+
+        return {
+          ...payroll.toObject(),
+          projectIncome,
+          projectExpenses,
+          projectBudget
+        };
+      })
+    );
+
     res.status(200).json({
       success: true,
-      count: payrolls.length,
-      data: payrolls
+      count: payrollsWithFinancials.length,
+      data: payrollsWithFinancials
     });
   } catch (error) {
     console.error('Payroll fetch error:', error);

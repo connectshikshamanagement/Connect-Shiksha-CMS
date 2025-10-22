@@ -19,6 +19,7 @@ export default function PayrollPage() {
   const [selectedProject, setSelectedProject] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('');
   const [analytics, setAnalytics] = useState<any>(null);
+  const [financialSummary, setFinancialSummary] = useState<any>(null);
   const { userRole, isFounder, isManager, isMember } = usePermissions();
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export default function PayrollPage() {
     fetchPayouts();
     if (isFounder || isManager) {
       fetchAnalytics();
+      fetchFinancialSummary();
     }
   }, [selectedMonth, selectedYear, selectedProject, selectedTeam, userRole]);
 
@@ -97,6 +99,37 @@ export default function PayrollPage() {
       }
     } catch (error) {
       console.error('Failed to fetch analytics:', error);
+    }
+  };
+
+  const fetchFinancialSummary = async () => {
+    try {
+      const params = new URLSearchParams({
+        month: selectedMonth.toString(),
+        year: selectedYear.toString()
+      });
+      
+      if (selectedProject) {
+        params.append('projectId', selectedProject);
+      }
+      if (selectedTeam) {
+        params.append('teamId', selectedTeam);
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/finance/summary?${params}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+      const data = await response.json();
+      if (data.success) {
+        setFinancialSummary(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch financial summary:', error);
     }
   };
 
@@ -356,6 +389,93 @@ export default function PayrollPage() {
             )}
           </div>
 
+          {/* Financial Summary Brief */}
+          {financialSummary && (isFounder || isManager) && (
+            <div className="mb-6 rounded-lg bg-gradient-to-r from-green-500 to-blue-500 text-white p-6 shadow-lg">
+              <h3 className="text-lg font-semibold mb-4 flex items-center">
+                <FiTrendingUp className="mr-2" />
+                Financial Overview - {new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white bg-opacity-20 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-green-100 text-sm font-medium">Total Income</p>
+                      <p className="text-2xl font-bold text-white">
+                        ₹{financialSummary.totalIncome?.toLocaleString() || '0'}
+                      </p>
+                    </div>
+                    <FiDollarSign className="h-8 w-8 text-green-200" />
+                  </div>
+                  {financialSummary.projectBreakdown && (
+                    <div className="mt-2 text-xs text-green-100">
+                      {Object.entries(financialSummary.projectBreakdown).map(([project, income]: [string, any]) => (
+                        <div key={project} className="flex justify-between">
+                          <span>{project}:</span>
+                          <span>₹{income.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="bg-white bg-opacity-20 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-red-100 text-sm font-medium">Total Expenses</p>
+                      <p className="text-2xl font-bold text-white">
+                        ₹{financialSummary.totalExpenses?.toLocaleString() || '0'}
+                      </p>
+                    </div>
+                    <FiDollarSign className="h-8 w-8 text-red-200" />
+                  </div>
+                  {financialSummary.expenseBreakdown && (
+                    <div className="mt-2 text-xs text-red-100">
+                      {Object.entries(financialSummary.expenseBreakdown).map(([category, amount]: [string, any]) => (
+                        <div key={category} className="flex justify-between">
+                          <span>{category}:</span>
+                          <span>₹{amount.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="bg-white bg-opacity-20 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-blue-100 text-sm font-medium">Net Profit</p>
+                      <p className={`text-2xl font-bold ${(financialSummary.netProfit || 0) >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+                        ₹{financialSummary.netProfit?.toLocaleString() || '0'}
+                      </p>
+                    </div>
+                    <FiTrendingUp className="h-8 w-8 text-blue-200" />
+                  </div>
+                  <div className="mt-2 text-xs text-blue-100">
+                    <div className="flex justify-between">
+                      <span>Profit Margin:</span>
+                      <span>{financialSummary.profitMargin ? `${financialSummary.profitMargin.toFixed(1)}%` : '0%'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {financialSummary.topProjects && financialSummary.topProjects.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white border-opacity-20">
+                  <p className="text-sm text-white font-medium mb-2">Top Performing Projects:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {financialSummary.topProjects.slice(0, 3).map((project: any, index: number) => (
+                      <span key={project._id} className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-xs">
+                        {index + 1}. {project.title} - ₹{project.profit?.toLocaleString() || '0'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Summary Cards */}
           <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-5">
             <div className="rounded-lg bg-white p-6 shadow">
@@ -490,92 +610,94 @@ export default function PayrollPage() {
           </div>
 
           {/* Payroll Records - Split Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className={`grid grid-cols-1 ${isMember ? '' : 'lg:grid-cols-2'} gap-6`}>
             
-            {/* Founder's Shares */}
-            <div className="rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 shadow-lg border border-purple-200">
-              <div className="bg-purple-600 text-white p-4 rounded-t-lg">
-                <h3 className="text-lg font-semibold flex items-center">
-                  <FiUsers className="mr-2" />
-                  Connect Shiksha Shares
-                </h3>
-                <p className="text-purple-100 text-sm mt-1">70% of all project profits</p>
-              </div>
-              
-              <div className="p-4">
-                {payouts.filter((payout: any) => payout.userId?.email === 'admin@connectshiksha.com').map((payout: any) => (
-                  <div key={payout._id} className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-purple-200">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h4 className="font-semibold text-gray-900">{payout.projectId?.title || 'N/A'}</h4>
-                        <p className="text-sm text-gray-600">{payout.teamId?.name || ''}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-purple-600">
-                          ₹{(payout.profitShare || 0).toLocaleString()}
+            {/* Founder's Shares - Hidden for team members */}
+            {!isMember && (
+              <div className="rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 shadow-lg border border-purple-200">
+                <div className="bg-purple-600 text-white p-4 rounded-t-lg">
+                  <h3 className="text-lg font-semibold flex items-center">
+                    <FiUsers className="mr-2" />
+                    Connect Shiksha Shares
+                  </h3>
+                  <p className="text-purple-100 text-sm mt-1">70% of all project profits</p>
+                </div>
+                
+                <div className="p-4">
+                  {payouts.filter((payout: any) => payout.userId?.email === 'admin@connectshiksha.com').map((payout: any) => (
+                    <div key={payout._id} className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-purple-200">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h4 className="font-semibold text-gray-900">{payout.projectId?.title || 'N/A'}</h4>
+                          <p className="text-sm text-gray-600">{payout.teamId?.name || ''}</p>
                         </div>
-                        <div className="text-sm text-gray-500">70% Founder Share</div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between items-center text-sm">
-                      <div className="flex flex-wrap gap-2">
-                        <span className="text-gray-600 text-xs">
-                          Base: ₹{(payout.baseSalary || 0).toLocaleString()}
-                        </span>
-                        <span className="text-gray-600 text-xs">
-                          Bonuses: ₹{(payout.bonuses || 0).toLocaleString()}
-                        </span>
-                        <span className="text-red-600 text-xs">
-                          Deductions: ₹{(payout.deductions || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-semibold text-green-600">
-                          ₹{(payout.netAmount || 0).toLocaleString()}
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-purple-600">
+                            ₹{(payout.profitShare || 0).toLocaleString()}
+                          </div>
+                          <div className="text-sm text-gray-500">70% Founder Share</div>
                         </div>
-                        <div className="text-xs text-gray-500">Net Amount</div>
                       </div>
-                    </div>
-                    
-                    <div className="mt-3 flex justify-between items-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        payout.status === 'paid' ? 'bg-green-100 text-green-800' :
-                        payout.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
-                        payout.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {payout.status}
-                      </span>
                       
-                      {canMarkAsPaid && payout.status === 'pending' && (
-                        <Button
-                          size="sm"
-                          variant="success"
-                          onClick={() => handleMarkAsPaid(payout._id)}
-                        >
-                          <FiCheck className="mr-1" />
-                          Mark as Paid
-                        </Button>
+                      <div className="flex justify-between items-center text-sm">
+                        <div className="flex flex-wrap gap-2">
+                          <span className="text-gray-600 text-xs">
+                            Base: ₹{(payout.baseSalary || 0).toLocaleString()}
+                          </span>
+                          <span className="text-gray-600 text-xs">
+                            Bonuses: ₹{(payout.bonuses || 0).toLocaleString()}
+                          </span>
+                          <span className="text-red-600 text-xs">
+                            Deductions: ₹{(payout.deductions || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-semibold text-green-600">
+                            ₹{(payout.netAmount || 0).toLocaleString()}
+                          </div>
+                          <div className="text-xs text-gray-500">Net Amount</div>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-3 flex justify-between items-center">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          payout.status === 'paid' ? 'bg-green-100 text-green-800' :
+                          payout.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
+                          payout.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {payout.status}
+                        </span>
+                        
+                        {canMarkAsPaid && payout.status === 'pending' && (
+                          <Button
+                            size="sm"
+                            variant="success"
+                            onClick={() => handleMarkAsPaid(payout._id)}
+                          >
+                            <FiCheck className="mr-1" />
+                            Mark as Paid
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {payout.description && (
+                        <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                          {payout.description}
+                        </div>
                       )}
                     </div>
-                    
-                    {payout.description && (
-                      <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                        {payout.description}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                
-                {payouts.filter((payout: any) => payout.userId?.email === 'admin@connectshiksha.com').length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <FiUsers className="mx-auto mb-2 h-8 w-8" />
-                    <p>No Connect Shiksha Shares found</p>
-                          </div>
-                        )}
+                  ))}
+                  
+                  {payouts.filter((payout: any) => payout.userId?.email === 'admin@connectshiksha.com').length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <FiUsers className="mx-auto mb-2 h-8 w-8" />
+                      <p>No Connect Shiksha Shares found</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Team Members' Shares */}
             <div className="rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 shadow-lg border border-blue-200">
@@ -606,14 +728,14 @@ export default function PayrollPage() {
                     
                     <div className="flex justify-between items-center text-sm">
                       <div className="flex flex-wrap gap-2">
-                        <span className="text-gray-600 text-xs">
-                          Base: ₹{(payout.baseSalary || 0).toLocaleString()}
+                        <span className="text-green-600 text-xs">
+                          Income: ₹{(payout.projectIncome || 0).toLocaleString()}
                         </span>
-                        <span className="text-gray-600 text-xs">
-                          Bonuses: ₹{(payout.bonuses || 0).toLocaleString()}
+                        <span className="text-blue-600 text-xs">
+                          Budget: ₹{(payout.projectBudget || 0).toLocaleString()}
                         </span>
                         <span className="text-red-600 text-xs">
-                          Deductions: ₹{(payout.deductions || 0).toLocaleString()}
+                          Expenses: ₹{(payout.projectExpenses || 0).toLocaleString()}
                         </span>
                       </div>
                       <div className="text-right">

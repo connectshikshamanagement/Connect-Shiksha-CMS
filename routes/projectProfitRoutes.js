@@ -8,6 +8,8 @@ const {
 } = require('../utils/projectProfitSharing');
 const Project = require('../models/Project');
 const Payroll = require('../models/Payroll');
+const Income = require('../models/Income');
+const Expense = require('../models/Expense');
 
 const router = express.Router();
 
@@ -127,12 +129,63 @@ router.get('/my-shares',
       }
       
       const myShares = await Payroll.find(query)
-        .populate('projectId', 'title category')
-        .populate('teamId', 'name')
+        .populate('projectId', 'title category allocatedBudget')
+        .populate('teamId', 'name monthlyBudget')
         .sort('-createdAt');
       
+      // Add project financial data to each record
+      const mySharesWithFinancials = await Promise.all(
+        myShares.map(async (record) => {
+          let projectIncome = 0;
+          let projectExpenses = 0;
+          let projectBudget = 0;
+
+          // If record has a projectId, get project-specific data
+          if (record.projectId) {
+            // Get project income (using sourceRefId and sourceRefModel)
+            const incomes = await Income.find({ 
+              sourceRefId: record.projectId._id,
+              sourceRefModel: 'Project'
+            });
+            projectIncome = incomes.reduce((sum, income) => sum + income.amount, 0);
+
+            // Get project expenses (using projectId)
+            const expenses = await Expense.find({ 
+              projectId: record.projectId._id 
+            });
+            projectExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+            // Get project budget
+            projectBudget = record.projectId.allocatedBudget || 0;
+          } else {
+            // If no projectId, get team-level data as fallback
+            // Get team income
+            const teamIncomes = await Income.find({ 
+              teamId: record.teamId._id 
+            });
+            projectIncome = teamIncomes.reduce((sum, income) => sum + income.amount, 0);
+
+            // Get team expenses
+            const teamExpenses = await Expense.find({ 
+              teamId: record.teamId._id 
+            });
+            projectExpenses = teamExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+            // Get team budget
+            projectBudget = record.teamId.monthlyBudget || 0;
+          }
+
+          return {
+            ...record.toObject(),
+            projectIncome,
+            projectExpenses,
+            projectBudget
+          };
+        })
+      );
+      
       // Calculate totals
-      const totals = myShares.reduce((acc, record) => {
+      const totals = mySharesWithFinancials.reduce((acc, record) => {
         acc.totalProfitShare += record.profitShare || 0;
         acc.totalBaseSalary += record.baseSalary || 0;
         acc.totalNetAmount += record.netAmount || 0;
@@ -146,7 +199,7 @@ router.get('/my-shares',
       res.status(200).json({
         success: true,
         data: {
-          records: myShares,
+          records: mySharesWithFinancials,
           totals
         }
       });

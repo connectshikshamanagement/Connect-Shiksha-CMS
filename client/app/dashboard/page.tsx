@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { dashboardAPI } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   FiDollarSign,
   FiTrendingUp,
@@ -34,7 +35,10 @@ import {
 export default function DashboardPage() {
   const router = useRouter();
   const [analytics, setAnalytics] = useState<any>(null);
+  const [teamProjects, setTeamProjects] = useState<any[]>([]);
+  const [projectFinancials, setProjectFinancials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { isFounder, isManager, isMember } = usePermissions();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -44,6 +48,10 @@ export default function DashboardPage() {
     }
 
     fetchAnalytics();
+    if (isMember) {
+      fetchTeamProjects();
+      fetchProjectFinancials();
+    }
   }, [router]);
 
   const fetchAnalytics = async () => {
@@ -56,6 +64,38 @@ export default function DashboardPage() {
       console.error('Error fetching analytics:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTeamProjects = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/my-team-projects`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setTeamProjects(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching team projects:', error);
+    }
+  };
+
+  const fetchProjectFinancials = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/my-project-financials`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setProjectFinancials(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching project financials:', error);
     }
   };
 
@@ -132,6 +172,250 @@ export default function DashboardPage() {
               color="bg-purple-500"
             />
           </div>
+
+          {/* Team Member Project Financial Overview */}
+          {isMember && teamProjects.length > 0 && (
+            <div className="mt-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white p-6 shadow-lg">
+              <h3 className="text-lg font-semibold mb-4 flex items-center">
+                <FiFolder className="mr-2" />
+                My Team Projects - Financial Overview
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {teamProjects.map((project: any) => (
+                  <div key={project._id} className="bg-white bg-opacity-20 rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h4 className="font-semibold text-white text-sm">{project.title}</h4>
+                        <p className="text-blue-100 text-xs">{project.category}</p>
+                        <p className="text-blue-100 text-xs">Status: {project.status}</p>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        project.status === 'active' ? 'bg-green-100 text-green-800' :
+                        project.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                        project.status === 'on-hold' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {project.status}
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-green-100">Income:</span>
+                        <span className="text-white font-semibold">₹{project.totalIncome?.toLocaleString() || '0'}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-red-100">Expenses:</span>
+                        <span className="text-white font-semibold">₹{project.totalExpense?.toLocaleString() || '0'}</span>
+                      </div>
+                      <div className="flex justify-between text-xs border-t border-white border-opacity-20 pt-2">
+                        <span className="text-blue-100 font-medium">Net Profit:</span>
+                        <span className={`font-bold ${(project.totalIncome - project.totalExpense) >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+                          ₹{((project.totalIncome || 0) - (project.totalExpense || 0)).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-blue-100">Budget:</span>
+                        <span className="text-white">₹{project.allocatedBudget?.toLocaleString() || '0'}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-blue-100">Progress:</span>
+                        <span className="text-white">{project.progress || 0}%</span>
+                      </div>
+                    </div>
+                    
+                    {project.progress > 0 && (
+                      <div className="mt-3">
+                        <div className="w-full bg-white bg-opacity-20 rounded-full h-2">
+                          <div 
+                            className="bg-white h-2 rounded-full transition-all duration-300" 
+                            style={{ width: `${project.progress}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              {teamProjects.length === 0 && (
+                <div className="text-center py-8">
+                  <FiFolder className="mx-auto mb-2 h-8 w-8 text-blue-200" />
+                  <p className="text-blue-100">No projects assigned to your team yet</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Detailed Project Financial Summary */}
+          {isMember && projectFinancials.length > 0 && (
+            <div className="mt-8 rounded-lg bg-white p-6 shadow-lg">
+              <h3 className="text-lg font-semibold mb-6 flex items-center text-gray-800">
+                <FiDollarSign className="mr-2" />
+                Detailed Project Financial Summary
+              </h3>
+              
+              <div className="space-y-6">
+                {projectFinancials.map((project: any) => (
+                  <div key={project._id} className="border border-gray-200 rounded-lg p-6 bg-gray-50">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="text-xl font-bold text-gray-900">{project.title}</h4>
+                        <p className="text-sm text-gray-600">{project.category} • {project.teamName}</p>
+                        <p className="text-xs text-gray-500">Status: {project.status}</p>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-2xl font-bold ${project.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          ₹{project.netProfit?.toLocaleString() || '0'}
+                        </div>
+                        <div className="text-sm text-gray-500">Net Profit</div>
+                      </div>
+                    </div>
+
+                    {/* Financial Breakdown */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-green-600">Total Income</p>
+                            <p className="text-2xl font-bold text-green-700">
+                              ₹{project.totalIncome?.toLocaleString() || '0'}
+                            </p>
+                          </div>
+                          <FiTrendingUp className="h-8 w-8 text-green-500" />
+                        </div>
+                        {project.incomeBreakdown && Object.keys(project.incomeBreakdown).length > 0 && (
+                          <div className="mt-3 text-xs text-green-600">
+                            {Object.entries(project.incomeBreakdown).map(([source, amount]: [string, any]) => (
+                              <div key={source} className="flex justify-between">
+                                <span>{source}:</span>
+                                <span>₹{amount.toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-red-600">Total Expenses</p>
+                            <p className="text-2xl font-bold text-red-700">
+                              ₹{project.totalExpense?.toLocaleString() || '0'}
+                            </p>
+                          </div>
+                          <FiTrendingDown className="h-8 w-8 text-red-500" />
+                        </div>
+                        {project.expenseBreakdown && Object.keys(project.expenseBreakdown).length > 0 && (
+                          <div className="mt-3 text-xs text-red-600">
+                            {Object.entries(project.expenseBreakdown).map(([category, amount]: [string, any]) => (
+                              <div key={category} className="flex justify-between">
+                                <span>{category}:</span>
+                                <span>₹{amount.toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-blue-600">Budget Utilization</p>
+                            <p className="text-2xl font-bold text-blue-700">
+                              {project.budgetUtilization || 0}%
+                            </p>
+                          </div>
+                          <FiCalendar className="h-8 w-8 text-blue-500" />
+                        </div>
+                        <div className="mt-3">
+                          <div className="w-full bg-blue-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                              style={{ width: `${Math.min(project.budgetUtilization || 0, 100)}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-blue-600 mt-1">
+                            ₹{project.allocatedBudget?.toLocaleString() || '0'} allocated
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Team Member Profit Sharing Information */}
+                    {project.profitSharing && (
+                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                        <h5 className="font-semibold text-purple-800 mb-3">Your Project Share</h5>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          <div className="bg-white p-3 rounded border border-purple-200">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium text-purple-700">Project Income</span>
+                              <span className="font-bold text-purple-800">
+                                ₹{project.totalIncome?.toLocaleString() || '0'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-purple-600">
+                              Total income generated
+                            </div>
+                          </div>
+                          <div className="bg-white p-3 rounded border border-purple-200">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium text-purple-700">Project Budget</span>
+                              <span className="font-bold text-purple-800">
+                                ₹{project.allocatedBudget?.toLocaleString() || '0'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-purple-600">
+                              Allocated budget
+                            </div>
+                          </div>
+                          <div className="bg-white p-3 rounded border border-purple-200">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium text-purple-700">Project Expenses</span>
+                              <span className="font-bold text-purple-800">
+                                ₹{project.totalExpense?.toLocaleString() || '0'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-purple-600">
+                              Total expenses incurred
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {project.profitSharing.myShare && (
+                          <div className="mt-3 bg-gradient-to-r from-green-400 to-blue-500 text-white p-3 rounded-lg">
+                            <div className="flex justify-between items-center">
+                              <span className="font-semibold">Your Share from {project.title}</span>
+                              <span className="text-xl font-bold">₹{project.profitSharing.myShare.toLocaleString()}</span>
+                            </div>
+                            <div className="text-sm text-green-100 mt-1">
+                              Based on your contribution to this project
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Project Progress */}
+                    <div className="mt-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-gray-700">Project Progress</span>
+                        <span className="text-sm font-bold text-gray-900">{project.progress || 0}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div 
+                          className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500" 
+                          style={{ width: `${project.progress || 0}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Charts Row */}
           <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
