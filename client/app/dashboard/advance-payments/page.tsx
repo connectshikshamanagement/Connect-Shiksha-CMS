@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { advancePaymentAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import FABMenu from '@/components/FABMenu';
+import MobileNavbar from '@/components/MobileNavbar';
 import Button from '@/components/Button';
 import Modal from '@/components/Modal';
 import { showToast } from '@/lib/toast';
@@ -148,7 +150,7 @@ export default function AdvancePaymentRequestsPage() {
     return (
       <div className="flex h-screen bg-gray-50">
         <Sidebar />
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto pt-16 md:pt-0">
           <Header title="Advance Payment Requests" />
           <div className="flex h-96 items-center justify-center">
             <div className="text-xl">Loading requests...</div>
@@ -162,7 +164,7 @@ export default function AdvancePaymentRequestsPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Advance Payment Requests" />
 
         <div className="p-6">
@@ -438,6 +440,10 @@ export default function AdvancePaymentRequestsPage() {
             </form>
           )}
         </Modal>
+        
+        {/* Mobile Components */}
+        <FABMenu />
+        <MobileNavbar />
       </div>
     </div>
   );

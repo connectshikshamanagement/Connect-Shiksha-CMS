@@ -6,6 +6,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { dataManagementAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import FABMenu from '@/components/FABMenu';
+import MobileNavbar from '@/components/MobileNavbar';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import { showToast } from '@/lib/toast';
@@ -111,7 +113,7 @@ export default function DataManagementPage() {
     return (
       <div className="flex h-screen bg-gray-50">
         <Sidebar />
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto pt-16 md:pt-0">
           <Header title="Data Management" />
           <div className="p-8">
             <div className="text-center">Loading...</div>
@@ -246,7 +248,7 @@ export default function DataManagementPage() {
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Data Management" />
 
         <div className="p-8">
@@ -609,6 +611,10 @@ export default function DataManagementPage() {
           </div>
         </div>
       </Modal>
+      
+      {/* Mobile Components */}
+      <FABMenu />
+      <MobileNavbar />
     </div>
   );
 }

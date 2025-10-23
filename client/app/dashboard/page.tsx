@@ -16,6 +16,8 @@ import {
 } from 'react-icons/fi';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import FABMenu from '@/components/FABMenu';
+import MobileNavbar from '@/components/MobileNavbar';
 import {
   LineChart,
   Line,
@@ -138,12 +140,12 @@ export default function DashboardPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Dashboard" />
 
-        <div className="p-8">
+        <div className="p-4 md:p-8 pb-20 md:pb-8">
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               title="Total Income"
               value={`₹${financialSummary?.totalIncome?.toLocaleString() || 0}`}
@@ -181,7 +183,7 @@ export default function DashboardPage() {
                 My Team Projects - Financial Overview
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {teamProjects.map((project: any) => (
                   <div key={project._id} className="bg-white bg-opacity-20 rounded-lg p-4">
                     <div className="flex justify-between items-start mb-3">
@@ -274,7 +276,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Financial Breakdown */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                       <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                         <div className="flex items-center justify-between">
                           <div>
@@ -348,7 +350,7 @@ export default function DashboardPage() {
                       <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                         <h5 className="font-semibold text-purple-800 mb-3">Your Project Share</h5>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                           <div className="bg-white p-3 rounded border border-purple-200">
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium text-purple-700">Project Income</span>
@@ -418,7 +420,7 @@ export default function DashboardPage() {
           )}
 
           {/* Charts Row */}
-          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
             {/* Income vs Expenses Chart */}
             <div className="rounded-lg bg-white p-6 shadow">
               <h3 className="mb-4 text-lg font-semibold text-gray-800">
@@ -465,7 +467,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Quick Actions */}
-          <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <QuickActionCard
               title="New Project"
               description="Create a new project"
@@ -533,6 +535,10 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+        
+        {/* Mobile Components */}
+        <FABMenu />
+        <MobileNavbar />
       </div>
     </div>
   );
@@ -540,18 +546,18 @@ export default function DashboardPage() {
 
 function StatCard({ title, value, icon, color, trend }: any) {
   return (
-    <div className="rounded-lg bg-white p-6 shadow transition-shadow hover:shadow-lg">
+    <div className="rounded-xl bg-white p-4 sm:p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100">
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="mt-2 text-3xl font-bold text-gray-900">{value}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">{title}</p>
+          <p className="mt-1 sm:mt-2 text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{value}</p>
           {trend && (
-            <p className={`mt-2 text-sm ${trend.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+            <p className={`mt-1 sm:mt-2 text-xs sm:text-sm ${trend.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
               {trend} from last month
             </p>
           )}
         </div>
-        <div className={`${color} rounded-full p-3 text-white`}>{icon}</div>
+        <div className={`${color} rounded-full p-2 sm:p-3 text-white flex-shrink-0`}>{icon}</div>
       </div>
     </div>
   );
@@ -561,13 +567,13 @@ function QuickActionCard({ title, description, icon, color, href }: any) {
   return (
     <a
       href={href}
-      className="block rounded-lg bg-white p-6 shadow transition-all hover:shadow-lg hover:scale-105"
+      className="block rounded-xl bg-white p-4 sm:p-6 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-105 border border-gray-100"
     >
-      <div className={`${color} mb-4 inline-block rounded-lg p-3 text-white`}>
+      <div className={`${color} mb-3 sm:mb-4 inline-block rounded-lg p-2 sm:p-3 text-white`}>
         {icon}
       </div>
-      <h4 className="font-semibold text-gray-900">{title}</h4>
-      <p className="mt-1 text-sm text-gray-600">{description}</p>
+      <h4 className="font-semibold text-gray-900 text-sm sm:text-base">{title}</h4>
+      <p className="mt-1 text-xs sm:text-sm text-gray-600">{description}</p>
     </a>
   );
 }

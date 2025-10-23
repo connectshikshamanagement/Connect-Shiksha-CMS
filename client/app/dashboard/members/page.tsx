@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import FABMenu from '@/components/FABMenu';
+import MobileNavbar from '@/components/MobileNavbar';
 import Button from '@/components/Button';
 import Modal from '@/components/Modal';
 import FormInput from '@/components/FormInput';
@@ -260,16 +262,16 @@ export default function MembersPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Members" />
 
         <div className="p-8">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">Member Management</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Member Management</h2>
               <p className="mt-1 text-sm text-gray-600">Manage team members, roles, and profit sharing</p>
             </div>
-            <Button variant="primary" onClick={() => setShowModal(true)}>
+            <Button variant="primary" onClick={() => setShowModal(true)} className="w-full sm:w-auto">
               <FiPlus className="mr-2" />
               Add Member
             </Button>
@@ -505,6 +507,10 @@ export default function MembersPage() {
           </Button>
         </div>
       </Modal>
+      
+      {/* Mobile Components */}
+      <FABMenu />
+      <MobileNavbar />
     </div>
   );
 }

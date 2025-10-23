@@ -5,6 +5,8 @@ import { io } from 'socket.io-client';
 import { incomeAPI, expenseAPI, clientAPI, teamAPI, projectAPI, userAPI, financeAPI, payrollAPI, reportAPI, budgetAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import FABMenu from '@/components/FABMenu';
+import MobileNavbar from '@/components/MobileNavbar';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import FormInput from '@/components/FormInput';
@@ -13,7 +15,7 @@ import { showToast } from '@/lib/toast';
 import { 
   FiPlus, FiTrendingUp, FiTrendingDown, FiDollarSign, FiEdit, FiTrash2, 
   FiCheck, FiX, FiUsers, FiFileText, FiDownload, FiAlertTriangle, 
-  FiCreditCard, FiTarget, FiCalendar 
+  FiCreditCard, FiTarget, FiCalendar, FiFolder
 } from 'react-icons/fi';
 
 export default function FinancePage() {
@@ -468,31 +470,33 @@ export default function FinancePage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Finance" />
 
-        <div className="p-8">
-          <div className="mb-6 flex items-center justify-between">
+        <div className="p-4 md:p-8 pb-20 md:pb-8">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-            <h2 className="text-2xl font-bold text-gray-800">Financial Management</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Financial Management</h2>
               <p className="mt-1 text-sm text-gray-600">Team-based financial control and reporting</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <FormInput
                 label="Select Month"
                 type="month"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-auto"
+                className="w-full sm:w-auto"
               />
-              <Button onClick={() => { resetIncomeForm(); setShowIncomeModal(true); }}>
-                <FiPlus className="mr-2" />
-                Add Income
-              </Button>
-              <Button variant="danger" onClick={() => { resetExpenseForm(); setShowExpenseModal(true); }}>
-                <FiPlus className="mr-2" />
-                Add Expense
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => { resetIncomeForm(); setShowIncomeModal(true); }} className="flex-1 sm:flex-none">
+                  <FiPlus className="mr-2" />
+                  Add Income
+                </Button>
+                <Button variant="danger" onClick={() => { resetExpenseForm(); setShowExpenseModal(true); }} className="flex-1 sm:flex-none">
+                  <FiPlus className="mr-2" />
+                  Add Expense
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -592,20 +596,22 @@ export default function FinancePage() {
           </div>
 
           {/* Tabs */}
-          <div className="mb-6 flex gap-4">
-            {['overview', 'teams', 'projects', 'payroll', 'history', 'budget'].map((tab) => (
-            <button
-                key={tab}
-                onClick={() => setActiveTab(tab as 'overview' | 'teams' | 'projects' | 'payroll' | 'history' | 'budget')}
-                className={`rounded-lg px-6 py-3 font-medium transition-colors capitalize ${
-                  activeTab === tab 
-                  ? 'bg-primary-600 text-white shadow-md' 
-                  : 'bg-white text-gray-700 shadow hover:bg-gray-50'
-              }`}
-            >
-                {tab} {tab === 'teams' && `(${teamFinancials.length})`} {tab === 'budget' && `(${budgetWarnings.filter(w => w.warningLevel !== 'none').length})`}
-            </button>
-            ))}
+          <div className="mb-6 overflow-x-auto">
+            <div className="flex gap-2 min-w-max">
+              {['overview', 'teams', 'projects', 'payroll', 'history', 'budget'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab as 'overview' | 'teams' | 'projects' | 'payroll' | 'history' | 'budget')}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors capitalize whitespace-nowrap ${
+                    activeTab === tab 
+                      ? 'bg-primary-600 text-white shadow-md' 
+                      : 'bg-white text-gray-700 shadow hover:bg-gray-50'
+                  }`}
+                >
+                  {tab} {tab === 'teams' && `(${teamFinancials.length})`} {tab === 'budget' && `(${budgetWarnings.filter(w => w.warningLevel !== 'none').length})`}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Content */}
@@ -770,67 +776,107 @@ export default function FinancePage() {
           )}
 
           {activeTab === 'projects' && (
-            <div className="rounded-lg bg-white shadow">
-              <div className="border-b p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">Project Finances</h3>
-                  <Button onClick={() => { resetPayrollForm(); setShowPayrollModal(true); }}>
-                    <FiPlus className="mr-2" />
-                    Add Payroll
-                  </Button>
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Project Finances</h3>
+                  <p className="text-sm text-gray-600">Financial overview of all projects</p>
                 </div>
+                <Button onClick={() => { resetPayrollForm(); setShowPayrollModal(true); }} className="w-full sm:w-auto">
+                  <FiPlus className="mr-2" />
+                  Add Payroll
+                </Button>
               </div>
-              <div className="divide-y">
-                {projectFinancials.length === 0 && (
-                  <div className="p-8 text-center text-gray-500">No project financial data available</div>
-                )}
+
+              {/* Project Cards */}
+              {projectFinancials.length === 0 && (
+                <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
+                  <FiFolder className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Project Financial Data</h3>
+                  <p className="text-gray-500">Project financial information will appear here once projects are created and have financial activity.</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-6">
                 {projectFinancials.map((project: any) => (
-                  <div key={project.projectId} className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium text-gray-900">{project.projectName}</h4>
-                          <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                            {project.category}
-                          </span>
-                          <span className={`rounded px-2 py-1 text-xs font-medium ${
-                            project.status === 'active' ? 'bg-green-100 text-green-800' :
-                            project.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {project.status}
+                  <div key={project.projectId} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-primary-200">
+                    <div className="space-y-4">
+                      {/* Project Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-primary-100 rounded-lg">
+                              <FiFolder className="h-5 w-5 text-primary-600" />
+                            </div>
+                            <h4 className="text-lg font-semibold text-gray-900">{project.projectName}</h4>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                              {project.category}
                             </span>
-                          {project.budgetExceeded && (
-                            <span className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
-                              Budget Exceeded
+                            <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                              project.status === 'active' ? 'bg-green-100 text-green-800' :
+                              project.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {project.status}
                             </span>
-                          )}
-                        </div>
-                        <div className="mt-2 flex gap-4 text-sm text-gray-500">
-                          <span>Team: {project.teamId?.name || 'N/A'}</span>
-                          <span>Owner: {project.ownerId?.name || 'N/A'}</span>
-                          <span>Progress: {project.progress}%</span>
+                            {project.budgetExceeded && (
+                              <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800">
+                                Budget Exceeded
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="flex gap-4 text-sm">
-                          <div>
-                            <p className="text-gray-500">Allocated Budget</p>
-                            <p className="font-medium">₹{project.allocatedBudget.toLocaleString()}</p>
+
+                      {/* Project Details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-center text-gray-600 mb-1">
+                            <FiUsers className="mr-2 h-4 w-4" />
+                            <span className="text-xs font-medium uppercase tracking-wide">Team</span>
                           </div>
-                          <div>
-                            <p className="text-gray-500">Total Income</p>
-                            <p className="font-medium text-green-600">₹{project.totalIncome.toLocaleString()}</p>
+                          <p className="text-sm font-semibold text-gray-900">{project.teamId?.name || 'N/A'}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-center text-gray-600 mb-1">
+                            <FiUsers className="mr-2 h-4 w-4" />
+                            <span className="text-xs font-medium uppercase tracking-wide">Owner</span>
                           </div>
-                          <div>
-                            <p className="text-gray-500">Total Expense</p>
-                            <p className="font-medium text-red-600">₹{project.totalExpense.toLocaleString()}</p>
+                          <p className="text-sm font-semibold text-gray-900">{project.ownerId?.name || 'N/A'}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-center text-gray-600 mb-1">
+                            <FiTarget className="mr-2 h-4 w-4" />
+                            <span className="text-xs font-medium uppercase tracking-wide">Progress</span>
                           </div>
-                          <div>
-                            <p className="text-gray-500">Net Profit</p>
-                            <p className={`font-bold ${project.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          <p className="text-sm font-semibold text-gray-900">{project.progress}%</p>
+                        </div>
+                      </div>
+
+                      {/* Financial Overview */}
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                        <h5 className="text-sm font-semibold text-gray-800 mb-3">Financial Overview</h5>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className="text-center">
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Budget</div>
+                            <div className="text-lg font-bold text-gray-900">₹{project.allocatedBudget.toLocaleString()}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Income</div>
+                            <div className="text-lg font-bold text-green-600">₹{project.totalIncome.toLocaleString()}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Expenses</div>
+                            <div className="text-lg font-bold text-red-600">₹{project.totalExpense.toLocaleString()}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Net Profit</div>
+                            <div className={`text-lg font-bold ${project.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               ₹{project.netProfit.toLocaleString()}
-                            </p>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -842,59 +888,117 @@ export default function FinancePage() {
           )}
 
           {activeTab === 'payroll' && (
-            <div className="rounded-lg bg-white shadow">
-              <div className="border-b p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">Payroll Management</h3>
-                  <Button onClick={() => { resetPayrollForm(); setShowPayrollModal(true); }}>
-                    <FiPlus className="mr-2" />
-                    Add Payroll
-                  </Button>
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Payroll Management</h3>
+                  <p className="text-sm text-gray-600">Manage team member salaries and payments</p>
                 </div>
+                <Button onClick={() => { resetPayrollForm(); setShowPayrollModal(true); }} className="w-full sm:w-auto">
+                  <FiPlus className="mr-2" />
+                  Add Payroll
+                </Button>
               </div>
-              <div className="divide-y">
+
+              {/* Payroll Cards */}
+              {payrolls.length === 0 && (
+                <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
+                  <FiCreditCard className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Payroll Records</h3>
+                  <p className="text-gray-500">Payroll records will appear here once they are created for team members.</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-6">
                 {payrolls.map((payroll: any) => (
-                  <div key={payroll._id} className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium text-gray-900">{payroll.userId?.name || 'N/A'}</h4>
-                          <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                            {payroll.teamId?.name || 'N/A'}
-                          </span>
-                          <span className={`rounded px-2 py-1 text-xs font-medium ${
-                            payroll.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {payroll.status}
-                          </span>
-                        </div>
-                        <div className="mt-2 flex gap-4 text-sm text-gray-500">
-                          <span>Month: {payroll.month}</span>
-                          {payroll.paymentDate && <span>Paid: {new Date(payroll.paymentDate).toLocaleDateString()}</span>}
-                          {payroll.transactionId && <span>Transaction: {payroll.transactionId}</span>}
+                  <div key={payroll._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-primary-200">
+                    <div className="space-y-4">
+                      {/* Payroll Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-green-100 rounded-lg">
+                              <FiCreditCard className="h-5 w-5 text-green-600" />
+                            </div>
+                            <h4 className="text-lg font-semibold text-gray-900">{payroll.userId?.name || 'N/A'}</h4>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                              {payroll.teamId?.name || 'N/A'}
+                            </span>
+                            <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                              payroll.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {payroll.status}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-gray-900">₹{(payroll.salaryAmount || 0).toLocaleString()}</p>
+
+                      {/* Payroll Details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-center text-gray-600 mb-1">
+                            <FiCalendar className="mr-2 h-4 w-4" />
+                            <span className="text-xs font-medium uppercase tracking-wide">Month</span>
+                          </div>
+                          <p className="text-sm font-semibold text-gray-900">{payroll.month}</p>
                         </div>
-                        <div className="flex gap-1">
-                          {payroll.status === 'pending' && (
-                              <Button
-                                variant="success"
-                                size="sm"
-                              onClick={() => handleMarkPayrollPaid(payroll._id, 'bank_transfer', '')}
-                              >
-                                <FiCheck />
-                              </Button>
-                          )}
-                          <Button variant="outline" size="sm">
-                            <FiEdit />
-                          </Button>
-                          <Button variant="danger" size="sm">
-                            <FiTrash2 />
-                          </Button>
+                        {payroll.paymentDate && (
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex items-center text-gray-600 mb-1">
+                              <FiCheck className="mr-2 h-4 w-4" />
+                              <span className="text-xs font-medium uppercase tracking-wide">Paid Date</span>
+                            </div>
+                            <p className="text-sm font-semibold text-gray-900">{new Date(payroll.paymentDate).toLocaleDateString()}</p>
+                          </div>
+                        )}
+                        {payroll.transactionId && (
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex items-center text-gray-600 mb-1">
+                              <FiCreditCard className="mr-2 h-4 w-4" />
+                              <span className="text-xs font-medium uppercase tracking-wide">Transaction</span>
+                            </div>
+                            <p className="text-sm font-semibold text-gray-900 font-mono">{payroll.transactionId}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Salary Amount */}
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-100">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h5 className="text-sm font-semibold text-gray-800 mb-1">Salary Amount</h5>
+                            <p className="text-xs text-gray-600">Monthly salary for {payroll.month}</p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-gray-900">₹{(payroll.salaryAmount || 0).toLocaleString()}</div>
+                          </div>
                         </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
+                        {payroll.status === 'pending' && (
+                          <Button
+                            variant="success"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleMarkPayrollPaid(payroll._id, 'bank_transfer', '')}
+                          >
+                            <FiCheck className="mr-2 h-4 w-4" />
+                            Mark as Paid
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" className="flex-1">
+                          <FiEdit className="mr-2 h-4 w-4" />
+                          Edit Payroll
+                        </Button>
+                        <Button variant="danger" size="sm" className="flex-1">
+                          <FiTrash2 className="mr-2 h-4 w-4" />
+                          Delete Payroll
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -905,102 +1009,220 @@ export default function FinancePage() {
 
           {activeTab === 'history' && (
             <div className="space-y-6">
-              {/* Income History */}
-              <div className="rounded-lg bg-white shadow">
-                <div className="border-b p-4">
-                  <h3 className="font-semibold text-gray-900">Income History</h3>
-                </div>
-                <div className="divide-y">
-                  {incomeHistory.map((income: any) => (
-                    <div key={income._id} className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-medium text-gray-900">{income.sourceType}</h4>
-                            <span className="rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                              Income
-                            </span>
-                            <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                              {income.receivedByUserId?.name || 'N/A'}
-                            </span>
-                            <span className="rounded bg-purple-100 px-2 py-1 text-xs font-medium text-purple-800">
-                              {income.teamId?.name || 'N/A'}
-                            </span>
-                          </div>
-                          <div className="mt-2 flex gap-4 text-sm text-gray-500">
-                            <span>Date: {new Date(income.date).toLocaleDateString()}</span>
-                            <span>Payment: {income.paymentMethod}</span>
-                            {income.transactionId && <span>Transaction: {income.transactionId}</span>}
-                            {income.clientId && <span>Client: {income.clientId?.name || 'N/A'}</span>}
-                          </div>
-                          {income.description && (
-                            <p className="mt-1 text-sm text-gray-600">{income.description}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className="text-2xl font-bold text-green-600">₹{income.amount.toLocaleString()}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {incomeHistory.length === 0 && (
-                    <div className="p-12 text-center">
-                      <FiDollarSign className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">No income records</h3>
-                      <p className="mt-1 text-sm text-gray-500">Get started by adding your first income entry.</p>
-                    </div>
-                  )}
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Financial History</h3>
+                  <p className="text-sm text-gray-600">Track all income and expense transactions</p>
                 </div>
               </div>
 
-              {/* Expense History */}
-              <div className="rounded-lg bg-white shadow">
-                <div className="border-b p-4">
-                  <h3 className="font-semibold text-gray-900">Expense History</h3>
+              {/* Income History */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <FiTrendingUp className="h-5 w-5 text-green-600" />
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900">Income History</h4>
                 </div>
-                <div className="divide-y">
-                  {expenseHistory.map((expense: any) => (
-                    <div key={expense._id} className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-medium text-gray-900">{expense.category}</h4>
-                            <span className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
-                              Expense
-                            </span>
-                            <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                              {expense.submittedBy?.name || 'N/A'}
-                            </span>
-                            <span className="rounded bg-purple-100 px-2 py-1 text-xs font-medium text-purple-800">
-                              {expense.teamId?.name || 'N/A'}
-                            </span>
+
+                {incomeHistory.length === 0 ? (
+                  <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
+                    <FiDollarSign className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Income Records</h3>
+                    <p className="text-gray-500">Income transactions will appear here once they are recorded.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {incomeHistory.map((income: any) => (
+                      <div key={income._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-green-200">
+                        <div className="space-y-4">
+                          {/* Income Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2 bg-green-100 rounded-lg">
+                                  <FiDollarSign className="h-5 w-5 text-green-600" />
+                                </div>
+                                <h5 className="text-lg font-semibold text-gray-900">{income.sourceType}</h5>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+                                  Income
+                                </span>
+                                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                                  {income.receivedByUserId?.name || 'N/A'}
+                                </span>
+                                <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-800">
+                                  {income.teamId?.name || 'N/A'}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="mt-2 flex gap-4 text-sm text-gray-500">
-                            <span>Date: {new Date(expense.date).toLocaleDateString()}</span>
-                            <span>Payment: {expense.paymentMethod}</span>
-                            {expense.vendorName && <span>Vendor: {expense.vendorName}</span>}
-                            {expense.billNumber && <span>Bill: {expense.billNumber}</span>}
+
+                          {/* Income Details */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FiCalendar className="mr-2 h-4 w-4" />
+                                <span className="text-xs font-medium uppercase tracking-wide">Date</span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">{new Date(income.date).toLocaleDateString()}</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FiCreditCard className="mr-2 h-4 w-4" />
+                                <span className="text-xs font-medium uppercase tracking-wide">Payment</span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">{income.paymentMethod}</p>
+                            </div>
+                            {income.transactionId && (
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <div className="flex items-center text-gray-600 mb-1">
+                                  <FiFileText className="mr-2 h-4 w-4" />
+                                  <span className="text-xs font-medium uppercase tracking-wide">Transaction</span>
+                                </div>
+                                <p className="text-sm font-semibold text-gray-900 font-mono">{income.transactionId}</p>
+                              </div>
+                            )}
+                            {income.clientId && (
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <div className="flex items-center text-gray-600 mb-1">
+                                  <FiUsers className="mr-2 h-4 w-4" />
+                                  <span className="text-xs font-medium uppercase tracking-wide">Client</span>
+                                </div>
+                                <p className="text-sm font-semibold text-gray-900">{income.clientId?.name || 'N/A'}</p>
+                              </div>
+                            )}
                           </div>
-                          <p className="mt-1 text-sm text-gray-600">{expense.description}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className="text-2xl font-bold text-red-600">₹{expense.amount.toLocaleString()}</p>
+
+                          {/* Description */}
+                          {income.description && (
+                            <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+                              <p className="text-sm text-gray-700">{income.description}</p>
+                            </div>
+                          )}
+
+                          {/* Amount */}
+                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-100">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h6 className="text-sm font-semibold text-gray-800 mb-1">Income Amount</h6>
+                                <p className="text-xs text-gray-600">Received on {new Date(income.date).toLocaleDateString()}</p>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-2xl font-bold text-green-600">₹{income.amount.toLocaleString()}</div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                  {expenseHistory.length === 0 && (
-                    <div className="p-12 text-center">
-                      <FiTrendingDown className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">No expense records</h3>
-                      <p className="mt-1 text-sm text-gray-500">Get started by adding your first expense entry.</p>
-                    </div>
-                  )}
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Expense History */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <FiTrendingDown className="h-5 w-5 text-red-600" />
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900">Expense History</h4>
                 </div>
+
+                {expenseHistory.length === 0 ? (
+                  <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
+                    <FiTrendingDown className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Expense Records</h3>
+                    <p className="text-gray-500">Expense transactions will appear here once they are recorded.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {expenseHistory.map((expense: any) => (
+                      <div key={expense._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-red-200">
+                        <div className="space-y-4">
+                          {/* Expense Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2 bg-red-100 rounded-lg">
+                                  <FiTrendingDown className="h-5 w-5 text-red-600" />
+                                </div>
+                                <h5 className="text-lg font-semibold text-gray-900">{expense.category}</h5>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800">
+                                  Expense
+                                </span>
+                                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                                  {expense.submittedBy?.name || 'N/A'}
+                                </span>
+                                <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-800">
+                                  {expense.teamId?.name || 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Expense Details */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FiCalendar className="mr-2 h-4 w-4" />
+                                <span className="text-xs font-medium uppercase tracking-wide">Date</span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">{new Date(expense.date).toLocaleDateString()}</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FiCreditCard className="mr-2 h-4 w-4" />
+                                <span className="text-xs font-medium uppercase tracking-wide">Payment</span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">{expense.paymentMethod}</p>
+                            </div>
+                            {expense.vendorName && (
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <div className="flex items-center text-gray-600 mb-1">
+                                  <FiUsers className="mr-2 h-4 w-4" />
+                                  <span className="text-xs font-medium uppercase tracking-wide">Vendor</span>
+                                </div>
+                                <p className="text-sm font-semibold text-gray-900">{expense.vendorName}</p>
+                              </div>
+                            )}
+                            {expense.billNumber && (
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <div className="flex items-center text-gray-600 mb-1">
+                                  <FiFileText className="mr-2 h-4 w-4" />
+                                  <span className="text-xs font-medium uppercase tracking-wide">Bill</span>
+                                </div>
+                                <p className="text-sm font-semibold text-gray-900">{expense.billNumber}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Description */}
+                          <div className="bg-red-50 rounded-lg p-3 border border-red-100">
+                            <p className="text-sm text-gray-700">{expense.description}</p>
+                          </div>
+
+                          {/* Amount */}
+                          <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-lg p-4 border border-red-100">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h6 className="text-sm font-semibold text-gray-800 mb-1">Expense Amount</h6>
+                                <p className="text-xs text-gray-600">Spent on {new Date(expense.date).toLocaleDateString()}</p>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-2xl font-bold text-red-600">₹{expense.amount.toLocaleString()}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1008,68 +1230,176 @@ export default function FinancePage() {
           {/* Budget Warnings Tab */}
           {activeTab === 'budget' && (
             <div className="space-y-6">
-              {/* Budget Warnings Overview */}
-              <div className="rounded-lg bg-white shadow">
-                <div className="border-b p-4">
-                  <h3 className="font-semibold text-gray-900">Budget Warnings & Tracking</h3>
-                  <p className="text-sm text-gray-600">Monitor project budgets and deal amount collections</p>
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Budget Management</h3>
+                  <p className="text-sm text-gray-600">Monitor project budgets and financial health</p>
                 </div>
-                <div className="divide-y">
-                  {budgetWarnings.length > 0 ? (
-                    budgetWarnings.map((warning: any) => (
-                      <div key={warning.projectId} className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-medium text-gray-900">{warning.projectTitle}</h4>
-                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                warning.warningLevel === 'critical' 
+              </div>
+
+              {/* Budget Summary Cards */}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-red-200">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="p-3 bg-red-100 rounded-lg">
+                        <FiAlertTriangle className="h-8 w-8 text-red-500" />
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-500">Over Budget</p>
+                      <p className="text-2xl font-semibold text-gray-900">
+                        {budgetWarnings.filter(w => w.warningLevel === 'critical').length}
+                      </p>
+                      <p className="text-xs text-gray-400">Projects exceeding budget</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-yellow-200">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="p-3 bg-yellow-100 rounded-lg">
+                        <FiTarget className="h-8 w-8 text-yellow-500" />
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-500">Near Limit</p>
+                      <p className="text-2xl font-semibold text-gray-900">
+                        {budgetWarnings.filter(w => w.warningLevel === 'warning').length}
+                      </p>
+                      <p className="text-xs text-gray-400">Projects approaching limit</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-green-200">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="p-3 bg-green-100 rounded-lg">
+                        <FiCheck className="h-8 w-8 text-green-500" />
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-500">Within Budget</p>
+                      <p className="text-2xl font-semibold text-gray-900">
+                        {budgetWarnings.filter(w => w.warningLevel === 'none').length}
+                      </p>
+                      <p className="text-xs text-gray-400">Projects on track</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Budget Warnings */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <FiTarget className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900">Project Budget Status</h4>
+                </div>
+
+                {budgetWarnings.length === 0 ? (
+                  <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
+                    <FiTarget className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Budget Warnings</h3>
+                    <p className="text-gray-500">All projects are within budget limits and performing well.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-6">
+                    {budgetWarnings.map((warning: any) => (
+                      <div key={warning.projectId} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-primary-200">
+                        <div className="space-y-4">
+                          {/* Project Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2 bg-blue-100 rounded-lg">
+                                  <FiTarget className="h-5 w-5 text-blue-600" />
+                                </div>
+                                <h5 className="text-lg font-semibold text-gray-900">{warning.projectTitle}</h5>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                                  warning.warningLevel === 'critical' 
+                                    ? 'bg-red-100 text-red-800'
+                                    : warning.warningLevel === 'warning'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-green-100 text-green-800'
+                                }`}>
+                                  {warning.warningLevel === 'critical' ? 'Over Budget' : 
+                                   warning.warningLevel === 'warning' ? 'Near Limit' : 'Within Budget'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Budget Details */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FiDollarSign className="mr-2 h-4 w-4" />
+                                <span className="text-xs font-medium uppercase tracking-wide">Budget</span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">₹{warning.budget.toLocaleString()}</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FiTrendingDown className="mr-2 h-4 w-4" />
+                                <span className="text-xs font-medium uppercase tracking-wide">Expenses</span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">₹{warning.totalExpenses.toLocaleString()}</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FiTarget className="mr-2 h-4 w-4" />
+                                <span className="text-xs font-medium uppercase tracking-wide">Utilization</span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">{warning.budgetUtilization}%</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FiDollarSign className="mr-2 h-4 w-4" />
+                                <span className="text-xs font-medium uppercase tracking-wide">Deal Amount</span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">₹{warning.dealAmount.toLocaleString()}</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FiTrendingUp className="mr-2 h-4 w-4" />
+                                <span className="text-xs font-medium uppercase tracking-wide">Income Collected</span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">₹{warning.totalIncome.toLocaleString()}</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FiCheck className="mr-2 h-4 w-4" />
+                                <span className="text-xs font-medium uppercase tracking-wide">Collection</span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">{warning.dealCollection}%</p>
+                            </div>
+                          </div>
+
+                          {/* Budget Progress */}
+                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                            <div className="flex items-center justify-between mb-3">
+                              <h6 className="text-sm font-semibold text-gray-800">Budget Utilization</h6>
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                warning.budgetUtilization > 100 
                                   ? 'bg-red-100 text-red-800'
-                                  : warning.warningLevel === 'warning'
+                                  : warning.budgetUtilization > 80
                                   ? 'bg-yellow-100 text-yellow-800'
                                   : 'bg-green-100 text-green-800'
                               }`}>
-                                {warning.warningLevel === 'critical' ? 'Over Budget' : 
-                                 warning.warningLevel === 'warning' ? 'Near Limit' : 'Within Budget'}
+                                {warning.budgetUtilization}%
                               </span>
                             </div>
-                            <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <span className="text-gray-500">Budget:</span>
-                                <span className="ml-2 font-medium">₹{warning.budget.toLocaleString()}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Expenses:</span>
-                                <span className="ml-2 font-medium">₹{warning.totalExpenses.toLocaleString()}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Utilization:</span>
-                                <span className="ml-2 font-medium">{warning.budgetUtilization}%</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Deal Amount:</span>
-                                <span className="ml-2 font-medium">₹{warning.dealAmount.toLocaleString()}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Income Collected:</span>
-                                <span className="ml-2 font-medium">₹{warning.totalIncome.toLocaleString()}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Collection:</span>
-                                <span className="ml-2 font-medium">{warning.dealCollection}%</span>
-                              </div>
-                            </div>
-                            {warning.message && (
-                              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                                <p className="text-sm text-yellow-800">{warning.message}</p>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
-                              <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="space-y-2">
+                              <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200">
                                 <div 
-                                  className={`h-full transition-all ${
+                                  className={`h-full transition-all duration-500 ${
                                     warning.budgetUtilization > 100 
                                       ? 'bg-red-500' 
                                       : warning.budgetUtilization > 80
@@ -1079,65 +1409,27 @@ export default function FinancePage() {
                                   style={{ width: `${Math.min(warning.budgetUtilization, 100)}%` }}
                                 ></div>
                               </div>
-                              <p className="text-xs text-gray-500 mt-1">Budget Usage</p>
+                              <div className="flex justify-between text-xs text-gray-500">
+                                <span>₹{warning.totalExpenses.toLocaleString()}</span>
+                                <span>₹{warning.budget.toLocaleString()}</span>
+                              </div>
                             </div>
                           </div>
+
+                          {/* Warning Message */}
+                          {warning.message && (
+                            <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+                              <div className="flex items-start gap-2">
+                                <FiAlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                                <p className="text-sm text-yellow-800">{warning.message}</p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="p-12 text-center">
-                      <FiTarget className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">No budget warnings</h3>
-                      <p className="mt-1 text-sm text-gray-500">All projects are within budget limits.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Budget Summary Cards */}
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                <div className="rounded-lg bg-white p-6 shadow">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <FiAlertTriangle className="h-8 w-8 text-red-500" />
-                    </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-500">Over Budget</p>
-                      <p className="text-2xl font-semibold text-gray-900">
-                        {budgetWarnings.filter(w => w.warningLevel === 'critical').length}
-                      </p>
-                    </div>
+                    ))}
                   </div>
-                </div>
-
-                <div className="rounded-lg bg-white p-6 shadow">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <FiTarget className="h-8 w-8 text-yellow-500" />
-                    </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-500">Near Limit</p>
-                      <p className="text-2xl font-semibold text-gray-900">
-                        {budgetWarnings.filter(w => w.warningLevel === 'warning').length}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg bg-white p-6 shadow">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <FiCheck className="h-8 w-8 text-green-500" />
-                    </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-500">Within Budget</p>
-                      <p className="text-2xl font-semibold text-gray-900">
-                        {budgetWarnings.filter(w => w.warningLevel === 'none').length}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -1602,6 +1894,10 @@ export default function FinancePage() {
           </div>
         </form>
       </Modal>
+      
+      {/* Mobile Components */}
+      <FABMenu />
+      <MobileNavbar />
     </div>
   );
 }

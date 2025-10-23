@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { payoutAPI, advancePaymentAPI, incomeAPI, expenseAPI, projectAPI, teamMemberFinanceAPI } from '@/lib/api';
+import { payoutAPI, incomeAPI, expenseAPI, projectAPI, teamMemberFinanceAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import FABMenu from '@/components/FABMenu';
+import MobileNavbar from '@/components/MobileNavbar';
 import Button from '@/components/Button';
 import Modal from '@/components/Modal';
 import FormInput from '@/components/FormInput';
@@ -23,20 +25,12 @@ export default function PayrollPage() {
   const [selectedTeam, setSelectedTeam] = useState('');
   const [analytics, setAnalytics] = useState<any>(null);
   const [financialSummary, setFinancialSummary] = useState<any>(null);
-  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [userProjects, setUserProjects] = useState([]);
   const { userRole, isFounder, isManager, isMember, loading: permissionsLoading } = usePermissions();
 
   // Form data states
-  const [advanceFormData, setAdvanceFormData] = useState({
-    amount: '',
-    reason: '',
-    projectId: '',
-    deductedFrom: 'profit_share'
-  });
-
   const [incomeFormData, setIncomeFormData] = useState({
     amount: '',
     source: '',
@@ -235,39 +229,6 @@ export default function PayrollPage() {
     }
   };
 
-  const handleExportExcel = async () => {
-    const loadingToast = showToast.loading('Generating Excel report...');
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/payroll/export/excel?month=${selectedMonth}&year=${selectedYear}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `payroll-${selectedMonth}-${selectedYear}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        
-        showToast.dismiss(loadingToast);
-        showToast.success('Excel report downloaded!');
-      } else {
-        throw new Error('Export failed');
-      }
-    } catch (error: any) {
-      showToast.dismiss(loadingToast);
-      showToast.error('Failed to export Excel');
-    }
-  };
 
   const fetchUserProjects = async () => {
     try {
@@ -289,27 +250,6 @@ export default function PayrollPage() {
   };
 
   // Form submission handlers
-  const handleAdvancePaymentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!advanceFormData.amount || !advanceFormData.reason) {
-      showToast.error('Please fill in all required fields');
-      return;
-    }
-
-    const loadingToast = showToast.loading('Submitting advance payment request...');
-
-    try {
-      await advancePaymentAPI.create(advanceFormData);
-      showToast.success('Advance payment request submitted successfully!');
-      setShowAdvanceModal(false);
-      setAdvanceFormData({ amount: '', reason: '', projectId: '', deductedFrom: 'profit_share' });
-    } catch (error: any) {
-      showToast.error(error.response?.data?.message || 'Failed to submit request');
-    } finally {
-      showToast.dismiss(loadingToast);
-    }
-  };
 
   const handleIncomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -377,39 +317,6 @@ export default function PayrollPage() {
     }
   };
 
-  const handleExportPDF = async () => {
-    const loadingToast = showToast.loading('Generating PDF report...');
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/payroll/export/pdf?month=${selectedMonth}&year=${selectedYear}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `payroll-${selectedMonth}-${selectedYear}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        
-        showToast.dismiss(loadingToast);
-        showToast.success('PDF report downloaded!');
-      } else {
-        throw new Error('Export failed');
-      }
-    } catch (error: any) {
-      showToast.dismiss(loadingToast);
-      showToast.error('Failed to export PDF');
-    }
-  };
 
   const totalBaseSalary = payouts.reduce((sum, p: any) => sum + (p.baseSalary || p.salaryAmount || 0), 0);
   const totalShares = payouts.reduce((sum, p: any) => sum + (p.totalShares || p.profitShare || 0), 0);
@@ -420,7 +327,6 @@ export default function PayrollPage() {
   // Role-based access control
   const canComputeProfitSharing = isFounder || isManager;
   const canMarkAsPaid = isFounder || isManager;
-  const canExport = isFounder || isManager;
 
   if (loading) {
     return (
@@ -440,13 +346,13 @@ export default function PayrollPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Payroll" />
 
-        <div className="p-8">
-          <div className="mb-6 flex items-center justify-between">
+        <div className="p-4 md:p-8 pb-20 md:pb-8">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
                 {isMember ? 'My Payouts' : 'Payroll Management'}
               </h2>
               <p className="mt-1 text-sm text-gray-600">
@@ -456,36 +362,20 @@ export default function PayrollPage() {
                 }
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {canComputeProfitSharing && (
-                <Button variant="primary" onClick={() => handleComputeProfitSharing()}>
+                <Button variant="primary" onClick={() => handleComputeProfitSharing()} className="flex-1 sm:flex-none">
                   <FiRefreshCw className="mr-2" />
                   Compute Profit Sharing
                 </Button>
               )}
-              {canExport && (
-                <>
-              <Button variant="success" onClick={handleExportExcel}>
-                <FiDownload className="mr-2" />
-                Export Excel
-              </Button>
-              <Button variant="danger" onClick={handleExportPDF}>
-                <FiDownload className="mr-2" />
-                Export PDF
-              </Button>
-                </>
-              )}
               {isMember && (
                 <>
-                  <Button variant="outline" onClick={() => setShowAdvanceModal(true)}>
-                    <FiCreditCard className="mr-2" />
-                    Request Advance
-                  </Button>
-                  <Button variant="success" onClick={() => setShowIncomeModal(true)}>
+                  <Button variant="success" onClick={() => setShowIncomeModal(true)} className="flex-1 sm:flex-none">
                     <FiPlus className="mr-2" />
                     Add Income
                   </Button>
-                  <Button variant="danger" onClick={() => setShowExpenseModal(true)}>
+                  <Button variant="danger" onClick={() => setShowExpenseModal(true)} className="flex-1 sm:flex-none">
                     <FiMinus className="mr-2" />
                     Add Expense
                   </Button>
@@ -650,14 +540,35 @@ export default function PayrollPage() {
           {/* Summary Cards */}
           <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-5">
             <div className="rounded-lg bg-white p-6 shadow">
-              <p className="text-sm font-medium text-gray-600">Base Salary</p>
-              <p className="mt-2 text-2xl font-bold text-gray-900">
-                ₹{totalBaseSalary.toLocaleString()}
+              <p className="text-sm font-medium text-gray-600">Income</p>
+              <p className="mt-2 text-2xl font-bold text-green-600">
+                ₹{isMember 
+                  ? payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.projectIncome || 0), 0).toLocaleString()
+                  : (financialSummary?.totalIncome?.toLocaleString() || '0')
+                }
+              </p>
+            </div>
+            <div className="rounded-lg bg-white p-6 shadow">
+              <p className="text-sm font-medium text-gray-600">Expense</p>
+              <p className="mt-2 text-2xl font-bold text-red-600">
+                ₹{isMember 
+                  ? payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.projectExpenses || 0), 0).toLocaleString()
+                  : (financialSummary?.totalExpenses?.toLocaleString() || '0')
+                }
+              </p>
+            </div>
+            <div className="rounded-lg bg-white p-6 shadow">
+              <p className="text-sm font-medium text-gray-600">Budget</p>
+              <p className="mt-2 text-2xl font-bold text-blue-600">
+                ₹{isMember 
+                  ? payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.projectBudget || 0), 0).toLocaleString()
+                  : (financialSummary?.netProfit?.toLocaleString() || '0')
+                }
               </p>
             </div>
             <div className="rounded-lg bg-white p-6 shadow">
               <p className="text-sm font-medium text-gray-600">Profit Shares</p>
-              <p className="mt-2 text-2xl font-bold text-blue-600">
+              <p className="mt-2 text-2xl font-bold text-purple-600">
                 ₹{totalShares.toLocaleString()}
               </p>
               {analytics && (
@@ -667,20 +578,8 @@ export default function PayrollPage() {
               )}
             </div>
             <div className="rounded-lg bg-white p-6 shadow">
-              <p className="text-sm font-medium text-gray-600">Bonuses</p>
-              <p className="mt-2 text-2xl font-bold text-purple-600">
-                ₹{totalBonuses.toLocaleString()}
-              </p>
-            </div>
-            <div className="rounded-lg bg-white p-6 shadow">
-              <p className="text-sm font-medium text-gray-600">Deductions</p>
-              <p className="mt-2 text-2xl font-bold text-red-600">
-                ₹{totalDeductions.toLocaleString()}
-              </p>
-            </div>
-            <div className="rounded-lg bg-white p-6 shadow">
               <p className="text-sm font-medium text-gray-600">Net Amount</p>
-              <p className="mt-2 text-2xl font-bold text-green-600">
+              <p className="mt-2 text-2xl font-bold text-gray-900">
                 ₹{totalPayout.toLocaleString()}
               </p>
             </div>
@@ -695,16 +594,18 @@ export default function PayrollPage() {
               </h3>
               
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                  <p className="text-sm text-purple-600 font-medium">Connect Shiksha Shares</p>
-                  <p className="text-2xl font-bold text-purple-700">
-                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
-                  </p>
-                  <p className="text-xs text-purple-500">70% of total profits</p>
-                </div>
+                {!isMember && (
+                  <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                    <p className="text-sm text-purple-600 font-medium">Connect Shiksha Shares</p>
+                    <p className="text-2xl font-bold text-purple-700">
+                      ₹{Math.round(payouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-purple-500">70% of total profits</p>
+                  </div>
+                )}
                 
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <p className="text-sm text-blue-600 font-medium">Team Shares</p>
+                  <p className="text-sm text-blue-600 font-medium">{isMember ? 'My Shares' : 'Team Shares'}</p>
                   <p className="text-2xl font-bold text-blue-700">
                     ₹{Math.round(payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
                   </p>
@@ -748,37 +649,41 @@ export default function PayrollPage() {
           )}
 
           {/* Payroll Summary */}
+          {!isMember && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Connect Shiksha</h3>
-                  <p className="text-purple-100 text-sm">70% of all project profits</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-3xl font-bold">
-                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
+            
+              <div className="rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Connect Shiksha</h3>
+                    <p className="text-purple-100 text-sm">70% of all project profits</p>
                   </div>
-                  <div className="text-purple-100 text-sm">Total Connect Shiksha Shares</div>
+                  <div className="text-right">
+                    <div className="text-3xl font-bold">
+                      ₹{Math.round(payouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
+                    </div>
+                    <div className="text-purple-100 text-sm">Total Connect Shiksha Shares</div>
+                  </div>
                 </div>
               </div>
-            </div>
+           
             
             <div className="rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold">Team Members</h3>
+                  <h3 className="text-lg font-semibold">{isMember ? 'My Shares' : 'Team Members'}</h3>
                   <p className="text-blue-100 text-sm">30% shared equally</p>
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold">
                     ₹{Math.round(payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
                   </div>
-                  <div className="text-blue-100 text-sm">Total Team Shares</div>
+                  <div className="text-blue-100 text-sm">{isMember ? 'Total My Shares' : 'Total Team Shares'}</div>
                 </div>
               </div>
             </div>
           </div>
+          )}
 
           {/* Payroll Records - Split Layout */}
           <div className={`grid grid-cols-1 ${isMember ? '' : 'lg:grid-cols-2'} gap-6`}>
@@ -875,9 +780,8 @@ export default function PayrollPage() {
               <div className="bg-blue-600 text-white p-4 rounded-t-lg">
                 <h3 className="text-lg font-semibold flex items-center">
                   <FiUsers className="mr-2" />
-                  Team Members Shares
+                  {isMember ? 'My Shares' : 'Team Members Shares'}
                 </h3>
-                <p className="text-blue-100 text-sm mt-1">30% shared equally among eligible members</p>
               </div>
               
               <div className="p-4 max-h-96 overflow-y-auto">
@@ -1012,76 +916,6 @@ export default function PayrollPage() {
             </div>
           )}
 
-          {/* Advance Payment Request Modal */}
-          <Modal
-            isOpen={showAdvanceModal}
-            onClose={() => setShowAdvanceModal(false)}
-            title="Request Advance Payment"
-            size="md"
-          >
-            <form onSubmit={handleAdvancePaymentSubmit}>
-              <div className="space-y-4">
-                <FormInput
-                  label="Amount (₹)"
-                  type="number"
-                  required
-                  value={advanceFormData.amount}
-                  onChange={(e) => setAdvanceFormData({ ...advanceFormData, amount: e.target.value })}
-                  placeholder="Enter amount"
-                />
-
-                <FormSelect
-                  label="Project (Optional)"
-                  value={advanceFormData.projectId}
-                  onChange={(e) => setAdvanceFormData({ ...advanceFormData, projectId: e.target.value })}
-                  options={[
-                    { value: '', label: 'No specific project' },
-                    ...userProjects.map((project: any) => ({
-                      value: project._id,
-                      label: project.title,
-                    }))
-                  ]}
-                />
-
-                <FormSelect
-                  label="Deduct From"
-                  value={advanceFormData.deductedFrom}
-                  onChange={(e) => setAdvanceFormData({ ...advanceFormData, deductedFrom: e.target.value })}
-                  options={[
-                    { value: 'profit_share', label: 'Profit Share' },
-                    { value: 'future_salary', label: 'Future Salary' },
-                  ]}
-                />
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Reason *
-                  </label>
-                  <textarea
-                    required
-                    value={advanceFormData.reason}
-                    onChange={(e) => setAdvanceFormData({ ...advanceFormData, reason: e.target.value })}
-                    rows={3}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    placeholder="Please provide a reason for the advance payment request..."
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowAdvanceModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  Submit Request
-                </Button>
-              </div>
-            </form>
-          </Modal>
 
           {/* Add Income Modal */}
           <Modal
@@ -1256,6 +1090,10 @@ export default function PayrollPage() {
               </div>
             </form>
           </Modal>
+          
+          {/* Mobile Components */}
+          <FABMenu />
+          <MobileNavbar />
       </div>
     </div>
   );

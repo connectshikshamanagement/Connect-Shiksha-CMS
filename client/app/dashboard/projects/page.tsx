@@ -5,6 +5,8 @@ import { projectAPI, teamAPI, userAPI } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import FABMenu from '@/components/FABMenu';
+import MobileNavbar from '@/components/MobileNavbar';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import FormInput from '@/components/FormInput';
@@ -204,13 +206,13 @@ export default function ProjectsPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Projects" />
 
-        <div className="p-8">
-          <div className="mb-6 flex items-center justify-between">
+        <div className="p-4 md:p-8 pb-20 md:pb-8">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
                 {isMember ? "My Projects" : "Project Management"}
               </h2>
               <p className="mt-1 text-sm text-gray-600">
@@ -218,7 +220,7 @@ export default function ProjectsPage() {
               </p>
             </div>
             {(isFounder || isManager) && (
-              <Button onClick={() => { resetForm(); setShowModal(true); }}>
+              <Button onClick={() => { resetForm(); setShowModal(true); }} className="w-full sm:w-auto">
                 <FiPlus className="mr-2" />
                 Create Project
               </Button>
@@ -227,87 +229,115 @@ export default function ProjectsPage() {
 
           <div className="grid grid-cols-1 gap-6">
             {projects.map((project: any) => (
-              <div key={project._id} className="rounded-lg bg-white p-6 shadow transition-shadow hover:shadow-lg">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <FiFolder className="h-5 w-5 text-primary-600" />
-                      <h3 className="text-xl font-semibold text-gray-900">{project.title}</h3>
-                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(project.status)}`}>
-                        {project.status}
-                      </span>
-                      <span className={`text-sm font-medium ${getPriorityColor(project.priority)}`}>
-                        ● {project.priority}
-                      </span>
+              <div key={project._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-primary-200">
+                <div className="space-y-4">
+                  {/* Project Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-primary-100 rounded-lg">
+                          <FiFolder className="h-5 w-5 text-primary-600" />
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900">{project.title}</h3>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(project.status)}`}>
+                          {project.status}
+                        </span>
+                        <span className={`text-sm font-medium ${getPriorityColor(project.priority)}`}>
+                          ● {project.priority}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Project Description */}
+                  {project.description && (
+                    <p className="text-gray-600 text-sm leading-relaxed">{project.description}</p>
+                  )}
+
+                  {/* Project Details Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center text-gray-600 mb-1">
+                        <FiFolder className="mr-2 h-4 w-4" />
+                        <span className="text-xs font-medium uppercase tracking-wide">Category</span>
+                      </div>
+                      <p className="text-sm font-semibold text-gray-900">{project.category}</p>
                     </div>
                     
-                    {project.description && (
-                      <p className="mt-2 text-gray-600">{project.description}</p>
-                    )}
-
-                    <div className="mt-4 flex flex-wrap gap-6 text-sm">
-                      <div className="flex items-center text-gray-600">
-                        <FiFolder className="mr-2" />
-                        <span className="font-medium">Category:</span>
-                        <span className="ml-1">{project.category}</span>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center text-gray-600 mb-1">
+                        <FiDollarSign className="mr-2 h-4 w-4" />
+                        <span className="text-xs font-medium uppercase tracking-wide">Budget</span>
                       </div>
-                      <div className="flex items-center text-gray-600">
-                        <FiDollarSign className="mr-2" />
-                        <span className="font-medium">Budget:</span>
-                        <span className="ml-1">₹{project.budget?.toLocaleString()}</span>
-                      </div>
-                      {project.totalDealAmount > 0 && (
-                        <div className="flex items-center text-gray-600">
-                          <FiDollarSign className="mr-2" />
-                          <span className="font-medium">Deal Amount:</span>
-                          <span className="ml-1">₹{project.totalDealAmount?.toLocaleString()}</span>
-                        </div>
-                      )}
-                      {project.startDate && (
-                        <div className="flex items-center text-gray-600">
-                          <FiClock className="mr-2" />
-                          <span className="font-medium">Start:</span>
-                          <span className="ml-1">{new Date(project.startDate).toLocaleDateString()}</span>
-                        </div>
-                      )}
-                      {project.endDate && (
-                        <div className="flex items-center text-gray-600">
-                          <FiClock className="mr-2" />
-                          <span className="font-medium">End:</span>
-                          <span className="ml-1">{new Date(project.endDate).toLocaleDateString()}</span>
-                        </div>
-                      )}
+                      <p className="text-sm font-semibold text-gray-900">₹{project.budget?.toLocaleString()}</p>
                     </div>
-
-                    {/* Budget Utilization Status */}
-                    {project.budget > 0 && (
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-                          <span className="font-medium">Budget Status:</span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            project.totalExpense > project.budget 
-                              ? 'bg-red-100 text-red-800' 
-                              : project.totalExpense > (project.budget * 0.8)
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-green-100 text-green-800'
-                          }`}>
-                            {project.totalExpense > project.budget 
-                              ? 'Over Budget' 
-                              : project.totalExpense > (project.budget * 0.8)
-                              ? 'Near Limit'
-                              : 'Within Budget'
-                            }
-                          </span>
+                    
+                    {project.totalDealAmount > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center text-gray-600 mb-1">
+                          <FiDollarSign className="mr-2 h-4 w-4" />
+                          <span className="text-xs font-medium uppercase tracking-wide">Deal Amount</span>
                         </div>
-                        <div className="flex items-center justify-between text-sm text-gray-600">
-                          <span>Utilization: ₹{project.totalExpense?.toLocaleString() || 0} / ₹{project.budget?.toLocaleString()}</span>
-                          <span className="font-medium">
+                        <p className="text-sm font-semibold text-gray-900">₹{project.totalDealAmount?.toLocaleString()}</p>
+                      </div>
+                    )}
+                    
+                    {project.startDate && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center text-gray-600 mb-1">
+                          <FiClock className="mr-2 h-4 w-4" />
+                          <span className="text-xs font-medium uppercase tracking-wide">Start Date</span>
+                        </div>
+                        <p className="text-sm font-semibold text-gray-900">{new Date(project.startDate).toLocaleDateString()}</p>
+                      </div>
+                    )}
+                    
+                    {project.endDate && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center text-gray-600 mb-1">
+                          <FiClock className="mr-2 h-4 w-4" />
+                          <span className="text-xs font-medium uppercase tracking-wide">End Date</span>
+                        </div>
+                        <p className="text-sm font-semibold text-gray-900">{new Date(project.endDate).toLocaleDateString()}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Budget Utilization Status */}
+                  {project.budget > 0 && (
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-gray-800">Budget Status</h4>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          project.totalExpense > project.budget 
+                            ? 'bg-red-100 text-red-800' 
+                            : project.totalExpense > (project.budget * 0.8)
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {project.totalExpense > project.budget 
+                            ? 'Over Budget' 
+                            : project.totalExpense > (project.budget * 0.8)
+                            ? 'Near Limit'
+                            : 'Within Budget'
+                          }
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Utilization</span>
+                          <span className="font-semibold text-gray-900">
                             {project.budget > 0 ? Math.round((project.totalExpense || 0) / project.budget * 100) : 0}%
                           </span>
                         </div>
-                        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div className="text-xs text-gray-500">
+                          ₹{project.totalExpense?.toLocaleString() || 0} / ₹{project.budget?.toLocaleString()}
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
                           <div 
-                            className={`h-full transition-all ${
+                            className={`h-full transition-all duration-500 ${
                               project.totalExpense > project.budget 
                                 ? 'bg-red-500' 
                                 : project.totalExpense > (project.budget * 0.8)
@@ -320,57 +350,62 @@ export default function ProjectsPage() {
                           ></div>
                         </div>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {project.projectMembers && project.projectMembers.length > 0 && (
-                      <div className="mt-4">
-                        <div className="flex items-center text-gray-600 mb-2">
-                          <FiUsers className="mr-2" />
-                          <span className="font-medium">Project Members:</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {project.projectMembers.map((member: any, index: number) => (
-                            <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {member.name || member}
-                            </span>
-                          ))}
-                        </div>
+                  {/* Project Members */}
+                  {project.projectMembers && project.projectMembers.length > 0 && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center text-gray-700 mb-3">
+                        <FiUsers className="mr-2 h-4 w-4" />
+                        <span className="text-sm font-semibold">Project Members</span>
                       </div>
-                    )}
-
-                    {project.progress !== undefined && (
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between text-sm text-gray-600">
-                          <span>Progress</span>
-                          <span className="font-medium">{project.progress}%</span>
-                        </div>
-                        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                          <div 
-                            className="h-full bg-primary-600 transition-all"
-                            style={{ width: `${project.progress}%` }}
-                          ></div>
-                        </div>
+                      <div className="flex flex-wrap gap-2">
+                        {project.projectMembers.map((member: any, index: number) => (
+                          <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {member.name || member}
+                          </span>
+                        ))}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
+                  {/* Project Progress */}
+                  {project.progress !== undefined && (
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-100">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-gray-800">Project Progress</h4>
+                        <span className="text-sm font-bold text-gray-900">{project.progress}%</span>
+                      </div>
+                      <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div 
+                          className="h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500"
+                          style={{ width: `${project.progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
                   {(isFounder || isManager) && (
-                    <div className="ml-4 flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
                       <Button
                         variant="outline"
                         size="sm"
+                        className="flex-1"
                         onClick={() => handleEdit(project)}
                       >
-                        <FiEdit className="mr-1" />
-                        Edit
+                        <FiEdit className="mr-2 h-4 w-4" />
+                        Edit Project
                       </Button>
                       <Button
                         variant="danger"
                         size="sm"
+                        className="flex-1"
                         onClick={() => handleDelete(project._id)}
                       >
-                        <FiTrash2 className="mr-1" />
-                        Delete
+                        <FiTrash2 className="mr-2 h-4 w-4" />
+                        Delete Project
                       </Button>
                     </div>
                   )}
@@ -501,7 +536,7 @@ export default function ProjectsPage() {
                         className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                       />
                       <span className="text-sm text-gray-700">
-                        {user.name} ({user.email})
+                        {user.name}
                       </span>
                     </label>
                   ))}
@@ -518,7 +553,7 @@ export default function ProjectsPage() {
               onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
               options={users.map((user: any) => ({
                 value: user._id,
-                label: `${user.name} (${user.email})`,
+                label: user.name,
               }))}
             />
 
@@ -595,6 +630,10 @@ export default function ProjectsPage() {
           </div>
         </form>
       </Modal>
+      
+      {/* Mobile Components */}
+      <FABMenu />
+      <MobileNavbar />
     </div>
   );
 }

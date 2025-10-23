@@ -18,7 +18,7 @@ export default function Header({ title }: HeaderProps) {
   }, []);
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-8">
+    <header className="hidden md:flex h-16 items-center justify-between border-b border-gray-200 bg-white px-8">
       <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
 
       <div className="flex items-center space-x-4">

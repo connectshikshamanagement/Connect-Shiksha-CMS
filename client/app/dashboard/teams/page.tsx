@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { teamAPI, userAPI, roleAPI, teamPerformanceAPI, teamBudgetAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import FABMenu from '@/components/FABMenu';
+import MobileNavbar from '@/components/MobileNavbar';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import FormInput from '@/components/FormInput';
@@ -216,16 +218,16 @@ export default function TeamsPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Teams" />
 
-        <div className="p-8">
-          <div className="mb-6 flex items-center justify-between">
+        <div className="p-4 md:p-8 pb-20 md:pb-8">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">Team Management</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Team Management</h2>
               <p className="mt-1 text-sm text-gray-600">Manage your organization's teams and members</p>
             </div>
-            <Button onClick={handleOpenModal}>
+            <Button onClick={handleOpenModal} className="w-full sm:w-auto">
               <FiPlus className="mr-2" />
               Add Team
             </Button>
@@ -262,7 +264,7 @@ export default function TeamsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-2">
+                <div className="mt-4">
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -281,26 +283,6 @@ export default function TeamsPage() {
                     >
                       <FiTrash2 className="mr-1" />
                       Delete
-                    </Button>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleViewPerformance(team)}
-                    >
-                      <FiTrendingUp className="mr-1" />
-                      Performance
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleManageBudget(team)}
-                    >
-                      <FiDollarSign className="mr-1" />
-                      Budget
                     </Button>
                   </div>
                 </div>
@@ -362,7 +344,7 @@ export default function TeamsPage() {
             onChange={(e) => setFormData({ ...formData, leadUserId: e.target.value })}
             options={users.map((user: any) => ({
               value: user._id,
-              label: `${user.name} (${user.email})`,
+              label: user.name,
             }))}
           />
 
@@ -758,6 +740,10 @@ export default function TeamsPage() {
           </div>
         </div>
       </Modal>
+      
+      {/* Mobile Components */}
+      <FABMenu />
+      <MobileNavbar />
     </div>
   );
 }

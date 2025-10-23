@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import FABMenu from '@/components/FABMenu';
+import MobileNavbar from '@/components/MobileNavbar';
 import Button from '@/components/Button';
 import FormInput from '@/components/FormInput';
 import { showToast } from '@/lib/toast';
@@ -96,7 +98,7 @@ export default function SettingsPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Settings" />
 
         <div className="p-8">
@@ -404,6 +406,10 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+        
+        {/* Mobile Components */}
+        <FABMenu />
+        <MobileNavbar />
       </div>
     </div>
   );

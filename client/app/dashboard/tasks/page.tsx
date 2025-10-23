@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { taskAPI, projectAPI, userAPI, teamAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import FABMenu from '@/components/FABMenu';
+import MobileNavbar from '@/components/MobileNavbar';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import FormInput from '@/components/FormInput';
@@ -313,10 +315,10 @@ export default function TasksPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Tasks" />
 
-        <div className="p-6">
+        <div className="p-4 md:p-6 pb-20 md:pb-6">
           {/* Header */}
           <div className="mb-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -647,6 +649,10 @@ export default function TasksPage() {
           </div>
         </form>
       </Modal>
+      
+      {/* Mobile Components */}
+      <FABMenu />
+      <MobileNavbar />
     </div>
   );
 }
