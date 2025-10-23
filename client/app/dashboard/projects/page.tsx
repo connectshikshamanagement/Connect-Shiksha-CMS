@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { projectAPI, teamAPI, userAPI } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import Modal from '@/components/Modal';
@@ -18,6 +19,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
+  const { isFounder, isManager, isMember } = usePermissions();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -36,12 +38,17 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [isMember]);
 
   const fetchData = async () => {
     try {
+      // Use role-based API calls
+      const projectsPromise = isMember 
+        ? projectAPI.getMyTeamProjects() 
+        : projectAPI.getAll();
+      
       const [projectsRes, teamsRes, usersRes] = await Promise.all([
-        projectAPI.getAll(),
+        projectsPromise,
         teamAPI.getAll(),
         userAPI.getAll()
       ]);
@@ -203,13 +210,19 @@ export default function ProjectsPage() {
         <div className="p-8">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">Project Management</h2>
-              <p className="mt-1 text-sm text-gray-600">Track and manage your organization's projects</p>
+              <h2 className="text-2xl font-bold text-gray-800">
+                {isMember ? "My Projects" : "Project Management"}
+              </h2>
+              <p className="mt-1 text-sm text-gray-600">
+                {isMember ? "View projects you are assigned to" : "Track and manage your organization's projects"}
+              </p>
             </div>
-            <Button onClick={() => { resetForm(); setShowModal(true); }}>
-              <FiPlus className="mr-2" />
-              Create Project
-            </Button>
+            {(isFounder || isManager) && (
+              <Button onClick={() => { resetForm(); setShowModal(true); }}>
+                <FiPlus className="mr-2" />
+                Create Project
+              </Button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-6">
@@ -341,24 +354,26 @@ export default function ProjectsPage() {
                     )}
                   </div>
 
-                  <div className="ml-4 flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(project)}
-                    >
-                      <FiEdit className="mr-1" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDelete(project._id)}
-                    >
-                      <FiTrash2 className="mr-1" />
-                      Delete
-                    </Button>
-                  </div>
+                  {(isFounder || isManager) && (
+                    <div className="ml-4 flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(project)}
+                      >
+                        <FiEdit className="mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDelete(project._id)}
+                      >
+                        <FiTrash2 className="mr-1" />
+                        Delete
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -368,11 +383,15 @@ export default function ProjectsPage() {
             <div className="rounded-lg bg-white p-12 text-center shadow">
               <FiFolder className="mx-auto mb-4 h-12 w-12 text-gray-400" />
               <p className="text-lg font-medium text-gray-900">No projects found</p>
-              <p className="mt-1 text-sm text-gray-500">Get started by creating your first project</p>
-              <Button className="mt-4" onClick={() => { resetForm(); setShowModal(true); }}>
-                <FiPlus className="mr-2" />
-                Create Project
-              </Button>
+              <p className="mt-1 text-sm text-gray-500">
+                {isMember ? "You are not assigned to any projects yet" : "Get started by creating your first project"}
+              </p>
+              {(isFounder || isManager) && (
+                <Button className="mt-4" onClick={() => { resetForm(); setShowModal(true); }}>
+                  <FiPlus className="mr-2" />
+                  Create Project
+                </Button>
+              )}
             </div>
           )}
         </div>

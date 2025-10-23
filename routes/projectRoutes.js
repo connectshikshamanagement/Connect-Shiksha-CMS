@@ -57,12 +57,6 @@ router
   .route('/')
   .post(authorize('projects.create'), projectController.create);
 
-router
-  .route('/:id')
-  .get(projectController.getOne)
-  .put(authorize('projects.update'), projectController.update)
-  .delete(authorize('projects.delete'), projectController.delete);
-
 // Get team projects for team members
 router.get('/my-team-projects', authorize('projects.read'), async (req, res) => {
   try {
@@ -258,6 +252,13 @@ router.get('/my-project-financials', authorize('projects.read'), async (req, res
     });
   }
 });
+
+// Generic routes for individual project operations (must be last)
+router
+  .route('/:id')
+  .get(projectController.getOne)
+  .put(authorize('projects.update'), projectController.update)
+  .delete(authorize('projects.delete'), projectController.delete);
 
 module.exports = router;
 

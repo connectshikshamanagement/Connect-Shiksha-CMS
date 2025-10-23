@@ -48,6 +48,8 @@ export const projectAPI = {
   create: (data: any) => api.post('/projects', data),
   update: (id: string, data: any) => api.put(`/projects/${id}`, data),
   delete: (id: string) => api.delete(`/projects/${id}`),
+  getMyTeamProjects: () => api.get('/projects/my-team-projects'),
+  getMyProjectFinancials: () => api.get('/projects/my-project-financials'),
 };
 
 export const taskAPI = {
