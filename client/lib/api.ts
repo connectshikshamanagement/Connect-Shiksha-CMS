@@ -213,3 +213,14 @@ export const teamPerformanceAPI = {
   getTeamAnalytics: (teamId: string, params?: any) => api.get(`/teams/${teamId}/analytics`, { params }),
 };
 
+export const dataManagementAPI = {
+  getStats: () => api.get('/data/stats'),
+  exportData: () => api.get('/data/export', { responseType: 'blob' }),
+  clearData: () => api.delete('/data/clear'),
+  importData: (formData: FormData) => api.post('/data/import', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }),
+};
+

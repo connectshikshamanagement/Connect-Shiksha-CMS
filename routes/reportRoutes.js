@@ -4,11 +4,193 @@ const Expense = require('../models/Expense');
 const Income = require('../models/Income');
 const Team = require('../models/Team');
 const Payroll = require('../models/Payroll');
+const User = require('../models/User');
+const Project = require('../models/Project');
+const Task = require('../models/Task');
+const Client = require('../models/Client');
 const { protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
 router.use(protect);
+
+// Dashboard analytics endpoint
+router.get('/dashboard', authorize('reports.read'), async (req, res) => {
+  try {
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1;
+    const currentYear = currentDate.getFullYear();
+    
+    // Get date ranges for current month
+    const startOfMonth = new Date(currentYear, currentMonth - 1, 1);
+    const endOfMonth = new Date(currentYear, currentMonth, 0);
+    
+    // Get basic counts
+    const totalUsers = await User.countDocuments({ active: true });
+    const totalTeams = await Team.countDocuments();
+    const totalProjects = await Project.countDocuments();
+    const totalTasks = await Task.countDocuments();
+    const totalClients = await Client.countDocuments();
+    
+    // Get current month financial data
+    const monthlyIncome = await Income.aggregate([
+      {
+        $match: {
+          date: { $gte: startOfMonth, $lte: endOfMonth }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    const monthlyExpenses = await Expense.aggregate([
+      {
+        $match: {
+          date: { $gte: startOfMonth, $lte: endOfMonth }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    const monthlyPayroll = await Payroll.aggregate([
+      {
+        $match: {
+          month: `${currentYear}-${String(currentMonth).padStart(2, '0')}`
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$salaryAmount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Get task status breakdown
+    const taskStatusBreakdown = await Task.aggregate([
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Get team performance data
+    const teamPerformance = await Team.aggregate([
+      {
+        $lookup: {
+          from: 'expenses',
+          localField: '_id',
+          foreignField: 'teamId',
+          as: 'expenses'
+        }
+      },
+      {
+        $lookup: {
+          from: 'incomes',
+          localField: 'members',
+          foreignField: 'receivedByUserId',
+          as: 'incomes'
+        }
+      },
+      {
+        $project: {
+          name: 1,
+          category: 1,
+          monthlyBudget: 1,
+          memberCount: { $size: '$members' },
+          totalExpenses: { $sum: '$expenses.amount' },
+          totalIncome: { $sum: '$incomes.amount' },
+          budgetUtilization: {
+            $cond: {
+              if: { $gt: ['$monthlyBudget', 0] },
+              then: { $multiply: [{ $divide: [{ $sum: '$expenses.amount' }, '$monthlyBudget'] }, 100] },
+              else: 0
+            }
+          }
+        }
+      },
+      {
+        $limit: 5
+      }
+    ]);
+    
+    // Calculate net profit
+    const totalIncome = monthlyIncome[0]?.total || 0;
+    const totalExpenses = monthlyExpenses[0]?.total || 0;
+    const totalPayroll = monthlyPayroll[0]?.total || 0;
+    const netProfit = totalIncome - totalExpenses - totalPayroll;
+    
+    // Format task status breakdown
+    const taskStatuses = {
+      todo: 0,
+      in_progress: 0,
+      review: 0,
+      done: 0
+    };
+    
+    taskStatusBreakdown.forEach(status => {
+      if (taskStatuses.hasOwnProperty(status._id)) {
+        taskStatuses[status._id] = status.count;
+      }
+    });
+    
+    const analytics = {
+      overview: {
+        totalUsers,
+        totalTeams,
+        totalProjects,
+        totalTasks,
+        totalClients
+      },
+      monthlyFinancials: {
+        income: {
+          total: totalIncome,
+          count: monthlyIncome[0]?.count || 0
+        },
+        expenses: {
+          total: totalExpenses,
+          count: monthlyExpenses[0]?.count || 0
+        },
+        payroll: {
+          total: totalPayroll,
+          count: monthlyPayroll[0]?.count || 0
+        },
+        netProfit
+      },
+      taskStatuses,
+      teamPerformance: teamPerformance.map(team => ({
+        ...team,
+        budgetUtilization: Math.round(team.budgetUtilization * 100) / 100
+      }))
+    };
+    
+    res.json({
+      success: true,
+      data: analytics
+    });
+    
+  } catch (error) {
+    console.error('Dashboard analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
 
 // Generate team financial report PDF
 router.get('/team/:teamId/:month', authorize('finance.read'), async (req, res) => {
