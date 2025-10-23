@@ -653,8 +653,8 @@ export default function FinancePage() {
                           <div className="mt-1 flex gap-4 text-xs">
                             <span className="text-blue-600">Income: ₹{project.totalIncome?.toLocaleString() || '0'}</span>
                             <span className="text-red-600">Expenses: ₹{project.totalExpense?.toLocaleString() || '0'}</span>
-                            {project.budget > 0 && (
-                              <span className="text-gray-600">Budget: ₹{project.budget.toLocaleString()}</span>
+                            {(project.budget || 0) > 0 && (
+                              <span className="text-gray-600">Budget: ₹{(project.budget || 0).toLocaleString()}</span>
                             )}
                           </div>
                         </div>
@@ -665,13 +665,13 @@ export default function FinancePage() {
                           <p className="text-xs text-gray-500">Net Profit</p>
                         </div>
                       </div>
-                      {project.budget > 0 && project.totalExpense > project.budget && (
+                      {(project.budget || 0) > 0 && (project.totalExpense || 0) > (project.budget || 0) && (
                         <div className="mt-2 flex items-center text-sm text-red-600">
                           <FiAlertTriangle className="mr-1" />
-                          Budget exceeded by ₹{((project.totalExpense || 0) - project.budget).toLocaleString()}
+                          Budget exceeded by ₹{((project.totalExpense || 0) - (project.budget || 0)).toLocaleString()}
                         </div>
                       )}
-                      {project.budget > 0 && (
+                      {(project.budget || 0) > 0 && (
                         <div className="mt-2">
                           <div className="flex justify-between text-xs text-gray-600 mb-1">
                             <span>Budget Utilization</span>
@@ -876,7 +876,7 @@ export default function FinancePage() {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <p className="text-2xl font-bold text-gray-900">₹{payroll.salaryAmount.toLocaleString()}</p>
+                          <p className="text-2xl font-bold text-gray-900">₹{(payroll.salaryAmount || 0).toLocaleString()}</p>
                         </div>
                         <div className="flex gap-1">
                           {payroll.status === 'pending' && (

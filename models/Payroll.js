@@ -81,6 +81,26 @@ const payrollSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  // Project financial data
+  projectIncome: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  projectExpenses: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  projectBudget: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  netProfit: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

@@ -27,7 +27,7 @@ export default function PayrollPage() {
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [userProjects, setUserProjects] = useState([]);
-  const { userRole, isFounder, isManager, isMember } = usePermissions();
+  const { userRole, isFounder, isManager, isMember, loading: permissionsLoading } = usePermissions();
 
   // Form data states
   const [advanceFormData, setAdvanceFormData] = useState({
@@ -55,6 +55,11 @@ export default function PayrollPage() {
   });
 
   useEffect(() => {
+    // Wait for permissions to load before making API calls
+    if (permissionsLoading) {
+      return;
+    }
+
     // Debug current user
     const user = localStorage.getItem('user');
     console.log('Current user:', user ? JSON.parse(user) : 'No user found');
@@ -68,7 +73,12 @@ export default function PayrollPage() {
     if (isMember) {
       fetchUserProjects();
     }
-  }, [selectedMonth, selectedYear, selectedProject, selectedTeam, userRole]);
+  }, [selectedMonth, selectedYear, selectedProject, selectedTeam, userRole, permissionsLoading]);
+
+  // Debug payouts state changes
+  useEffect(() => {
+    console.log('Payouts state changed:', payouts);
+  }, [payouts]);
 
   const fetchPayouts = async () => {
     setLoading(true);
@@ -107,9 +117,11 @@ export default function PayrollPage() {
       const data = await response.json();
       
       console.log('Payroll response:', data);
+      console.log('Setting payouts to:', data.data.records || data.data);
       
       if (data.success) {
         setPayouts(data.data.records || data.data);
+        console.log('Payouts state updated');
       }
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to fetch payouts');
@@ -320,7 +332,11 @@ export default function PayrollPage() {
       showToast.success('Income entry added successfully!');
       setShowIncomeModal(false);
       setIncomeFormData({ amount: '', source: '', sourceType: 'Product Sales', description: '', projectId: '', date: new Date().toISOString().split('T')[0] });
-      fetchPayouts(); // Refresh data
+      
+      // Add small delay to ensure backend processing is complete
+      setTimeout(() => {
+        fetchPayouts(); // Refresh data
+      }, 1000);
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to add income entry');
     } finally {
@@ -349,7 +365,11 @@ export default function PayrollPage() {
       showToast.success('Expense entry added successfully!');
       setShowExpenseModal(false);
       setExpenseFormData({ amount: '', category: 'Other', description: '', projectId: '', date: new Date().toISOString().split('T')[0] });
-      fetchPayouts(); // Refresh data
+      
+      // Add small delay to ensure backend processing is complete
+      setTimeout(() => {
+        fetchPayouts(); // Refresh data
+      }, 1000);
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to add expense entry');
     } finally {
@@ -678,7 +698,7 @@ export default function PayrollPage() {
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                   <p className="text-sm text-purple-600 font-medium">Connect Shiksha Shares</p>
                   <p className="text-2xl font-bold text-purple-700">
-                    ₹{payouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0).toLocaleString()}
+                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
                   </p>
                   <p className="text-xs text-purple-500">70% of total profits</p>
                 </div>
@@ -686,7 +706,7 @@ export default function PayrollPage() {
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <p className="text-sm text-blue-600 font-medium">Team Shares</p>
                   <p className="text-2xl font-bold text-blue-700">
-                    ₹{payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0).toLocaleString()}
+                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
                   </p>
                   <p className="text-xs text-blue-500">30% of total profits</p>
                 </div>
@@ -704,9 +724,9 @@ export default function PayrollPage() {
                   <div className="space-y-2">
                     {Array.from(new Set(payouts.map((p: any) => p.projectId?.title).filter(Boolean))).map((projectTitle: string) => {
                       const projectPayouts = payouts.filter((p: any) => p.projectId?.title === projectTitle);
-                      const totalProjectProfit = projectPayouts.reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0);
-                      const founderProfit = projectPayouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0);
-                      const teamProfit = projectPayouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0);
+                      const totalProjectProfit = Math.round(projectPayouts.reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
+                      const founderProfit = Math.round(projectPayouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
+                      const teamProfit = Math.round(projectPayouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
                       
                       return (
                         <div key={projectTitle} className="p-3 bg-gray-50 rounded-lg">
@@ -737,7 +757,7 @@ export default function PayrollPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold">
-                    ₹{payouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0).toLocaleString()}
+                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
                   </div>
                   <div className="text-purple-100 text-sm">Total Connect Shiksha Shares</div>
                 </div>
@@ -752,7 +772,7 @@ export default function PayrollPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold">
-                    ₹{payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0).toLocaleString()}
+                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
                   </div>
                   <div className="text-blue-100 text-sm">Total Team Shares</div>
                 </div>
@@ -784,7 +804,7 @@ export default function PayrollPage() {
                         </div>
                         <div className="text-right">
                           <div className="text-2xl font-bold text-purple-600">
-                            ₹{(payout.profitShare || 0).toLocaleString()}
+                            ₹{Math.round(payout.profitShare || 0).toLocaleString()}
                           </div>
                           <div className="text-sm text-gray-500">70% Founder Share</div>
                         </div>
@@ -871,7 +891,7 @@ export default function PayrollPage() {
                       </div>
                       <div className="text-right">
                         <div className="text-xl font-bold text-blue-600">
-                          ₹{(payout.profitShare || 0).toLocaleString()}
+                          ₹{Math.round(payout.profitShare || 0).toLocaleString()}
                         </div>
                         <div className="text-sm text-gray-500">Team Share</div>
                       </div>

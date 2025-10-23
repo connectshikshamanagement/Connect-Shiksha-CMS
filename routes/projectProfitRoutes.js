@@ -133,56 +133,16 @@ router.get('/my-shares',
         .populate('teamId', 'name monthlyBudget')
         .sort('-createdAt');
       
-      // Add project financial data to each record
-      const mySharesWithFinancials = await Promise.all(
-        myShares.map(async (record) => {
-          let projectIncome = 0;
-          let projectExpenses = 0;
-          let projectBudget = 0;
-
-          // If record has a projectId, get project-specific data
-          if (record.projectId) {
-            // Get project income (using sourceRefId and sourceRefModel)
-            const incomes = await Income.find({ 
-              sourceRefId: record.projectId._id,
-              sourceRefModel: 'Project'
-            });
-            projectIncome = incomes.reduce((sum, income) => sum + income.amount, 0);
-
-            // Get project expenses (using projectId)
-            const expenses = await Expense.find({ 
-              projectId: record.projectId._id 
-            });
-            projectExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-
-            // Get project budget
-            projectBudget = record.projectId.allocatedBudget || 0;
-          } else {
-            // If no projectId, get team-level data as fallback
-            // Get team income
-            const teamIncomes = await Income.find({ 
-              teamId: record.teamId._id 
-            });
-            projectIncome = teamIncomes.reduce((sum, income) => sum + income.amount, 0);
-
-            // Get team expenses
-            const teamExpenses = await Expense.find({ 
-              teamId: record.teamId._id 
-            });
-            projectExpenses = teamExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-
-            // Get team budget
-            projectBudget = record.teamId.monthlyBudget || 0;
-          }
-
-          return {
-            ...record.toObject(),
-            projectIncome,
-            projectExpenses,
-            projectBudget
-          };
-        })
-      );
+      // Use pre-calculated project financial data from Payroll records
+      
+      const mySharesWithFinancials = myShares.map((record) => {
+        return {
+          ...record.toObject(),
+          projectIncome: record.projectIncome || 0,
+          projectExpenses: record.projectExpenses || 0,
+          projectBudget: record.projectBudget || 0
+        };
+      });
       
       // Calculate totals
       const totals = mySharesWithFinancials.reduce((acc, record) => {

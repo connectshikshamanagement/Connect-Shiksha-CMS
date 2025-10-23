@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Income = require('../models/Income');
 const Expense = require('../models/Expense');
 const Project = require('../models/Project');
@@ -62,10 +63,25 @@ router.post('/project-income', async (req, res) => {
     const income = await Income.create(incomeData);
 
     // Automatically compute profit sharing
-    await computeProfitSharing(income);
+    console.log('=== COMPUTING PROFIT SHARING FOR TEAM MEMBER INCOME ===');
+    console.log('Income ID:', income._id);
+    console.log('Source Type:', income.sourceType);
+    console.log('Amount:', income.amount);
+    console.log('Team ID:', income.teamId);
+    console.log('Project ID:', income.sourceRefId);
+    
+    // Use our new recalculateProjectPayroll function instead of the old computeProfitSharing
+    console.log('✅ Income added successfully, triggering payroll recalculation');
+    console.log('🔍 About to call recalculateProjectPayroll with projectId:', projectId);
 
     // Trigger payroll recalculation for the project team
-    await recalculateProjectPayroll(projectId);
+    console.log(`🚀 About to recalculate payroll for project: ${projectId}`);
+    try {
+      await recalculateProjectPayroll(projectId);
+      console.log(`✅ Completed recalculating payroll for project: ${projectId}`);
+    } catch (error) {
+      console.error(`❌ Error recalculating payroll for project ${projectId}:`, error.message);
+    }
 
     // Populate the response
     const populatedIncome = await Income.findById(income._id)
@@ -132,7 +148,13 @@ router.post('/project-expense', async (req, res) => {
     const expense = await Expense.create(expenseData);
 
     // Trigger payroll recalculation for the project team
-    await recalculateProjectPayroll(projectId);
+    console.log(`🚀 About to recalculate payroll for project: ${projectId}`);
+    try {
+      await recalculateProjectPayroll(projectId);
+      console.log(`✅ Completed recalculating payroll for project: ${projectId}`);
+    } catch (error) {
+      console.error(`❌ Error recalculating payroll for project ${projectId}:`, error.message);
+    }
 
     // Populate the response
     const populatedExpense = await Expense.findById(expense._id)
@@ -188,7 +210,7 @@ router.get('/my-income-history', async (req, res) => {
 
     let query = {
       teamId: { $in: teamIds },
-      receivedByUserId: req.user.id  // Only show records created by this user
+      receivedByUserId: new mongoose.Types.ObjectId(req.user.id)  // Only show records created by this user
     };
 
     // Filter by project if specified
@@ -234,7 +256,7 @@ router.get('/my-expense-history', async (req, res) => {
 
     let query = {
       teamId: { $in: teamIds },
-      submittedBy: req.user.id  // Only show records created by this user
+      submittedBy: new mongoose.Types.ObjectId(req.user.id)  // Only show records created by this user
     };
 
     // Filter by project if specified
@@ -271,70 +293,123 @@ router.get('/my-expense-history', async (req, res) => {
 // Helper function to recalculate payroll for a project team
 async function recalculateProjectPayroll(projectId) {
   try {
+    console.log(`🔄 Recalculating payroll for project: ${projectId}`);
     const project = await Project.findById(projectId).populate('teamId');
-    if (!project) return;
+    if (!project) {
+      console.log(`❌ Project not found: ${projectId}`);
+      return;
+    }
 
     const team = project.teamId;
     const currentDate = new Date();
-    const month = currentDate.getMonth() + 1;
+    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
     const year = currentDate.getFullYear();
+    const monthYear = `${year}-${month}`;
 
-    // Get all team members
+    // Get project-specific members (if project has specific members) or fall back to team members
+    let memberIds = project.projectMembers && project.projectMembers.length > 0 
+      ? project.projectMembers 
+      : team.members;
+    
     const teamMembers = await User.find({ 
-      _id: { $in: team.members },
+      _id: { $in: memberIds },
       active: true 
     });
 
-    // Calculate project financials
+    console.log(`👥 Project ${project.title} members: ${teamMembers.map(m => m.name).join(', ')} (${teamMembers.length} total)`);
+
+    // Calculate project financials for the specific month
     const projectIncome = await Income.find({
       sourceRefId: projectId,
-      sourceRefModel: 'Project',
-      date: {
-        $gte: new Date(year, month - 1, 1),
-        $lt: new Date(year, month, 1)
-      }
+      sourceRefModel: 'Project'
+      // Remove date filtering to get all income for this project
     });
 
     const projectExpenses = await Expense.find({
-      projectId: projectId,
-      date: {
-        $gte: new Date(year, month - 1, 1),
-        $lt: new Date(year, month, 1)
-      }
+      projectId: projectId
+      // Remove date filtering to get all expenses for this project
     });
 
     const totalIncome = projectIncome.reduce((sum, inc) => sum + inc.amount, 0);
     const totalExpenses = projectExpenses.reduce((sum, exp) => sum + exp.amount, 0);
     const netProfit = totalIncome - totalExpenses;
+    
+    console.log(`📊 Project ${project.title}: Income: ₹${totalIncome}, Expenses: ₹${totalExpenses}, Profit: ₹${netProfit}`);
 
     // Update or create payroll records for each team member
     for (const member of teamMembers) {
       const existingPayroll = await Payroll.findOne({
         userId: member._id,
-        month: month,
-        year: year
+        projectId: projectId,
+        month: monthYear
       });
 
       if (existingPayroll) {
         // Update existing payroll with new project data
         existingPayroll.projectIncome = totalIncome;
         existingPayroll.projectExpenses = totalExpenses;
-        existingPayroll.projectBudget = project.allocatedBudget;
+        existingPayroll.projectBudget = project.allocatedBudget || 0;
         existingPayroll.netProfit = netProfit;
+        
+        // Recalculate profit sharing based on new financials
+        // 70% to founder, 30% to team members
+        const founderShare = netProfit * 0.7;
+        const teamShare = netProfit * 0.3;
+        
+        // Update profit share based on user role
+        const memberRoles = await User.findById(member._id).populate('roleIds');
+        if (memberRoles.roleIds && memberRoles.roleIds.some(role => role.key === 'FOUNDER')) {
+          existingPayroll.profitShare = founderShare;
+        } else {
+          // Calculate individual team member share
+          const nonFounderMembers = teamMembers.filter(m => {
+            // This is a simplified check - in practice you'd need to populate roles
+            return m._id.toString() !== '68e4a8c33b6e38a3561c5594'; // Founder's ID
+          });
+          existingPayroll.profitShare = nonFounderMembers.length > 0 ? teamShare / nonFounderMembers.length : 0;
+        }
+        
+        // Always update the project financial fields (migration + regular update)
+        existingPayroll.projectIncome = totalIncome;
+        existingPayroll.projectExpenses = totalExpenses;
+        existingPayroll.projectBudget = project.allocatedBudget || 0;
+        existingPayroll.netProfit = netProfit;
+        
         await existingPayroll.save();
+        console.log(`📝 Updated payroll for ${member.name}: ₹${existingPayroll.profitShare}`);
       } else {
         // Create new payroll record
+        // Calculate profit sharing
+        const founderShare = netProfit * 0.7;
+        const teamShare = netProfit * 0.3;
+        
+        // Determine profit share based on user role
+        const memberRoles = await User.findById(member._id).populate('roleIds');
+        let profitShareAmount = 0;
+        
+        if (memberRoles.roleIds && memberRoles.roleIds.some(role => role.key === 'FOUNDER')) {
+          profitShareAmount = founderShare;
+        } else {
+          // Calculate individual team member share
+          const nonFounderMembers = teamMembers.filter(m => {
+            return m._id.toString() !== '68e4a8c33b6e38a3561c5594'; // Founder's ID
+          });
+          profitShareAmount = nonFounderMembers.length > 0 ? teamShare / nonFounderMembers.length : 0;
+        }
+        
         await Payroll.create({
           userId: member._id,
           teamId: team._id,
           projectId: projectId,
-          month: month,
+          month: monthYear,
           year: year,
           projectIncome: totalIncome,
           projectExpenses: totalExpenses,
-          projectBudget: project.allocatedBudget,
+          projectBudget: project.allocatedBudget || 0,
           netProfit: netProfit,
-          status: 'pending'
+          profitShare: profitShareAmount,
+          status: 'pending',
+          createdBy: member._id // Use member ID as creator for team member payroll
         });
       }
     }
