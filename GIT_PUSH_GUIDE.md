@@ -1,6 +1,25 @@
 # 🚀 Git Push Scripts Guide
 
-## Available Scripts
+## ✅ Working Script
+
+### **push-now.ps1** ⭐ (Simple & Works)
+One-command push with auto-generated commit message.
+
+**Usage:**
+```powershell
+.\push-now.ps1
+```
+
+**Features:**
+- Auto-generated commit message with timestamp
+- Adds all changes automatically
+- Pulls before pushing (avoids conflicts)
+- Pushes to GitHub
+- Fast and simple
+
+---
+
+## Other Scripts (Available but may need fixes)
 
 ### 1. **push-changes.ps1** (Recommended)
 Full-featured push with custom commit message.

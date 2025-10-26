@@ -59,7 +59,30 @@ export default function TeamsPage() {
         roleAPI.getAll(),
       ]);
       
-      if (teamsRes.data.success) setTeams(teamsRes.data.data);
+      // Populate team lead data if not already populated
+      if (teamsRes.data.success) {
+        const teamsData = teamsRes.data.data;
+        const teamsWithLead = await Promise.all(teamsData.map(async (team: any) => {
+          // If leadUserId is not populated, fetch the user data
+          if (team.leadUserId && !team.leadUserId.name) {
+            try {
+              const userData = await userAPI.getOne(team.leadUserId);
+              if (userData.data.success) {
+                team.leadUserId = {
+                  _id: team.leadUserId,
+                  name: userData.data.data.name,
+                  email: userData.data.data.email
+                };
+              }
+            } catch (error) {
+              console.error('Error fetching team lead:', error);
+            }
+          }
+          return team;
+        }));
+        setTeams(teamsWithLead);
+      }
+      
       if (usersRes.data.success) setUsers(usersRes.data.data);
       if (rolesRes.data.success) setRoles(rolesRes.data.data);
     } catch (error: any) {
@@ -352,23 +375,34 @@ export default function TeamsPage() {
             <label className="mb-1 block text-sm font-medium text-gray-700">
               Team Members
             </label>
-            <select
-              multiple
-              value={formData.members}
-              onChange={(e) => {
-                const selected = Array.from(e.target.selectedOptions, option => option.value);
-                setFormData({ ...formData, members: selected });
-              }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              size={5}
-            >
+            <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-gray-300 p-3">
               {users.map((user: any) => (
-                <option key={user._id} value={user._id}>
-                  {user.name}
-                </option>
+                <label key={user._id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                  <input
+                    type="checkbox"
+                    checked={formData.members.includes(user._id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setFormData({
+                          ...formData,
+                          members: [...formData.members, user._id]
+                        });
+                      } else {
+                        setFormData({
+                          ...formData,
+                          members: formData.members.filter(id => id !== user._id)
+                        });
+                      }
+                    }}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">{user.name} ({user.email})</span>
+                </label>
               ))}
-            </select>
-            <p className="mt-1 text-xs text-gray-500">Hold Ctrl/Cmd to select multiple members</p>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Select team members ({formData.members.length} selected)
+            </p>
 
             <div className="mt-3">
               <button
