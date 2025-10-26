@@ -95,14 +95,15 @@ export default function TeamsPage() {
             if (!isFounder) {
               console.log('User Data:', userData);
               console.log('All teams:', teamsWithLead);
+              const userId = userData._id || userData.id; // Support both _id and id
               const filteredTeams = teamsWithLead.filter((team: any) => {
                 const teamLeadId = typeof team.leadUserId === 'string' ? team.leadUserId : team.leadUserId?._id;
-                const isLead = teamLeadId === userData._id;
+                const isLead = teamLeadId === userId;
                 const isMember = team.members?.some((member: any) => {
                   const memberId = typeof member === 'string' ? member : member._id;
-                  return memberId === userData._id;
+                  return memberId === userId;
                 });
-                console.log(`Team: ${team.name}, Lead: ${teamLeadId}, User: ${userData._id}, IsMember: ${isMember}`);
+                console.log(`Team: ${team.name}, Lead: ${teamLeadId}, User: ${userId}, IsMember: ${isMember}`);
                 return isLead || isMember;
               });
               console.log('Filtered teams count:', filteredTeams.length);
