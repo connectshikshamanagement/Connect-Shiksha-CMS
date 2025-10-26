@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -40,36 +40,34 @@ const navigation = [
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [userInfo, setUserInfo] = useState({ name: 'User', email: '', role: 'Unknown' });
   const pathname = usePathname();
   const { hasPermission, userRole, loading, isFounder, isManager, isMember } = usePermissions();
+
+  // Load user info on client side only
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const user = localStorage.getItem('user');
+      if (user) {
+        try {
+          const userData = JSON.parse(user);
+          setUserInfo({
+            name: userData.name || 'User',
+            email: userData.email || '',
+            role: userRole || 'Unknown'
+          });
+        } catch (error) {
+          setUserInfo({ name: 'User', email: '', role: 'Unknown' });
+        }
+      }
+    }
+  }, [userRole]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/login';
   };
-
-  // Get user info for display
-  const getUserInfo = () => {
-    if (typeof window !== 'undefined') {
-      const user = localStorage.getItem('user');
-      if (user) {
-        try {
-          const userData = JSON.parse(user);
-          return {
-            name: userData.name || 'User',
-            email: userData.email || '',
-            role: userRole || 'Unknown'
-          };
-        } catch (error) {
-          return { name: 'User', email: '', role: 'Unknown' };
-        }
-      }
-    }
-    return { name: 'User', email: '', role: 'Unknown' };
-  };
-
-  const userInfo = getUserInfo();
 
   // Filter navigation based on permissions and role
   const filteredNavigation = navigation.filter(item => {

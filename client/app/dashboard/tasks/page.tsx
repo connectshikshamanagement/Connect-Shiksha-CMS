@@ -131,6 +131,11 @@ export default function TasksPage() {
       filtered = filtered.filter(task => task.status === activeTab);
     }
 
+    // Hide done tasks for team members
+    if (isMember) {
+      filtered = filtered.filter(task => task.status !== 'done');
+    }
+
     // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(task =>
@@ -161,8 +166,20 @@ export default function TasksPage() {
       filtered = filtered.filter(task => task.status === filters.status);
     }
 
+    // Sort tasks by priority and date
+    filtered.sort((a, b) => {
+      // Priority order: urgent > high > medium > low
+      const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
+      const priorityDiff = priorityOrder[b.priority as keyof typeof priorityOrder] - priorityOrder[a.priority as keyof typeof priorityOrder];
+      
+      if (priorityDiff !== 0) return priorityDiff;
+      
+      // If same priority, sort by deadline (earliest first)
+      return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+    });
+
     setFilteredTasks(filtered);
-  }, [tasks, activeTab, searchTerm, filters]);
+  }, [tasks, activeTab, searchTerm, filters, isMember]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -344,8 +361,9 @@ export default function TasksPage() {
             </div>
           </div>
 
-          {/* Search and Filters */}
-          <div className="mb-6 bg-white rounded-lg shadow-sm p-4">
+          {/* Search and Filters - Hidden for team members */}
+          {!isMember && (
+            <div className="mb-6 bg-white rounded-lg shadow-sm p-4">
             <div className="flex flex-col lg:flex-row gap-4">
               {/* Search */}
               <div className="flex-1">
@@ -397,6 +415,18 @@ export default function TasksPage() {
                   <option value="urgent">Urgent</option>
                 </select>
 
+                <select
+                  value={filters.status}
+                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Status</option>
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="review">Review</option>
+                  <option value="done">Done</option>
+                </select>
+
                 <button
                   onClick={() => setFilters({ teamId: '', projectId: '', priority: '', status: '' })}
                   className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
@@ -406,6 +436,23 @@ export default function TasksPage() {
               </div>
             </div>
           </div>
+          )}
+
+          {/* Simple Search for Team Members */}
+          {isMember && (
+            <div className="mb-6 bg-white rounded-lg shadow-sm p-4">
+              <div className="relative">
+                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search your tasks..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Task Tabs */}
           <div className="mb-6">
@@ -415,7 +462,8 @@ export default function TasksPage() {
                 { key: 'todo', label: 'To Do', icon: FiCalendar },
                 { key: 'in_progress', label: 'In Progress', icon: FiUsers },
                 { key: 'review', label: 'Review', icon: FiFilter },
-                { key: 'done', label: 'Done', icon: FiPlus },
+                // Hide Done tab for team members
+                ...(isMember ? [] : [{ key: 'done', label: 'Done', icon: FiCheckCircle }]),
               ].map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}

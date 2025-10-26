@@ -56,6 +56,37 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
+  const getTaskCardBackground = (task: Task) => {
+    // Green background for completed tasks
+    if (task.status === 'done') {
+      return 'bg-green-50 border-green-200';
+    }
+    
+    // Priority-based background colors
+    switch (task.priority) {
+      case 'urgent':
+        return 'bg-red-50 border-red-200';
+      case 'high':
+        return 'bg-orange-50 border-orange-200';
+      case 'medium':
+        return 'bg-yellow-50 border-yellow-200';
+      case 'low':
+        return 'bg-gray-50 border-gray-200';
+      default:
+        return 'bg-white border-gray-200';
+    }
+  };
+
+  const getPriorityBadgeColor = (priority: string) => {
+    const colors = {
+      low: 'bg-gray-100 text-gray-800',
+      medium: 'bg-yellow-100 text-yellow-800',
+      high: 'bg-orange-100 text-orange-800',
+      urgent: 'bg-red-100 text-red-800',
+    };
+    return colors[priority as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+  };
+
   const formatDeadline = (deadline: string) => {
     const date = new Date(deadline);
     const now = new Date();
@@ -73,12 +104,24 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
     }
   };
 
-  const getDeadlineColor = (deadline: string) => {
+  const getDeadlineColor = (deadline: string, priority: string) => {
     const date = new Date(deadline);
     const now = new Date();
     const diffTime = date.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
+    // High priority tasks get red highlight for deadlines
+    if (priority === 'high' || priority === 'urgent') {
+      if (diffDays < 0) {
+        return 'bg-red-200 text-red-900 border-red-300';
+      } else if (diffDays <= 1) {
+        return 'bg-red-100 text-red-800 border-red-200';
+      } else if (diffDays <= 3) {
+        return 'bg-orange-100 text-orange-800 border-orange-200';
+      }
+    }
+    
+    // Regular deadline colors
     if (diffDays < 0) {
       return 'bg-red-100 text-red-800';
     } else if (diffDays <= 1) {
@@ -128,11 +171,11 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
   };
 
   const TaskCard = ({ task }: { task: Task }) => (
-    <div className={`p-4 mb-3 rounded-2xl shadow bg-white w-full hover:shadow-lg transition-all duration-200 border-l-4 ${getPriorityColor(task.priority)}`}>
-      <div className="flex justify-between items-start mb-2">
-        <h3 className="font-bold text-lg truncate flex-1 mr-2">{task.title}</h3>
+    <div className={`p-5 mb-4 rounded-xl shadow-sm bg-white w-full hover:shadow-md transition-all duration-300 border-l-4 ${getTaskCardBackground(task)}`}>
+      <div className="flex justify-between items-start mb-3">
+        <h3 className="font-bold text-lg truncate flex-1 mr-3">{task.title}</h3>
         <div className="flex items-center gap-2">
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getDeadlineColor(task.deadline)}`}>
+          <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getDeadlineColor(task.deadline, task.priority)}`}>
             {formatDeadline(task.deadline)}
           </span>
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
@@ -142,34 +185,40 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
       </div>
 
       {task.description && (
-        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{task.description}</p>
+        <p className="text-sm text-gray-600 mb-4 line-clamp-2">{task.description}</p>
       )}
 
-      {/* Progress Bar */}
+      {/* Priority Badge */}
       <div className="mb-3">
-        <div className="flex justify-between items-center mb-1">
+        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPriorityBadgeColor(task.priority)}`}>
+          <span className={`mr-1 h-2 w-2 rounded-full ${
+            task.priority === 'urgent' ? 'bg-red-500' :
+            task.priority === 'high' ? 'bg-orange-500' :
+            task.priority === 'medium' ? 'bg-yellow-500' : 'bg-gray-500'
+          }`}></span>
+          {task.priority.toUpperCase()}
+        </span>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-2">
           <span className="text-sm font-medium text-gray-700">Progress</span>
           <span className="text-sm font-bold text-blue-600">{task.progress}%</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
+        <div className="w-full bg-gray-200 rounded-full h-2.5">
           <div 
-            className="h-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-300" 
+            className={`h-2.5 rounded-full transition-all duration-500 ${
+              task.status === 'done' ? 'bg-gradient-to-r from-green-500 to-green-600' :
+              'bg-gradient-to-r from-blue-500 to-blue-600'
+            }`}
             style={{ width: `${task.progress}%` }}
           ></div>
         </div>
       </div>
 
       {/* Task Details */}
-      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mb-3">
-        <span className="flex items-center">
-          <span className={`mr-1 h-2 w-2 rounded-full ${
-            task.priority === 'urgent' ? 'bg-red-500' :
-            task.priority === 'high' ? 'bg-orange-500' :
-            task.priority === 'medium' ? 'bg-yellow-500' : 'bg-gray-500'
-          }`}></span>
-          {task.priority}
-        </span>
-        
+      <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 mb-4">
         <span className="flex items-center">
           <FiUser className="mr-1" />
           {task.assignedTo.length} assigned
@@ -189,7 +238,7 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
       </div>
 
       {/* Team and Project Info */}
-      <div className="mb-3 text-xs text-gray-600">
+      <div className="mb-4 text-xs text-gray-600 bg-gray-50 p-3 rounded-lg">
         <div className="flex items-center gap-2">
           <span className="font-medium">Team:</span>
           <span>{task.teamId.name} ({task.teamId.category})</span>
@@ -253,9 +302,9 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {tasks.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="col-span-full text-center py-12">
             <div className="text-gray-400 text-6xl mb-4">📋</div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks found</h3>
             <p className="text-gray-500">Create your first task to get started!</p>
