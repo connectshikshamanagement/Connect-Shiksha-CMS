@@ -1,8 +1,30 @@
 # 🚀 Git Push Scripts Guide
 
-## ✅ Working Script
+## ✅ Manual Push Command
 
-### **push-now.ps1** ⭐ (Simple & Works)
+### **push.ps1** (Manual - Recommended)
+Only runs when you manually execute it. No auto-push.
+
+**Usage:**
+```powershell
+# Simple push with auto message
+.\push.ps1
+
+# With custom message
+.\push.ps1 "Fixed team member selection with checkboxes"
+```
+
+**Features:**
+- ✅ Only runs when YOU run it
+- ✅ No automatic execution
+- ✅ Custom commit message
+- ✅ Safe - shows what it's doing
+
+---
+
+## Other Scripts
+
+### **push-now.ps1** (Alternative)
 One-command push with auto-generated commit message.
 
 **Usage:**

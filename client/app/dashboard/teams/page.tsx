@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { teamAPI, userAPI, roleAPI, teamPerformanceAPI, teamBudgetAPI, financeAPI } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import FABMenu from '@/components/FABMenu';
@@ -20,6 +21,8 @@ export default function TeamsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingTeam, setEditingTeam] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { isFounder, isManager, isMember } = usePermissions();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -80,7 +83,33 @@ export default function TeamsPage() {
           }
           return team;
         }));
-        setTeams(teamsWithLead);
+        
+        // Get current user
+        try {
+          const user = localStorage.getItem('user');
+          if (user) {
+            const userData = JSON.parse(user);
+            setCurrentUser(userData);
+            
+            // Filter teams based on role
+            if (!isFounder) {
+              const filteredTeams = teamsWithLead.filter((team: any) => {
+                // Check if user is lead or member
+                const isLead = team.leadUserId?._id === userData._id || team.leadUserId === userData._id;
+                const isMember = team.members?.includes(userData._id);
+                return isLead || isMember;
+              });
+              setTeams(filteredTeams);
+            } else {
+              setTeams(teamsWithLead);
+            }
+          } else {
+            setTeams(teamsWithLead);
+          }
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+          setTeams(teamsWithLead);
+        }
       }
       
       if (usersRes.data.success) setUsers(usersRes.data.data);
