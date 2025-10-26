@@ -31,14 +31,14 @@ const seedData = async () => {
         reports: { create: true, read: true, update: true, delete: true }
       };
 
-      // Team Manager - 70% access (team management)
+      // Team Manager - Team and project management without finance access
       const teamManagerPermissions = {
         users: { create: false, read: true, update: false, delete: false },
         teams: { create: true, read: true, update: true, delete: true },
         projects: { create: true, read: true, update: true, delete: true },
         tasks: { create: true, read: true, update: true, delete: true },
-        finance: { create: true, read: true, update: true, delete: false },
-        payroll: { create: false, read: true, update: false, delete: false },
+        finance: { create: false, read: false, update: false, delete: false }, // Hide finance, products, and sales
+        payroll: { create: false, read: true, update: false, delete: false }, // Show payroll
         clients: { create: true, read: true, update: true, delete: true },
         reports: { create: false, read: true, update: false, delete: false }
       };

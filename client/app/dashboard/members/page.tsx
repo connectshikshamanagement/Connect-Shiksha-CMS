@@ -147,10 +147,11 @@ export default function MembersPage() {
       
       const method = editingUser ? 'PUT' : 'POST';
       
-      // Transform data for API
-      const payload = editingUser ? formData : {
-        ...formData,
-        roleIds: formData.roleId ? [formData.roleId] : []
+      // Transform data for API - convert roleId to roleIds array
+      const { roleId, ...payload } = formData;
+      const finalPayload = {
+        ...payload,
+        roleIds: formData.roleId ? [formData.roleId] : [],
       };
       
       const response = await fetch(url, {
@@ -159,7 +160,7 @@ export default function MembersPage() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(finalPayload),
       });
 
       const data = await response.json();

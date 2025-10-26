@@ -38,14 +38,14 @@ const updateRoleSystem = async () => {
       {
         key: 'TEAM_MANAGER',
         name: 'Team Manager',
-        description: 'Manages team projects, receives equal share of 30% profit',
+        description: 'Manages team projects, receives equal share of 30% profit if part of project',
         permissions: {
           users: { create: false, read: true, update: false, delete: false },
-          teams: { create: false, read: true, update: true, delete: false },
-          projects: { create: true, read: true, update: true, delete: false },
-          tasks: { create: true, read: true, update: true, delete: false },
-          finance: { create: true, read: true, update: false, delete: false },
-          payroll: { create: false, read: true, update: false, delete: false },
+          teams: { create: true, read: true, update: true, delete: true },
+          projects: { create: true, read: true, update: true, delete: true },
+          tasks: { create: true, read: true, update: true, delete: true },
+          finance: { create: false, read: false, update: false, delete: false }, // Hide finance, products, and sales
+          payroll: { create: false, read: true, update: false, delete: false }, // Show payroll
           clients: { create: true, read: true, update: true, delete: false },
           reports: { create: false, read: true, update: false, delete: false }
         }
