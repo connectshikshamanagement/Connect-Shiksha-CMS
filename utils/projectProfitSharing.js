@@ -68,8 +68,9 @@ exports.computeProjectProfitSharing = async (projectId) => {
       });
     }
 
-    // Add eligible team managers (all active managers)
+    // Add eligible team managers (ONLY if they are part of the project)
     const eligibleManagers = await User.find({
+      _id: { $in: project.projectMembers },
       roleIds: { $in: [managerRole._id] },
       active: true
     });

@@ -4,20 +4,19 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { dashboardAPI } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import {
-  FiDollarSign,
-  FiTrendingUp,
-  FiTrendingDown,
-  FiShoppingBag,
-  FiCalendar,
-  FiUsers,
-  FiFolder,
-  FiCheckSquare,
-} from 'react-icons/fi';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import FABMenu from '@/components/FABMenu';
 import MobileNavbar from '@/components/MobileNavbar';
+import {
+  FiDollarSign,
+  FiTrendingUp,
+  FiTrendingDown,
+  FiUsers,
+  FiFolder,
+  FiCheckSquare,
+  FiActivity,
+} from 'react-icons/fi';
 import {
   LineChart,
   Line,
@@ -37,8 +36,6 @@ import {
 export default function DashboardPage() {
   const router = useRouter();
   const [analytics, setAnalytics] = useState<any>(null);
-  const [teamProjects, setTeamProjects] = useState<any[]>([]);
-  const [projectFinancials, setProjectFinancials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { isFounder, isManager, isMember } = usePermissions();
 
@@ -50,10 +47,6 @@ export default function DashboardPage() {
     }
 
     fetchAnalytics();
-    if (isMember) {
-      fetchTeamProjects();
-      fetchProjectFinancials();
-    }
   }, [router]);
 
   const fetchAnalytics = async () => {
@@ -69,73 +62,47 @@ export default function DashboardPage() {
     }
   };
 
-  const fetchTeamProjects = async () => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/my-team-projects`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setTeamProjects(data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching team projects:', error);
-    }
-  };
-
-  const fetchProjectFinancials = async () => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/my-project-financials`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setProjectFinancials(data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching project financials:', error);
-    }
-  };
-
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-xl">Loading dashboard...</div>
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
-  const { financialSummary, monthlyIncome, monthlyExpenses, taskStats } = analytics || {};
+  if (!analytics) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 overflow-auto pt-16 md:pt-0">
+          <Header title="Dashboard" />
+          <div className="flex h-96 items-center justify-center">
+            <div className="text-center">
+              <p className="text-xl text-gray-600">No data available</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  // Prepare chart data
-  const incomeExpenseData = [
-    { month: 'Jan', income: 0, expenses: 0 },
-    { month: 'Feb', income: 0, expenses: 0 },
-    { month: 'Mar', income: 0, expenses: 0 },
-    { month: 'Apr', income: 0, expenses: 0 },
-    { month: 'May', income: 0, expenses: 0 },
-    { month: 'Jun', income: 0, expenses: 0 },
-    { month: 'Jul', income: 0, expenses: 0 },
-    { month: 'Aug', income: 0, expenses: 0 },
-    { month: 'Sep', income: 0, expenses: 0 },
-    { month: 'Oct', income: 225000, expenses: 400000 },
-    { month: 'Nov', income: 0, expenses: 0 },
-    { month: 'Dec', income: 0, expenses: 0 },
+  const { monthlyFinancials, overview, taskStatuses } = analytics;
+
+  // Task status data for pie chart
+  const taskStatusData = [
+    { name: 'To Do', value: taskStatuses?.todo || 0, color: '#6b7280' },
+    { name: 'In Progress', value: taskStatuses?.in_progress || 0, color: '#3b82f6' },
+    { name: 'Review', value: taskStatuses?.review || 0, color: '#f59e0b' },
+    { name: 'Done', value: taskStatuses?.done || 0, color: '#10b981' },
   ];
 
-  const taskStatusData = taskStats || [
-    { name: 'To Do', value: 5, color: '#6b7280' },
-    { name: 'In Progress', value: 3, color: '#3b82f6' },
-    { name: 'Review', value: 2, color: '#f59e0b' },
-    { name: 'Done', value: 8, color: '#10b981' },
-  ];
-
-  const COLORS = ['#6b7280', '#3b82f6', '#f59e0b', '#10b981'];
-
+  // Prepare recent months data
+  const recentMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const currentMonth = new Date().getMonth();
+  
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
@@ -143,295 +110,90 @@ export default function DashboardPage() {
       <div className="flex-1 overflow-auto pt-16 md:pt-0">
         <Header title="Dashboard" />
 
-        <div className="p-4 md:p-8 pb-20 md:pb-8">
+        <div className="p-4 md:p-8">
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
             <StatCard
               title="Total Income"
-              value={`₹${financialSummary?.totalIncome?.toLocaleString() || 0}`}
+              value={`₹${(monthlyFinancials?.income?.total || 0).toLocaleString()}`}
               icon={<FiDollarSign className="h-8 w-8" />}
               color="bg-green-500"
-              trend="+12.5%"
+              subtitle={`${monthlyFinancials?.income?.count || 0} transactions`}
             />
             <StatCard
               title="Total Expenses"
-              value={`₹${financialSummary?.totalExpenses?.toLocaleString() || 0}`}
+              value={`₹${(monthlyFinancials?.expenses?.total || 0).toLocaleString()}`}
               icon={<FiTrendingDown className="h-8 w-8" />}
               color="bg-red-500"
-              trend="+8.2%"
+              subtitle={`${monthlyFinancials?.expenses?.count || 0} transactions`}
             />
             <StatCard
               title="Net Profit"
-              value={`₹${financialSummary?.netProfit?.toLocaleString() || 0}`}
+              value={`₹${(monthlyFinancials?.netProfit || 0).toLocaleString()}`}
               icon={<FiTrendingUp className="h-8 w-8" />}
-              color="bg-blue-500"
-              trend={financialSummary?.netProfit >= 0 ? '+' : '-'}
+              color={(monthlyFinancials?.netProfit || 0) >= 0 ? 'bg-blue-500' : 'bg-orange-500'}
+              subtitle={monthlyFinancials?.netProfit >= 0 ? 'Profitable' : 'In Loss'}
             />
             <StatCard
-              title="Active Projects"
-              value="3"
+              title="Total Projects"
+              value={overview?.totalProjects || 0}
               icon={<FiFolder className="h-8 w-8" />}
               color="bg-purple-500"
+              subtitle="Active projects"
             />
           </div>
 
-          {/* Team Member Project Financial Overview */}
-          {isMember && teamProjects.length > 0 && (
-            <div className="mt-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white p-6 shadow-lg">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <FiFolder className="mr-2" />
-                My Team Projects - Financial Overview
-              </h3>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {teamProjects.map((project: any) => (
-                  <div key={project._id} className="bg-white bg-opacity-20 rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h4 className="font-semibold text-white text-sm">{project.title}</h4>
-                        <p className="text-blue-100 text-xs">{project.category}</p>
-                        <p className="text-blue-100 text-xs">Status: {project.status}</p>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        project.status === 'active' ? 'bg-green-100 text-green-800' :
-                        project.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                        project.status === 'on-hold' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {project.status}
-                      </span>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-green-100">Income:</span>
-                        <span className="text-white font-semibold">₹{project.totalIncome?.toLocaleString() || '0'}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-red-100">Expenses:</span>
-                        <span className="text-white font-semibold">₹{project.totalExpense?.toLocaleString() || '0'}</span>
-                      </div>
-                      <div className="flex justify-between text-xs border-t border-white border-opacity-20 pt-2">
-                        <span className="text-blue-100 font-medium">Net Profit:</span>
-                        <span className={`font-bold ${(project.totalIncome - project.totalExpense) >= 0 ? 'text-green-200' : 'text-red-200'}`}>
-                          ₹{((project.totalIncome || 0) - (project.totalExpense || 0)).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-blue-100">Budget:</span>
-                        <span className="text-white">₹{project.allocatedBudget?.toLocaleString() || '0'}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-blue-100">Progress:</span>
-                        <span className="text-white">{project.progress || 0}%</span>
-                      </div>
-                    </div>
-                    
-                    {project.progress > 0 && (
-                      <div className="mt-3">
-                        <div className="w-full bg-white bg-opacity-20 rounded-full h-2">
-                          <div 
-                            className="bg-white h-2 rounded-full transition-all duration-300" 
-                            style={{ width: `${project.progress}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              
-              {teamProjects.length === 0 && (
-                <div className="text-center py-8">
-                  <FiFolder className="mx-auto mb-2 h-8 w-8 text-blue-200" />
-                  <p className="text-blue-100">No projects assigned to your team yet</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Detailed Project Financial Summary */}
-          {isMember && projectFinancials.length > 0 && (
-            <div className="mt-8 rounded-lg bg-white p-6 shadow-lg">
-              <h3 className="text-lg font-semibold mb-6 flex items-center text-gray-800">
-                <FiDollarSign className="mr-2" />
-                Detailed Project Financial Summary
-              </h3>
-              
-              <div className="space-y-6">
-                {projectFinancials.map((project: any) => (
-                  <div key={project._id} className="border border-gray-200 rounded-lg p-6 bg-gray-50">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h4 className="text-xl font-bold text-gray-900">{project.title}</h4>
-                        <p className="text-sm text-gray-600">{project.category} • {project.teamName}</p>
-                        <p className="text-xs text-gray-500">Status: {project.status}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-2xl font-bold ${project.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ₹{project.netProfit?.toLocaleString() || '0'}
-                        </div>
-                        <div className="text-sm text-gray-500">Net Profit</div>
-                      </div>
-                    </div>
-
-                    {/* Financial Breakdown */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-green-600">Total Income</p>
-                            <p className="text-2xl font-bold text-green-700">
-                              ₹{project.totalIncome?.toLocaleString() || '0'}
-                            </p>
-                          </div>
-                          <FiTrendingUp className="h-8 w-8 text-green-500" />
-                        </div>
-                        {project.incomeBreakdown && Object.keys(project.incomeBreakdown).length > 0 && (
-                          <div className="mt-3 text-xs text-green-600">
-                            {Object.entries(project.incomeBreakdown).map(([source, amount]: [string, any]) => (
-                              <div key={source} className="flex justify-between">
-                                <span>{source}:</span>
-                                <span>₹{amount.toLocaleString()}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-red-600">Total Expenses</p>
-                            <p className="text-2xl font-bold text-red-700">
-                              ₹{project.totalExpense?.toLocaleString() || '0'}
-                            </p>
-                          </div>
-                          <FiTrendingDown className="h-8 w-8 text-red-500" />
-                        </div>
-                        {project.expenseBreakdown && Object.keys(project.expenseBreakdown).length > 0 && (
-                          <div className="mt-3 text-xs text-red-600">
-                            {Object.entries(project.expenseBreakdown).map(([category, amount]: [string, any]) => (
-                              <div key={category} className="flex justify-between">
-                                <span>{category}:</span>
-                                <span>₹{amount.toLocaleString()}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-blue-600">Budget Utilization</p>
-                            <p className="text-2xl font-bold text-blue-700">
-                              {project.budgetUtilization || 0}%
-                            </p>
-                          </div>
-                          <FiCalendar className="h-8 w-8 text-blue-500" />
-                        </div>
-                        <div className="mt-3">
-                          <div className="w-full bg-blue-200 rounded-full h-2">
-                            <div 
-                              className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                              style={{ width: `${Math.min(project.budgetUtilization || 0, 100)}%` }}
-                            ></div>
-                          </div>
-                          <p className="text-xs text-blue-600 mt-1">
-                            ₹{project.allocatedBudget?.toLocaleString() || '0'} allocated
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Team Member Profit Sharing Information */}
-                    {project.profitSharing && (
-                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                        <h5 className="font-semibold text-purple-800 mb-3">Your Project Share</h5>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                          <div className="bg-white p-3 rounded border border-purple-200">
-                            <div className="flex justify-between items-center mb-2">
-                              <span className="text-sm font-medium text-purple-700">Project Income</span>
-                              <span className="font-bold text-purple-800">
-                                ₹{project.totalIncome?.toLocaleString() || '0'}
-                              </span>
-                            </div>
-                            <div className="text-xs text-purple-600">
-                              Total income generated
-                            </div>
-                          </div>
-                          <div className="bg-white p-3 rounded border border-purple-200">
-                            <div className="flex justify-between items-center mb-2">
-                              <span className="text-sm font-medium text-purple-700">Project Budget</span>
-                              <span className="font-bold text-purple-800">
-                                ₹{project.allocatedBudget?.toLocaleString() || '0'}
-                              </span>
-                            </div>
-                            <div className="text-xs text-purple-600">
-                              Allocated budget
-                            </div>
-                          </div>
-                          <div className="bg-white p-3 rounded border border-purple-200">
-                            <div className="flex justify-between items-center mb-2">
-                              <span className="text-sm font-medium text-purple-700">Project Expenses</span>
-                              <span className="font-bold text-purple-800">
-                                ₹{project.totalExpense?.toLocaleString() || '0'}
-                              </span>
-                            </div>
-                            <div className="text-xs text-purple-600">
-                              Total expenses incurred
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {project.profitSharing.myShare && (
-                          <div className="mt-3 bg-gradient-to-r from-green-400 to-blue-500 text-white p-3 rounded-lg">
-                            <div className="flex justify-between items-center">
-                              <span className="font-semibold">Your Share from {project.title}</span>
-                              <span className="text-xl font-bold">₹{project.profitSharing.myShare.toLocaleString()}</span>
-                            </div>
-                            <div className="text-sm text-green-100 mt-1">
-                              Based on your contribution to this project
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Project Progress */}
-                    <div className="mt-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-gray-700">Project Progress</span>
-                        <span className="text-sm font-bold text-gray-900">{project.progress || 0}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div 
-                          className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500" 
-                          style={{ width: `${project.progress || 0}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {/* Additional Stats for Founder/Manager */}
+          {(isFounder || isManager) && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+              <StatCard
+                title="Total Users"
+                value={overview?.totalUsers || 0}
+                icon={<FiUsers className="h-8 w-8" />}
+                color="bg-indigo-500"
+                subtitle="Active members"
+              />
+              <StatCard
+                title="Total Teams"
+                value={overview?.totalTeams || 0}
+                icon={<FiActivity className="h-8 w-8" />}
+                color="bg-cyan-500"
+                subtitle="Organization teams"
+              />
+              <StatCard
+                title="Total Tasks"
+                value={overview?.totalTasks || 0}
+                icon={<FiCheckSquare className="h-8 w-8" />}
+                color="bg-emerald-500"
+                subtitle="All tasks"
+              />
+              <StatCard
+                title="Total Clients"
+                value={overview?.totalClients || 0}
+                icon={<FiUsers className="h-8 w-8" />}
+                color="bg-pink-500"
+                subtitle="Clients & leads"
+              />
             </div>
           )}
 
           {/* Charts Row */}
-          <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {/* Income vs Expenses Chart */}
-            <div className="rounded-lg bg-white p-6 shadow">
-              <h3 className="mb-4 text-lg font-semibold text-gray-800">
-                Income vs Expenses (Monthly)
-              </h3>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Financial Overview */}
+            <div className="rounded-lg bg-white p-6 shadow-sm">
+              <h3 className="mb-4 text-lg font-semibold text-gray-800">Financial Overview</h3>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={incomeExpenseData}>
+                <BarChart data={[
+                  {
+                    category: 'Current',
+                    income: monthlyFinancials?.income?.total || 0,
+                    expenses: monthlyFinancials?.expenses?.total || 0,
+                  }
+                ]}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
+                  <XAxis dataKey="category" />
                   <YAxis />
-                  <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} />
+                  <Tooltip formatter={(value) => `₹${Number(value).toLocaleString()}`} />
                   <Legend />
                   <Bar dataKey="income" fill="#10b981" name="Income" />
                   <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />
@@ -439,11 +201,9 @@ export default function DashboardPage() {
               </ResponsiveContainer>
             </div>
 
-            {/* Task Status Distribution */}
-            <div className="rounded-lg bg-white p-6 shadow">
-              <h3 className="mb-4 text-lg font-semibold text-gray-800">
-                Task Distribution
-              </h3>
+            {/* Task Distribution */}
+            <div className="rounded-lg bg-white p-6 shadow-sm">
+              <h3 className="mb-4 text-lg font-semibold text-gray-800">Task Distribution</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
@@ -451,16 +211,17 @@ export default function DashboardPage() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={(entry) => `${entry.name}: ${entry.value}`}
+                    label={(entry) => entry.value > 0 ? `${entry.name}: ${entry.value}` : ''}
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
                   >
-                    {taskStatusData.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    {taskStatusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip />
+                  <Legend />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -469,71 +230,80 @@ export default function DashboardPage() {
           {/* Quick Actions */}
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <QuickActionCard
-              title="New Project"
-              description="Create a new project"
-              icon={<FiFolder className="h-8 w-8" />}
-              color="bg-blue-500"
+              title="Projects"
+              description="Manage projects"
+              icon={<FiFolder className="h-6 w-6" />}
               href="/dashboard/projects"
             />
             <QuickActionCard
-              title="Add Task"
-              description="Create a new task"
-              icon={<FiCheckSquare className="h-8 w-8" />}
-              color="bg-green-500"
+              title="Tasks"
+              description="View tasks"
+              icon={<FiCheckSquare className="h-6 w-6" />}
               href="/dashboard/tasks"
             />
             <QuickActionCard
-              title="Record Income"
-              description="Log new income"
-              icon={<FiDollarSign className="h-8 w-8" />}
-              color="bg-yellow-500"
+              title="Finance"
+              description="Income & Expenses"
+              icon={<FiDollarSign className="h-6 w-6" />}
               href="/dashboard/finance"
             />
             <QuickActionCard
-              title="Add Client"
-              description="New lead or client"
-              icon={<FiUsers className="h-8 w-8" />}
-              color="bg-purple-500"
-              href="/dashboard/clients"
+              title="Team"
+              description="Manage team"
+              icon={<FiUsers className="h-6 w-6" />}
+              href="/dashboard/teams"
             />
           </div>
 
-          {/* Recent Activity */}
-          <div className="mt-8 rounded-lg bg-white p-6 shadow">
-            <h3 className="mb-4 text-lg font-semibold text-gray-800">
-              Recent Activity
-            </h3>
-            <div className="space-y-4">
-              <ActivityItem
-                title="New income recorded: ₹50,000"
-                subtitle="Coaching batch payment"
-                time="2 hours ago"
-                icon={<FiDollarSign />}
-                color="text-green-600"
-              />
-              <ActivityItem
-                title="Profit sharing computed"
-                subtitle="₹15,000 distributed to mentors"
-                time="2 hours ago"
-                icon={<FiTrendingUp />}
-                color="text-blue-600"
-              />
-              <ActivityItem
-                title="New project created"
-                subtitle="Robotics Workshop - Schools"
-                time="5 hours ago"
-                icon={<FiFolder />}
-                color="text-purple-600"
-              />
-              <ActivityItem
-                title="Task completed"
-                subtitle="Design workshop materials"
-                time="1 day ago"
-                icon={<FiCheckSquare />}
-                color="text-green-600"
-              />
+          {/* Team Performance (if available) */}
+          {analytics?.teamPerformance && analytics.teamPerformance.length > 0 && (
+            <div className="mt-8 rounded-lg bg-white p-6 shadow-sm">
+              <h3 className="mb-4 text-lg font-semibold text-gray-800">Team Performance</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                        Team
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                        Budget Used
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                        Utilization
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {analytics.teamPerformance.map((team: any) => (
+                      <tr key={team._id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="font-medium text-gray-900">{team.name}</div>
+                          <div className="text-sm text-gray-500">{team.category}</div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          ₹{(team.totalExpenses || 0).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full"
+                                style={{ width: `${Math.min(team.budgetUtilization || 0, 100)}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-sm font-medium text-gray-700">
+                              {team.budgetUtilization?.toFixed(1) || 0}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </div>
         
         {/* Mobile Components */}
@@ -544,49 +314,40 @@ export default function DashboardPage() {
   );
 }
 
-function StatCard({ title, value, icon, color, trend }: any) {
+function StatCard({ title, value, icon, color, subtitle }: any) {
   return (
-    <div className="rounded-xl bg-white p-4 sm:p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100">
+    <div className="rounded-lg bg-white p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-100">
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
-          <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">{title}</p>
-          <p className="mt-1 sm:mt-2 text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{value}</p>
-          {trend && (
-            <p className={`mt-1 sm:mt-2 text-xs sm:text-sm ${trend.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-              {trend} from last month
-            </p>
+          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <p className="mt-2 text-2xl font-bold text-gray-900">{value}</p>
+          {subtitle && (
+            <p className="mt-1 text-xs text-gray-500">{subtitle}</p>
           )}
         </div>
-        <div className={`${color} rounded-full p-2 sm:p-3 text-white flex-shrink-0`}>{icon}</div>
+        <div className={`${color} rounded-lg p-3 text-white flex-shrink-0 ml-4`}>
+          {icon}
+        </div>
       </div>
     </div>
   );
 }
 
-function QuickActionCard({ title, description, icon, color, href }: any) {
+function QuickActionCard({ title, description, icon, href }: any) {
   return (
     <a
       href={href}
-      className="block rounded-xl bg-white p-4 sm:p-6 shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-105 border border-gray-100"
+      className="block rounded-lg bg-white p-5 shadow-sm transition-all hover:shadow-md border border-gray-100 group"
     >
-      <div className={`${color} mb-3 sm:mb-4 inline-block rounded-lg p-2 sm:p-3 text-white`}>
-        {icon}
+      <div className="flex items-center space-x-4">
+        <div className="rounded-lg bg-primary-100 p-3 text-primary-600 group-hover:bg-primary-200 transition-colors">
+          {icon}
+        </div>
+        <div>
+          <h4 className="font-semibold text-gray-900">{title}</h4>
+          <p className="text-sm text-gray-600">{description}</p>
+        </div>
       </div>
-      <h4 className="font-semibold text-gray-900 text-sm sm:text-base">{title}</h4>
-      <p className="mt-1 text-xs sm:text-sm text-gray-600">{description}</p>
     </a>
-  );
-}
-
-function ActivityItem({ title, subtitle, time, icon, color }: any) {
-  return (
-    <div className="flex items-start space-x-4 border-l-4 border-primary-500 pl-4">
-      <div className={`mt-1 ${color}`}>{icon}</div>
-      <div className="flex-1">
-        <p className="text-sm font-medium text-gray-900">{title}</p>
-        <p className="text-xs text-gray-500">{subtitle}</p>
-        <p className="mt-1 text-xs text-gray-400">{time}</p>
-      </div>
-    </div>
   );
 }

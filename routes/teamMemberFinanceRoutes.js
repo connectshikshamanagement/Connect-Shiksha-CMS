@@ -336,6 +336,22 @@ async function recalculateProjectPayroll(projectId) {
     
     console.log(`📊 Project ${project.title}: Income: ₹${totalIncome}, Expenses: ₹${totalExpenses}, Profit: ₹${netProfit}`);
 
+    // Find founder to determine profit share
+    const Role = require('../models/Role');
+    const founderRole = await Role.findOne({ key: 'FOUNDER' });
+    const founder = await User.findOne({ 
+      roleIds: { $in: [founderRole._id] },
+      active: true 
+    });
+    
+    // Calculate profit sharing: 70% to founder, 30% shared among eligible members
+    const founderShare = netProfit * 0.7;
+    const teamShare = netProfit * 0.3;
+    
+    // Count eligible members (all team members in this function are already part of project)
+    const eligibleCount = teamMembers.length;
+    const sharePerPerson = eligibleCount > 0 ? teamShare / eligibleCount : 0;
+    
     // Update or create payroll records for each team member
     for (const member of teamMembers) {
       const existingPayroll = await Payroll.findOne({
@@ -351,50 +367,27 @@ async function recalculateProjectPayroll(projectId) {
         existingPayroll.projectBudget = project.allocatedBudget || 0;
         existingPayroll.netProfit = netProfit;
         
-        // Recalculate profit sharing based on new financials
-        // 70% to founder, 30% to team members
-        const founderShare = netProfit * 0.7;
-        const teamShare = netProfit * 0.3;
-        
-        // Update profit share based on user role
+        // Determine profit share based on user role
         const memberRoles = await User.findById(member._id).populate('roleIds');
         if (memberRoles.roleIds && memberRoles.roleIds.some(role => role.key === 'FOUNDER')) {
           existingPayroll.profitShare = founderShare;
         } else {
-          // Calculate individual team member share
-          const nonFounderMembers = teamMembers.filter(m => {
-            // This is a simplified check - in practice you'd need to populate roles
-            return m._id.toString() !== '68e4a8c33b6e38a3561c5594'; // Founder's ID
-          });
-          existingPayroll.profitShare = nonFounderMembers.length > 0 ? teamShare / nonFounderMembers.length : 0;
+          // All other members (managers and team members) share 30% equally
+          existingPayroll.profitShare = sharePerPerson;
         }
-        
-        // Always update the project financial fields (migration + regular update)
-        existingPayroll.projectIncome = totalIncome;
-        existingPayroll.projectExpenses = totalExpenses;
-        existingPayroll.projectBudget = project.allocatedBudget || 0;
-        existingPayroll.netProfit = netProfit;
         
         await existingPayroll.save();
         console.log(`📝 Updated payroll for ${member.name}: ₹${existingPayroll.profitShare}`);
       } else {
         // Create new payroll record
-        // Calculate profit sharing
-        const founderShare = netProfit * 0.7;
-        const teamShare = netProfit * 0.3;
-        
-        // Determine profit share based on user role
         const memberRoles = await User.findById(member._id).populate('roleIds');
         let profitShareAmount = 0;
         
         if (memberRoles.roleIds && memberRoles.roleIds.some(role => role.key === 'FOUNDER')) {
           profitShareAmount = founderShare;
         } else {
-          // Calculate individual team member share
-          const nonFounderMembers = teamMembers.filter(m => {
-            return m._id.toString() !== '68e4a8c33b6e38a3561c5594'; // Founder's ID
-          });
-          profitShareAmount = nonFounderMembers.length > 0 ? teamShare / nonFounderMembers.length : 0;
+          // All other members share 30% equally
+          profitShareAmount = sharePerPerson;
         }
         
         await Payroll.create({
