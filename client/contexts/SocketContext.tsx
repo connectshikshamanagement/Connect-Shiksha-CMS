@@ -35,17 +35,11 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    // Use the same API_URL pattern as lib/api.ts
-    const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:10000';
-    const socketInstance = io(API_URL, {
+    const socketInstance = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
       auth: {
         token: token,
       },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      timeout: 10000,
+      transports: ['websocket'],
     });
 
     socketInstance.on('connect', () => {

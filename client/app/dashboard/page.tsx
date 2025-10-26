@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { dashboardAPI, incomeAPI, expenseAPI, taskAPI, projectAPI, teamAPI, userAPI, payoutAPI } from '@/lib/api';
+import { dashboardAPI } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   FiDollarSign,
@@ -13,11 +13,6 @@ import {
   FiUsers,
   FiFolder,
   FiCheckSquare,
-  FiClock,
-  FiTarget,
-  FiActivity,
-  FiBarChart,
-  FiPieChart,
 } from 'react-icons/fi';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
@@ -45,8 +40,7 @@ export default function DashboardPage() {
   const [teamProjects, setTeamProjects] = useState<any[]>([]);
   const [projectFinancials, setProjectFinancials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [realTimeData, setRealTimeData] = useState<any>({});
-  const { isFounder, isManager, isMember, userRole } = usePermissions();
+  const { isFounder, isManager, isMember } = usePermissions();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -55,42 +49,12 @@ export default function DashboardPage() {
       return;
     }
 
-    fetchAllData();
-  }, [router, userRole]);
-
-  const fetchAllData = async () => {
-    setLoading(true);
-    try {
-      // Fetch analytics data
-      await fetchAnalytics();
-      
-      // Fetch additional real-time data
-      await Promise.all([
-        fetchIncomeData(),
-        fetchExpenseData(),
-        fetchTaskData(),
-        fetchProjectData(),
-        fetchTeamData(),
-        fetchUserData(),
-        fetchPayrollData()
-      ]);
-      
-      // Fetch role-specific data
+    fetchAnalytics();
     if (isMember) {
-        await Promise.all([
-          fetchTeamProjects(),
-          fetchProjectFinancials(),
-          fetchMyTasks(),
-          fetchMyIncome(),
-          fetchMyExpenses()
-        ]);
-      }
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
+      fetchTeamProjects();
+      fetchProjectFinancials();
     }
-  };
+  }, [router]);
 
   const fetchAnalytics = async () => {
     try {
@@ -100,131 +64,8 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error('Error fetching analytics:', error);
-    }
-  };
-
-  const fetchIncomeData = async () => {
-    try {
-      const response = await incomeAPI.getAll();
-      if (response.data.success) {
-        setRealTimeData(prev => ({ ...prev, income: response.data.data }));
-      }
-    } catch (error) {
-      console.error('Error fetching income data:', error);
-    }
-  };
-
-  const fetchExpenseData = async () => {
-    try {
-      const response = await expenseAPI.getAll();
-      if (response.data.success) {
-        setRealTimeData(prev => ({ ...prev, expenses: response.data.data }));
-      }
-    } catch (error) {
-      console.error('Error fetching expense data:', error);
-    }
-  };
-
-  const fetchTaskData = async () => {
-    try {
-      const response = await taskAPI.getAll();
-      if (response.data.success) {
-        setRealTimeData(prev => ({ ...prev, tasks: response.data.data }));
-      }
-    } catch (error) {
-      console.error('Error fetching task data:', error);
-    }
-  };
-
-  const fetchProjectData = async () => {
-    try {
-      const response = await projectAPI.getAll();
-      if (response.data.success) {
-        setRealTimeData(prev => ({ ...prev, projects: response.data.data }));
-      }
-    } catch (error) {
-      console.error('Error fetching project data:', error);
-    }
-  };
-
-  const fetchTeamData = async () => {
-    try {
-      const response = await teamAPI.getAll();
-      if (response.data.success) {
-        setRealTimeData(prev => ({ ...prev, teams: response.data.data }));
-      }
-    } catch (error) {
-      console.error('Error fetching team data:', error);
-    }
-  };
-
-  const fetchUserData = async () => {
-    try {
-      const response = await userAPI.getAll();
-      if (response.data.success) {
-        setRealTimeData(prev => ({ ...prev, users: response.data.data }));
-      }
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-    }
-  };
-
-  const fetchPayrollData = async () => {
-    try {
-      const currentDate = new Date();
-      const currentMonth = currentDate.getMonth() + 1;
-      const currentYear = currentDate.getFullYear();
-      const response = await payoutAPI.getAll({ month: currentMonth, year: currentYear });
-      if (response.data.success) {
-        setRealTimeData(prev => ({ ...prev, payroll: response.data.data }));
-      }
-    } catch (error) {
-      console.error('Error fetching payroll data:', error);
-    }
-  };
-
-  const fetchMyTasks = async () => {
-    try {
-      const userId = localStorage.getItem('userId');
-      const response = await taskAPI.getAll();
-      if (response.data.success) {
-        const myTasks = response.data.data.filter((task: any) => 
-          task.assignedTo.some((user: any) => user._id === userId)
-        );
-        setRealTimeData(prev => ({ ...prev, myTasks }));
-      }
-    } catch (error) {
-      console.error('Error fetching my tasks:', error);
-    }
-  };
-
-  const fetchMyIncome = async () => {
-    try {
-      const userId = localStorage.getItem('userId');
-      const response = await incomeAPI.getAll();
-      if (response.data.success) {
-        const myIncome = response.data.data.filter((income: any) => 
-          income.receivedByUserId === userId
-        );
-        setRealTimeData(prev => ({ ...prev, myIncome }));
-      }
-    } catch (error) {
-      console.error('Error fetching my income:', error);
-    }
-  };
-
-  const fetchMyExpenses = async () => {
-    try {
-      const userId = localStorage.getItem('userId');
-      const response = await expenseAPI.getAll();
-      if (response.data.success) {
-        const myExpenses = response.data.data.filter((expense: any) => 
-          expense.userId === userId
-        );
-        setRealTimeData(prev => ({ ...prev, myExpenses }));
-      }
-    } catch (error) {
-      console.error('Error fetching my expenses:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -269,147 +110,29 @@ export default function DashboardPage() {
   }
 
   const { financialSummary, monthlyIncome, monthlyExpenses, taskStats } = analytics || {};
-  const { income = [], expenses = [], tasks = [], projects = [], teams = [], users = [], payroll = [], myTasks = [], myIncome = [], myExpenses = [] } = realTimeData;
 
-  // Calculate real-time statistics
-  const calculateStats = () => {
-    const totalIncome = income.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-    const totalExpenses = expenses.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter((task: any) => task.status === 'done').length;
-    const activeProjects = projects.filter((project: any) => project.status === 'active').length;
-    const totalUsers = users.filter((user: any) => user.active).length;
-    const totalTeams = teams.length;
-    
-    // Calculate monthly trends
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    
-    const monthlyIncomeData = income.filter((item: any) => {
-      const itemDate = new Date(item.date);
-      return itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear;
-    }).reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-    
-    const monthlyExpenseData = expenses.filter((item: any) => {
-      const itemDate = new Date(item.date);
-      return itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear;
-    }).reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-    
-    return {
-      totalIncome,
-      totalExpenses,
-      netProfit: totalIncome - totalExpenses,
-      totalTasks,
-      completedTasks,
-      activeProjects,
-      totalUsers,
-      totalTeams,
-      monthlyIncome: monthlyIncomeData,
-      monthlyExpenses: monthlyExpenseData,
-      taskCompletionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-    };
-  };
+  // Prepare chart data
+  const incomeExpenseData = [
+    { month: 'Jan', income: 0, expenses: 0 },
+    { month: 'Feb', income: 0, expenses: 0 },
+    { month: 'Mar', income: 0, expenses: 0 },
+    { month: 'Apr', income: 0, expenses: 0 },
+    { month: 'May', income: 0, expenses: 0 },
+    { month: 'Jun', income: 0, expenses: 0 },
+    { month: 'Jul', income: 0, expenses: 0 },
+    { month: 'Aug', income: 0, expenses: 0 },
+    { month: 'Sep', income: 0, expenses: 0 },
+    { month: 'Oct', income: 225000, expenses: 400000 },
+    { month: 'Nov', income: 0, expenses: 0 },
+    { month: 'Dec', income: 0, expenses: 0 },
+  ];
 
-  const stats = calculateStats();
-
-  // Calculate team member specific stats
-  const calculateMemberStats = () => {
-    if (!isMember) return {};
-    
-    const myTotalIncome = myIncome.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-    const myTotalExpenses = myExpenses.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-    const myTotalTasks = myTasks.length;
-    const myCompletedTasks = myTasks.filter((task: any) => task.status === 'done').length;
-    
-    return {
-      myTotalIncome,
-      myTotalExpenses,
-      myNetProfit: myTotalIncome - myTotalExpenses,
-      myTotalTasks,
-      myCompletedTasks,
-      myTaskCompletionRate: myTotalTasks > 0 ? Math.round((myCompletedTasks / myTotalTasks) * 100) : 0
-    };
-  };
-
-  const memberStats = calculateMemberStats();
-
-  // Prepare chart data with real data
-  const prepareChartData = () => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const currentYear = new Date().getFullYear();
-    
-    return months.map((month, index) => {
-      const monthIncome = income.filter((item: any) => {
-        const itemDate = new Date(item.date);
-        return itemDate.getMonth() === index && itemDate.getFullYear() === currentYear;
-      }).reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-      
-      const monthExpenses = expenses.filter((item: any) => {
-        const itemDate = new Date(item.date);
-        return itemDate.getMonth() === index && itemDate.getFullYear() === currentYear;
-      }).reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-      
-      return {
-        month,
-        income: monthIncome,
-        expenses: monthExpenses,
-        profit: monthIncome - monthExpenses
-      };
-    });
-  };
-
-  const incomeExpenseData = prepareChartData();
-
-  // Prepare task status data with real data
-  const prepareTaskStatusData = () => {
-    const statusCounts = {
-      todo: 0,
-      in_progress: 0,
-      review: 0,
-      done: 0
-    };
-    
-    const tasksToAnalyze = isMember ? myTasks : tasks;
-    
-    tasksToAnalyze.forEach((task: any) => {
-      if (statusCounts.hasOwnProperty(task.status)) {
-        statusCounts[task.status as keyof typeof statusCounts]++;
-      }
-    });
-    
-    return [
-      { name: 'To Do', value: statusCounts.todo, color: '#6b7280' },
-      { name: 'In Progress', value: statusCounts.in_progress, color: '#3b82f6' },
-      { name: 'Review', value: statusCounts.review, color: '#f59e0b' },
-      { name: 'Done', value: statusCounts.done, color: '#10b981' },
-    ].filter(item => item.value > 0);
-  };
-
-  const taskStatusData = prepareTaskStatusData();
-
-  // Prepare project performance data
-  const prepareProjectPerformanceData = () => {
-    return projects.map((project: any) => ({
-      name: project.title,
-      progress: project.progress || 0,
-      budget: project.allocatedBudget || 0,
-      status: project.status
-    }));
-  };
-
-  const projectPerformanceData = prepareProjectPerformanceData();
-
-  // Prepare team performance data
-  const prepareTeamPerformanceData = () => {
-    return teams.map((team: any) => ({
-      name: team.name,
-      members: team.members?.length || 0,
-      budget: team.monthlyBudget || 0,
-      category: team.category
-    }));
-  };
-
-  const teamPerformanceData = prepareTeamPerformanceData();
+  const taskStatusData = taskStats || [
+    { name: 'To Do', value: 5, color: '#6b7280' },
+    { name: 'In Progress', value: 3, color: '#3b82f6' },
+    { name: 'Review', value: 2, color: '#f59e0b' },
+    { name: 'Done', value: 8, color: '#10b981' },
+  ];
 
   const COLORS = ['#6b7280', '#3b82f6', '#f59e0b', '#10b981'];
 
@@ -421,165 +144,38 @@ export default function DashboardPage() {
         <Header title="Dashboard" />
 
         <div className="p-4 md:p-8 pb-20 md:pb-8">
-          {/* Header with Refresh Button */}
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {isMember ? 'My Dashboard' : 'Company Dashboard'}
-              </h1>
-              <p className="text-sm text-gray-600 mt-1">
-                {isMember ? 'Track your projects, tasks, and earnings' : 'Monitor company performance and team activities'}
-              </p>
-            </div>
-            <button
-              onClick={fetchAllData}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <FiActivity className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Refreshing...' : 'Refresh Data'}
-            </button>
-          </div>
           {/* Stats Grid */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              title={isMember ? "My Income" : "Total Income"}
-              value={`₹${(isMember ? memberStats.myTotalIncome : stats.totalIncome).toLocaleString()}`}
+              title="Total Income"
+              value={`₹${financialSummary?.totalIncome?.toLocaleString() || 0}`}
               icon={<FiDollarSign className="h-8 w-8" />}
               color="bg-green-500"
-              trend={stats.monthlyIncome > 0 ? `+₹${stats.monthlyIncome.toLocaleString()}` : "No data"}
-              subtitle={isMember ? "From my projects" : "All sources"}
+              trend="+12.5%"
             />
             <StatCard
-              title={isMember ? "My Expenses" : "Total Expenses"}
-              value={`₹${(isMember ? memberStats.myTotalExpenses : stats.totalExpenses).toLocaleString()}`}
+              title="Total Expenses"
+              value={`₹${financialSummary?.totalExpenses?.toLocaleString() || 0}`}
               icon={<FiTrendingDown className="h-8 w-8" />}
               color="bg-red-500"
-              trend={stats.monthlyExpenses > 0 ? `+₹${stats.monthlyExpenses.toLocaleString()}` : "No data"}
-              subtitle={isMember ? "My expenses" : "All expenses"}
+              trend="+8.2%"
             />
             <StatCard
-              title={isMember ? "My Net Profit" : "Net Profit"}
-              value={`₹${(isMember ? memberStats.myNetProfit : stats.netProfit).toLocaleString()}`}
+              title="Net Profit"
+              value={`₹${financialSummary?.netProfit?.toLocaleString() || 0}`}
               icon={<FiTrendingUp className="h-8 w-8" />}
-              color={stats.netProfit >= 0 ? "bg-blue-500" : "bg-orange-500"}
-              trend={stats.netProfit >= 0 ? "Profitable" : "Loss"}
-              subtitle={isMember ? "My contribution" : "Overall performance"}
+              color="bg-blue-500"
+              trend={financialSummary?.netProfit >= 0 ? '+' : '-'}
             />
             <StatCard
-              title={isMember ? "My Tasks" : "Active Projects"}
-              value={isMember ? `${memberStats.myTotalTasks}` : `${stats.activeProjects}`}
-              icon={isMember ? <FiCheckSquare className="h-8 w-8" /> : <FiFolder className="h-8 w-8" />}
+              title="Active Projects"
+              value="3"
+              icon={<FiFolder className="h-8 w-8" />}
               color="bg-purple-500"
-              trend={isMember ? `${memberStats.myTaskCompletionRate}% complete` : `${stats.totalProjects} total`}
-              subtitle={isMember ? "Assigned to me" : "Currently active"}
             />
           </div>
 
-          {/* Additional Stats for Founders/Managers */}
-          {!isMember && (
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard
-                title="Total Users"
-                value={`${stats.totalUsers}`}
-                icon={<FiUsers className="h-8 w-8" />}
-                color="bg-indigo-500"
-                trend={`${teams.length} teams`}
-                subtitle="Active members"
-              />
-              <StatCard
-                title="Task Completion"
-                value={`${stats.taskCompletionRate}%`}
-                icon={<FiTarget className="h-8 w-8" />}
-                color="bg-emerald-500"
-                trend={`${stats.completedTasks}/${stats.totalTasks} done`}
-                subtitle="Overall progress"
-              />
-              <StatCard
-                title="Monthly Income"
-                value={`₹${stats.monthlyIncome.toLocaleString()}`}
-                icon={<FiBarChart className="h-8 w-8" />}
-                color="bg-green-600"
-                trend="This month"
-                subtitle="Current period"
-              />
-              <StatCard
-                title="Monthly Expenses"
-                value={`₹${stats.monthlyExpenses.toLocaleString()}`}
-                icon={<FiActivity className="h-8 w-8" />}
-                color="bg-red-600"
-                trend="This month"
-                subtitle="Current period"
-              />
-            </div>
-          )}
-
-          {/* Data Summary Cards */}
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Data Overview</h3>
-                  <p className="text-blue-100 text-sm mt-1">Real-time statistics</p>
-                </div>
-                <FiBarChart className="h-8 w-8 text-blue-200" />
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-blue-100 text-xs">Total Records</p>
-                  <p className="text-xl font-bold">{income.length + expenses.length + tasks.length + projects.length}</p>
-                </div>
-                <div>
-                  <p className="text-blue-100 text-xs">Last Updated</p>
-                  <p className="text-sm font-medium">{new Date().toLocaleTimeString()}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-gradient-to-r from-green-500 to-green-600 text-white p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Performance</h3>
-                  <p className="text-green-100 text-sm mt-1">Key metrics</p>
-                </div>
-                <FiTarget className="h-8 w-8 text-green-200" />
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-green-100 text-xs">Task Rate</p>
-                  <p className="text-xl font-bold">{stats.taskCompletionRate}%</p>
-                </div>
-                <div>
-                  <p className="text-green-100 text-xs">Active Projects</p>
-                  <p className="text-xl font-bold">{stats.activeProjects}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Financial Health</h3>
-                  <p className="text-purple-100 text-sm mt-1">Current status</p>
-                </div>
-                <FiTrendingUp className="h-8 w-8 text-purple-200" />
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-purple-100 text-xs">Net Profit</p>
-                  <p className={`text-xl font-bold ${stats.netProfit >= 0 ? 'text-green-200' : 'text-red-200'}`}>
-                    ₹{stats.netProfit.toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-purple-100 text-xs">Profit Margin</p>
-                  <p className="text-xl font-bold">
-                    {stats.totalIncome > 0 ? Math.round((stats.netProfit / stats.totalIncome) * 100) : 0}%
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Team Member Project Financial Overview */}
           {isMember && teamProjects.length > 0 && (
             <div className="mt-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white p-6 shadow-lg">
               <h3 className="text-lg font-semibold mb-4 flex items-center">
@@ -827,9 +423,8 @@ export default function DashboardPage() {
           <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
             {/* Income vs Expenses Chart */}
             <div className="rounded-lg bg-white p-6 shadow">
-              <h3 className="mb-4 text-lg font-semibold text-gray-800 flex items-center">
-                <FiBarChart className="mr-2" />
-                {isMember ? 'My Income vs Expenses' : 'Income vs Expenses'} (Monthly)
+              <h3 className="mb-4 text-lg font-semibold text-gray-800">
+                Income vs Expenses (Monthly)
               </h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={incomeExpenseData}>
@@ -846,9 +441,8 @@ export default function DashboardPage() {
 
             {/* Task Status Distribution */}
             <div className="rounded-lg bg-white p-6 shadow">
-              <h3 className="mb-4 text-lg font-semibold text-gray-800 flex items-center">
-                <FiPieChart className="mr-2" />
-                {isMember ? 'My Task Distribution' : 'Task Distribution'}
+              <h3 className="mb-4 text-lg font-semibold text-gray-800">
+                Task Distribution
               </h3>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -863,7 +457,7 @@ export default function DashboardPage() {
                     dataKey="value"
                   >
                     {taskStatusData.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -871,55 +465,6 @@ export default function DashboardPage() {
               </ResponsiveContainer>
             </div>
           </div>
-
-          {/* Additional Charts for Founders/Managers */}
-          {!isMember && (
-            <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {/* Project Performance Chart */}
-              <div className="rounded-lg bg-white p-6 shadow">
-                <h3 className="mb-4 text-lg font-semibold text-gray-800 flex items-center">
-                  <FiTarget className="mr-2" />
-                  Project Performance
-                </h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={projectPerformanceData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                    <YAxis />
-                    <Tooltip formatter={(value, name) => [
-                      name === 'progress' ? `${value}%` : `₹${value.toLocaleString()}`,
-                      name === 'progress' ? 'Progress' : 'Budget'
-                    ]} />
-                    <Legend />
-                    <Bar dataKey="progress" fill="#3b82f6" name="Progress %" />
-                    <Bar dataKey="budget" fill="#10b981" name="Budget ₹" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Team Performance Chart */}
-              <div className="rounded-lg bg-white p-6 shadow">
-                <h3 className="mb-4 text-lg font-semibold text-gray-800 flex items-center">
-                  <FiUsers className="mr-2" />
-                  Team Performance
-                </h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={teamPerformanceData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                    <YAxis />
-                    <Tooltip formatter={(value, name) => [
-                      name === 'members' ? `${value} members` : `₹${value.toLocaleString()}`,
-                      name === 'members' ? 'Members' : 'Budget'
-                    ]} />
-                    <Legend />
-                    <Bar dataKey="members" fill="#8b5cf6" name="Members" />
-                    <Bar dataKey="budget" fill="#f59e0b" name="Budget ₹" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
 
           {/* Quick Actions */}
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -955,71 +500,38 @@ export default function DashboardPage() {
 
           {/* Recent Activity */}
           <div className="mt-8 rounded-lg bg-white p-6 shadow">
-            <h3 className="mb-4 text-lg font-semibold text-gray-800 flex items-center">
-              <FiActivity className="mr-2" />
+            <h3 className="mb-4 text-lg font-semibold text-gray-800">
               Recent Activity
             </h3>
             <div className="space-y-4">
-              {income.slice(0, 3).map((item: any, index: number) => (
-                <ActivityItem
-                  key={`income-${index}`}
-                  title={`New income recorded: ₹${item.amount.toLocaleString()}`}
-                  subtitle={item.description || item.sourceType || 'Income entry'}
-                  time={new Date(item.date).toLocaleDateString()}
-                  icon={<FiDollarSign />}
-                  color="text-green-600"
-                />
-              ))}
-              {expenses.slice(0, 2).map((item: any, index: number) => (
-                <ActivityItem
-                  key={`expense-${index}`}
-                  title={`Expense recorded: ₹${item.amount.toLocaleString()}`}
-                  subtitle={item.description || item.category || 'Expense entry'}
-                  time={new Date(item.date).toLocaleDateString()}
-                  icon={<FiTrendingDown />}
-                  color="text-red-600"
-                />
-              ))}
-              {tasks.filter((task: any) => task.status === 'done').slice(0, 2).map((task: any, index: number) => (
-                <ActivityItem
-                  key={`task-${index}`}
-                  title={`Task completed: ${task.title}`}
-                  subtitle={task.description || 'Task completed'}
-                  time={new Date(task.updatedAt || task.createdAt).toLocaleDateString()}
-                  icon={<FiCheckSquare />}
-                  color="text-green-600"
-                />
-              ))}
-              {projects.slice(0, 1).map((project: any, index: number) => (
-                <ActivityItem
-                  key={`project-${index}`}
-                  title={`Project updated: ${project.title}`}
-                  subtitle={`Progress: ${project.progress || 0}%`}
-                  time={new Date(project.updatedAt || project.createdAt).toLocaleDateString()}
-                  icon={<FiFolder />}
-                  color="text-purple-600"
-                />
-              ))}
-              
-              {/* Fallback activities if no real data */}
-              {income.length === 0 && expenses.length === 0 && tasks.length === 0 && (
-                <>
-                  <ActivityItem
-                    title="Welcome to Connect Shiksha CRM!"
-                    subtitle="Start by creating your first project or recording income"
-                    time="Just now"
-                    icon={<FiActivity />}
-                    color="text-blue-600"
-                  />
-                  <ActivityItem
-                    title="System Ready"
-                    subtitle="All features are available and ready to use"
-                    time="System startup"
-                    icon={<FiCheckSquare />}
-                    color="text-green-600"
-                  />
-                </>
-              )}
+              <ActivityItem
+                title="New income recorded: ₹50,000"
+                subtitle="Coaching batch payment"
+                time="2 hours ago"
+                icon={<FiDollarSign />}
+                color="text-green-600"
+              />
+              <ActivityItem
+                title="Profit sharing computed"
+                subtitle="₹15,000 distributed to mentors"
+                time="2 hours ago"
+                icon={<FiTrendingUp />}
+                color="text-blue-600"
+              />
+              <ActivityItem
+                title="New project created"
+                subtitle="Robotics Workshop - Schools"
+                time="5 hours ago"
+                icon={<FiFolder />}
+                color="text-purple-600"
+              />
+              <ActivityItem
+                title="Task completed"
+                subtitle="Design workshop materials"
+                time="1 day ago"
+                icon={<FiCheckSquare />}
+                color="text-green-600"
+              />
             </div>
           </div>
         </div>
@@ -1032,7 +544,7 @@ export default function DashboardPage() {
   );
 }
 
-function StatCard({ title, value, icon, color, trend, subtitle }: any) {
+function StatCard({ title, value, icon, color, trend }: any) {
   return (
     <div className="rounded-xl bg-white p-4 sm:p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100">
       <div className="flex items-center justify-between">
@@ -1040,15 +552,9 @@ function StatCard({ title, value, icon, color, trend, subtitle }: any) {
           <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">{title}</p>
           <p className="mt-1 sm:mt-2 text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{value}</p>
           {trend && (
-            <p className={`mt-1 sm:mt-2 text-xs sm:text-sm ${
-              trend.startsWith('+') || trend.includes('Profitable') || trend.includes('% complete') ? 'text-green-600' : 
-              trend.includes('Loss') ? 'text-red-600' : 'text-gray-600'
-            }`}>
-              {trend}
+            <p className={`mt-1 sm:mt-2 text-xs sm:text-sm ${trend.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+              {trend} from last month
             </p>
-          )}
-          {subtitle && (
-            <p className="mt-1 text-xs text-gray-500">{subtitle}</p>
           )}
         </div>
         <div className={`${color} rounded-full p-2 sm:p-3 text-white flex-shrink-0`}>{icon}</div>

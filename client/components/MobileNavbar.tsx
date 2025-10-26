@@ -17,13 +17,11 @@ export default function MobileNavbar() {
       { name: 'Projects', href: '/dashboard/projects', icon: FiFolder },
     ];
 
-    // Add Payroll for all users (team members see their payout, founders/managers see full payroll)
-    baseItems.push({ name: 'Payout', href: '/dashboard/payroll', icon: FiDollarSign });
-
-    // Only add Profile for founders/managers, team members get Payout instead
     if (isFounder || isManager) {
-      baseItems.push({ name: 'Profile', href: '/dashboard/profile', icon: FiUser });
+      baseItems.push({ name: 'Payroll', href: '/dashboard/payroll', icon: FiDollarSign });
     }
+
+    baseItems.push({ name: 'Profile', href: '/dashboard/profile', icon: FiUser });
 
     return baseItems;
   };
