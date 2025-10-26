@@ -23,6 +23,30 @@ export const showToast = {
     });
   },
   
+  info: (message: string, persist = false) => {
+    toast(message, {
+      duration: persist ? Infinity : 3000,
+      position: 'top-right',
+      icon: 'ℹ️',
+      style: {
+        background: '#3B82F6',
+        color: '#fff',
+      },
+    });
+  },
+  
+  warning: (message: string) => {
+    toast(message, {
+      duration: 3000,
+      position: 'top-right',
+      icon: '⚠️',
+      style: {
+        background: '#F59E0B',
+        color: '#fff',
+      },
+    });
+  },
+  
   loading: (message: string) => {
     return toast.loading(message, {
       position: 'top-right',

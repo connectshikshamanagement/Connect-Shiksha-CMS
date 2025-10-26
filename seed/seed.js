@@ -19,12 +19,46 @@ const seedData = async () => {
   try {
     // ---- ROLES ----
     if (await Role.countDocuments() === 0) {
+      // Founder - 100% access
+      const founderPermissions = {
+        users: { create: true, read: true, update: true, delete: true },
+        teams: { create: true, read: true, update: true, delete: true },
+        projects: { create: true, read: true, update: true, delete: true },
+        tasks: { create: true, read: true, update: true, delete: true },
+        finance: { create: true, read: true, update: true, delete: true },
+        payroll: { create: true, read: true, update: true, delete: true },
+        clients: { create: true, read: true, update: true, delete: true },
+        reports: { create: true, read: true, update: true, delete: true }
+      };
+
+      // Team Manager - 70% access (team management)
+      const teamManagerPermissions = {
+        users: { create: false, read: true, update: false, delete: false },
+        teams: { create: true, read: true, update: true, delete: true },
+        projects: { create: true, read: true, update: true, delete: true },
+        tasks: { create: true, read: true, update: true, delete: true },
+        finance: { create: true, read: true, update: true, delete: false },
+        payroll: { create: false, read: true, update: false, delete: false },
+        clients: { create: true, read: true, update: true, delete: true },
+        reports: { create: false, read: true, update: false, delete: false }
+      };
+
+      // Team Member - Basic access
+      const teamMemberPermissions = {
+        users: { create: false, read: true, update: false, delete: false },
+        teams: { create: false, read: true, update: false, delete: false },
+        projects: { create: false, read: true, update: false, delete: false },
+        tasks: { create: true, read: true, update: true, delete: false },
+        finance: { create: true, read: true, update: false, delete: false },
+        payroll: { create: false, read: true, update: false, delete: false },
+        clients: { create: false, read: true, update: false, delete: false },
+        reports: { create: false, read: true, update: false, delete: false }
+      };
+
       await Role.insertMany([
-        { key: 'FOUNDER', name: 'Founder' },
-        { key: 'INNOVATION_LEAD', name: 'Innovation Lead' },
-        { key: 'COACHING_MANAGER', name: 'Coaching Manager' },
-        { key: 'MEDIA_MANAGER', name: 'Media Manager' },
-        { key: 'MENTOR', name: 'Mentor' },
+        { key: 'FOUNDER', name: 'Founder', permissions: founderPermissions },
+        { key: 'TEAM_MANAGER', name: 'Team Manager', permissions: teamManagerPermissions },
+        { key: 'TEAM_MEMBER', name: 'Team Member', permissions: teamMemberPermissions },
       ]);
       console.log('✅ Roles seeded');
     } else {
@@ -34,10 +68,8 @@ const seedData = async () => {
     // ---- USERS ----
     if (await User.countDocuments() === 0) {
       const founderRole = await Role.findOne({ key: 'FOUNDER' });
-      const innovationRole = await Role.findOne({ key: 'INNOVATION_LEAD' });
-      const coachingRole = await Role.findOne({ key: 'COACHING_MANAGER' });
-      const mediaRole = await Role.findOne({ key: 'MEDIA_MANAGER' });
-      const mentorRole = await Role.findOne({ key: 'MENTOR' });
+      const teamManagerRole = await Role.findOne({ key: 'TEAM_MANAGER' });
+      const teamMemberRole = await Role.findOne({ key: 'TEAM_MEMBER' });
 
       await User.create({
         name: 'Founder',
@@ -50,18 +82,30 @@ const seedData = async () => {
       });
 
       await User.create({
-        name: 'Nikhil',
-        email: 'nikhil@connectshiksha.com',
+        name: 'Team Manager',
+        email: 'manager@connectshiksha.com',
         phone: '9876543211',
-        passwordHash: 'nikhil123', // will be hashed by pre-save middleware
-        roleIds: [innovationRole._id],
+        passwordHash: 'manager123', // will be hashed by pre-save middleware
+        roleIds: [teamManagerRole._id],
         salary: 80000,
         active: true,
       });
-     
-    
+
+      await User.create({
+        name: 'Team Member',
+        email: 'member@connectshiksha.com',
+        phone: '9876543212',
+        passwordHash: 'member123', // will be hashed by pre-save middleware
+        roleIds: [teamMemberRole._id],
+        salary: 50000,
+        active: true,
+      });
 
       console.log('✅ Users seeded');
+      console.log('👉 Login credentials:');
+      console.log('   - Founder: founder@connectshiksha.com / founder123');
+      console.log('   - Manager: manager@connectshiksha.com / manager123');
+      console.log('   - Member: member@connectshiksha.com / member123');
     } else {
       console.log('ℹ️ Users already exist, skipping');
     }
@@ -141,7 +185,10 @@ const seedData = async () => {
     }
 
     console.log('\n🎉 Safe seed done!');
-    console.log('👉 Login with founder@connectshiksha.com / founder123');
+    console.log('\n👉 Login credentials:');
+    console.log('   - Founder (100% access): founder@connectshiksha.com / founder123');
+    console.log('   - Team Manager (70% access): manager@connectshiksha.com / manager123');
+    console.log('   - Team Member (Basic access): member@connectshiksha.com / member123');
 
     process.exit(0);
   } catch (err) {

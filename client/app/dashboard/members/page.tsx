@@ -58,6 +58,7 @@ export default function MembersPage() {
     name: '',
     email: '',
     phone: '',
+    password: '',
     salary: 0,
     roleId: '',
     teamId: '',
@@ -129,6 +130,7 @@ export default function MembersPage() {
       name: user.name,
       email: user.email,
       phone: user.phone,
+      password: '',
       salary: user.salary || 0,
       roleId: user.roleIds[0]?._id || '',
       teamId: user.teamHistory[user.teamHistory.length - 1]?.teamId._id || '',
@@ -145,13 +147,19 @@ export default function MembersPage() {
       
       const method = editingUser ? 'PUT' : 'POST';
       
+      // Transform data for API
+      const payload = editingUser ? formData : {
+        ...formData,
+        roleIds: formData.roleId ? [formData.roleId] : []
+      };
+      
       const response = await fetch(url, {
         method,
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -164,6 +172,7 @@ export default function MembersPage() {
           name: '',
           email: '',
           phone: '',
+          password: '',
           salary: 0,
           roleId: '',
           teamId: '',
@@ -417,6 +426,7 @@ export default function MembersPage() {
             name: '',
             email: '',
             phone: '',
+            password: '',
             salary: 0,
             roleId: '',
             teamId: '',
@@ -447,6 +457,16 @@ export default function MembersPage() {
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             required
           />
+          {!editingUser && (
+            <FormInput
+              label="Temp Password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              required={!editingUser}
+              placeholder="Min 6 characters"
+            />
+          )}
           <FormInput
             label="Salary"
             type="number"

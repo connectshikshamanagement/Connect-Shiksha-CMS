@@ -54,9 +54,9 @@ export default function MyTasksPage() {
     onTaskDeleted: (taskId) => {
       setTasks(prev => prev.filter(task => task._id !== taskId));
     },
-    onTaskStatusChanged: (data) => {
+    onTaskStatusChanged: (data: { taskId: string; status: string }) => {
       setTasks(prev => prev.map(task => 
-        task._id === data.taskId ? { ...task, status: data.status } : task
+        task._id === data.taskId ? { ...task, status: data.status as Task['status'] } : task
       ));
     },
     userId: typeof window !== 'undefined' ? localStorage.getItem('userId') || undefined : undefined,

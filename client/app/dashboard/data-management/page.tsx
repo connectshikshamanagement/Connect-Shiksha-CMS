@@ -165,7 +165,7 @@ export default function DataManagementPage() {
         
         // Show a brief message before redirecting
         setTimeout(() => {
-          showToast.info('You will be redirected to login in 3 seconds...');
+          showToast.info('You will be redirected to login in 3 seconds...', true);
         }, 1000);
         
         // Redirect to login after clearing data

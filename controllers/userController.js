@@ -51,10 +51,28 @@ exports.getUser = async (req, res) => {
 // @access  Private
 exports.createUser = async (req, res) => {
   try {
-    const user = await User.create({
-      ...req.body,
-      passwordHash: req.body.password || 'changeme123'
-    });
+    const Role = require('../models/Role');
+    
+    // Extract password and convert to passwordHash for the model
+    const { password, ...userData } = req.body;
+    
+    // If no roleIds provided, default to Team Member
+    if (!userData.roleIds || userData.roleIds.length === 0) {
+      const teamMemberRole = await Role.findOne({ key: 'TEAM_MEMBER' });
+      if (teamMemberRole) {
+        userData.roleIds = [teamMemberRole._id];
+      }
+    }
+    
+    const dataToSave = {
+      ...userData,
+      passwordHash: password || 'changeme123'
+    };
+
+    const user = await User.create(dataToSave);
+
+    // Populate roleIds before sending response
+    await user.populate('roleIds');
 
     res.status(201).json({
       success: true,

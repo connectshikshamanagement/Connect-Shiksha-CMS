@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { teamAPI, userAPI, roleAPI, teamPerformanceAPI, teamBudgetAPI } from '@/lib/api';
+import { teamAPI, userAPI, roleAPI, teamPerformanceAPI, teamBudgetAPI, financeAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import FABMenu from '@/components/FABMenu';
@@ -172,7 +172,7 @@ export default function TeamsPage() {
     const loadingToast = showToast.loading('Updating team budget...');
 
     try {
-      await teamBudgetAPI.updateTeamBudget(selectedTeam._id, budgetData);
+      await financeAPI.updateTeamBudget(selectedTeam._id, budgetData);
       showToast.dismiss(loadingToast);
       showToast.success('Team budget updated successfully!');
       setShowBudgetModal(false);
@@ -382,58 +382,64 @@ export default function TeamsPage() {
 
             {showAddMember && (
               <div className="mt-3 rounded-lg border border-gray-200 p-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <FormInput
-                    label="Name"
-                    value={newMember.name}
-                    onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
-                    placeholder="Full name"
-                  />
-                  <FormInput
-                    label="Email"
-                    type="email"
-                    value={newMember.email}
-                    onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
-                    placeholder="email@example.com"
-                  />
-                  <FormInput
-                    label="Phone"
-                    value={newMember.phone}
-                    onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
-                    placeholder="10-digit phone"
-                  />
-                  <FormInput
-                    label="Temp Password"
-                    type="password"
-                    value={newMember.password}
-                    onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
-                    placeholder="min 6 chars"
-                  />
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Role</label>
-                    <select
-                      value={newMember.roleId}
-                      onChange={(e) => setNewMember({ ...newMember, roleId: e.target.value })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    >
-                      <option value="">Select role</option>
-                      {roles.map((role: any) => (
-                        <option key={role._id} value={role._id}>{role.name}</option>
-                      ))}
-                    </select>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormInput
+                      label="Name"
+                      value={newMember.name}
+                      onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                      placeholder="Full name"
+                    />
+                    <FormInput
+                      label="Email"
+                      type="email"
+                      value={newMember.email}
+                      onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                      placeholder="email@example.com"
+                    />
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Assign to Team</label>
-                    <select
-                      value={newMember.teamId}
-                      onChange={(e) => setNewMember({ ...newMember, teamId: e.target.value })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    >
-                      <option value="">Select team (optional)</option>
-                      {teams.map((t: any) => (
-                        <option key={t._id} value={t._id}>{t.name}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormInput
+                      label="Phone"
+                      value={newMember.phone}
+                      onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
+                      placeholder="10-digit phone"
+                    />
+                    <FormInput
+                      label="Temp Password"
+                      type="password"
+                      value={newMember.password}
+                      onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
+                      placeholder="min 6 chars"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Role</label>
+                      <select
+                        value={newMember.roleId}
+                        onChange={(e) => setNewMember({ ...newMember, roleId: e.target.value })}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      >
+                        <option value="">Select role</option>
+                        {roles.map((role: any) => (
+                          <option key={role._id} value={role._id}>{role.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Assign to Team</label>
+                      <select
+                        value={newMember.teamId}
+                        onChange={(e) => setNewMember({ ...newMember, teamId: e.target.value })}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      >
+                        <option value="">Select team (optional)</option>
+                        {teams.map((t: any) => (
+                          <option key={t._id} value={t._id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-3 flex justify-end">
