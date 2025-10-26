@@ -93,14 +93,22 @@ export default function TeamsPage() {
             
             // Filter teams based on role
             if (!isFounder) {
+              console.log('User Data:', userData);
+              console.log('All teams:', teamsWithLead);
               const filteredTeams = teamsWithLead.filter((team: any) => {
-                // Check if user is lead or member
-                const isLead = team.leadUserId?._id === userData._id || team.leadUserId === userData._id;
-                const isMember = team.members?.includes(userData._id);
+                const teamLeadId = typeof team.leadUserId === 'string' ? team.leadUserId : team.leadUserId?._id;
+                const isLead = teamLeadId === userData._id;
+                const isMember = team.members?.some((member: any) => {
+                  const memberId = typeof member === 'string' ? member : member._id;
+                  return memberId === userData._id;
+                });
+                console.log(`Team: ${team.name}, Lead: ${teamLeadId}, User: ${userData._id}, IsMember: ${isMember}`);
                 return isLead || isMember;
               });
+              console.log('Filtered teams count:', filteredTeams.length);
               setTeams(filteredTeams);
             } else {
+              console.log('Founder - showing all teams');
               setTeams(teamsWithLead);
             }
           } else {
