@@ -91,14 +91,15 @@ router.get('/my-team-projects', authorize('projects.read'), async (req, res) => 
     // Calculate financial data for each project
     const projectsWithFinancials = await Promise.all(
       projects.map(async (project) => {
-        // Get expenses for this project's team
+        // Get expenses for this specific project (not just team)
         const expenses = await Expense.find({ 
-          teamId: project.teamId._id 
+          projectId: project._id 
         });
         
-        // Get income for this project's team
+        // Get income for this specific project (not just team)
         const incomes = await Income.find({ 
-          teamId: project.teamId._id 
+          sourceRefId: project._id,
+          sourceRefModel: 'Project'
         });
 
         const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -163,14 +164,15 @@ router.get('/my-project-financials', authorize('projects.read'), async (req, res
     // Calculate detailed financial data for each project
     const projectsWithDetailedFinancials = await Promise.all(
       projects.map(async (project) => {
-        // Get detailed expenses for this project's team
+        // Get detailed expenses for this specific project (not just team)
         const expenses = await Expense.find({ 
-          teamId: project.teamId._id 
+          projectId: project._id 
         }).populate('submittedBy', 'name email');
         
-        // Get detailed income for this project's team
+        // Get detailed income for this specific project (not just team)
         const incomes = await Income.find({ 
-          teamId: project.teamId._id 
+          sourceRefId: project._id,
+          sourceRefModel: 'Project'
         }).populate('receivedByUserId', 'name email');
 
         const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);

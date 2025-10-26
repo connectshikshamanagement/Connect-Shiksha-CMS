@@ -17,12 +17,12 @@ import { FiDownload, FiCheck, FiDollarSign, FiUsers, FiTrendingUp, FiFilter, FiR
 export default function PayrollPage() {
   const [payouts, setPayouts] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [teams, setTeams] = useState([]);
+  // Removed: const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedProject, setSelectedProject] = useState('');
-  const [selectedTeam, setSelectedTeam] = useState('');
+  // Removed: const [selectedTeam, setSelectedTeam] = useState('');
   const [analytics, setAnalytics] = useState<any>(null);
   const [financialSummary, setFinancialSummary] = useState<any>(null);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
@@ -59,6 +59,7 @@ export default function PayrollPage() {
     console.log('Current user:', user ? JSON.parse(user) : 'No user found');
     console.log('User role:', userRole, 'isFounder:', isFounder, 'isManager:', isManager, 'isMember:', isMember);
     
+    fetchProjects();
     fetchPayouts();
     if (isFounder || isManager) {
       fetchAnalytics();
@@ -67,7 +68,9 @@ export default function PayrollPage() {
     if (isMember) {
       fetchUserProjects();
     }
-  }, [selectedMonth, selectedYear, selectedProject, selectedTeam, userRole, permissionsLoading]);
+  }, [selectedMonth, selectedYear, selectedProject, userRole, permissionsLoading]);
+
+  // Removed fetchTeams - team filter removed
 
   // Debug payouts state changes
   useEffect(() => {
@@ -94,10 +97,6 @@ export default function PayrollPage() {
       } else if (isFounder || isManager) {
         // For founders and managers, use the payroll endpoint
         endpoint = '/payroll';
-      }
-
-      if (selectedTeam) {
-        params.append('teamId', selectedTeam);
       }
 
       console.log('Fetching payroll from:', endpoint, 'with params:', params.toString());
@@ -152,9 +151,6 @@ export default function PayrollPage() {
       
       if (selectedProject) {
         params.append('projectId', selectedProject);
-      }
-      if (selectedTeam) {
-        params.append('teamId', selectedTeam);
       }
 
       const response = await fetch(
@@ -215,20 +211,72 @@ export default function PayrollPage() {
     const loadingToast = showToast.loading('Updating payout status...');
 
     try {
-      await payoutAPI.updateStatus(payoutId, {
-        status: 'paid',
+      console.log('Marking payout as paid:', payoutId);
+      console.log('Available payouts:', payouts.map((p: any) => ({ id: p._id, type: 'payroll' })));
+      
+      // Check if this is a payout record or a payroll record
+      const payoutRecord = payouts.find((p: any) => p._id === payoutId);
+      
+      if (!payoutRecord) {
+        throw new Error('Payout record not found');
+      }
+      
+      console.log('Payout record found:', payoutRecord);
+      
+      // Since we're using /payroll endpoint, all records are payroll records
+      // Always use the payroll endpoint
+      const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/payroll/${payoutId}/pay`;
+      
+      const body = {
         paymentMethod: 'bank_transfer',
         transactionId: `TXN${Date.now()}`,
+      };
+      
+      console.log('Using endpoint:', endpoint, 'with body:', body);
+      
+      const response = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
       });
+      
+      const data = await response.json();
+      
+      console.log('Response:', data);
+      
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to update payout status');
+      }
+      
       showToast.dismiss(loadingToast);
       showToast.success('Payout marked as paid!');
       fetchPayouts();
     } catch (error: any) {
+      console.error('Error marking as paid:', error);
       showToast.dismiss(loadingToast);
-      showToast.error(error.response?.data?.message || 'Operation failed');
+      showToast.error(error.message || 'Operation failed');
     }
   };
 
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setProjects(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch projects:', error);
+    }
+  };
 
   const fetchUserProjects = async () => {
     try {
@@ -415,38 +463,21 @@ export default function PayrollPage() {
               </select>
             </div>
             {!isMember && (
-              <>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Project</label>
-                  <select
-                    value={selectedProject}
-                    onChange={(e) => setSelectedProject(e.target.value)}
-                    className="rounded-lg border border-gray-300 px-3 py-2"
-                  >
-                    <option value="">All Projects</option>
-                    {projects.map((project: any) => (
-                      <option key={project._id} value={project._id}>
-                        {project.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Team</label>
-                  <select
-                    value={selectedTeam}
-                    onChange={(e) => setSelectedTeam(e.target.value)}
-                    className="rounded-lg border border-gray-300 px-3 py-2"
-                  >
-                    <option value="">All Teams</option>
-                    {teams.map((team: any) => (
-                      <option key={team._id} value={team._id}>
-                        {team.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Project</label>
+                <select
+                  value={selectedProject}
+                  onChange={(e) => setSelectedProject(e.target.value)}
+                  className="rounded-lg border border-gray-300 px-3 py-2"
+                >
+                  <option value="">All Projects</option>
+                  {projects.map((project: any) => (
+                    <option key={project._id} value={project._id}>
+                      {project.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
           </div>
 
@@ -543,17 +574,8 @@ export default function PayrollPage() {
               <p className="text-sm font-medium text-gray-600">Income</p>
               <p className="mt-2 text-2xl font-bold text-green-600">
                 ₹{isMember 
-                  ? payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.projectIncome || 0), 0).toLocaleString()
+                  ? payouts.filter((p: any) => p.userId?.email !== 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.projectIncome || 0), 0).toLocaleString()
                   : (financialSummary?.totalIncome?.toLocaleString() || '0')
-                }
-              </p>
-            </div>
-            <div className="rounded-lg bg-white p-6 shadow">
-              <p className="text-sm font-medium text-gray-600">Expense</p>
-              <p className="mt-2 text-2xl font-bold text-red-600">
-                ₹{isMember 
-                  ? payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.projectExpenses || 0), 0).toLocaleString()
-                  : (financialSummary?.totalExpenses?.toLocaleString() || '0')
                 }
               </p>
             </div>
@@ -561,8 +583,17 @@ export default function PayrollPage() {
               <p className="text-sm font-medium text-gray-600">Budget</p>
               <p className="mt-2 text-2xl font-bold text-blue-600">
                 ₹{isMember 
-                  ? payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.projectBudget || 0), 0).toLocaleString()
-                  : (financialSummary?.netProfit?.toLocaleString() || '0')
+                  ? payouts.filter((p: any) => p.userId?.email !== 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.projectBudget || 0), 0).toLocaleString()
+                  : (financialSummary?.totalBudget?.toLocaleString() || '0')
+                }
+              </p>
+            </div>
+            <div className="rounded-lg bg-white p-6 shadow">
+              <p className="text-sm font-medium text-gray-600">Expenses</p>
+              <p className="mt-2 text-2xl font-bold text-red-600">
+                ₹{isMember 
+                  ? payouts.filter((p: any) => p.userId?.email !== 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.projectExpenses || 0), 0).toLocaleString()
+                  : (financialSummary?.totalExpenses?.toLocaleString() || '0')
                 }
               </p>
             </div>
@@ -598,7 +629,7 @@ export default function PayrollPage() {
                   <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                     <p className="text-sm text-purple-600 font-medium">Connect Shiksha Shares</p>
                     <p className="text-2xl font-bold text-purple-700">
-                      ₹{Math.round(payouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
+                      ₹{Math.round(payouts.filter((p: any) => p.userId?.email === 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
                     </p>
                     <p className="text-xs text-purple-500">70% of total profits</p>
                   </div>
@@ -607,7 +638,7 @@ export default function PayrollPage() {
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <p className="text-sm text-blue-600 font-medium">{isMember ? 'My Shares' : 'Team Shares'}</p>
                   <p className="text-2xl font-bold text-blue-700">
-                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
+                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email !== 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
                   </p>
                   <p className="text-xs text-blue-500">30% of total profits</p>
                 </div>
@@ -626,8 +657,8 @@ export default function PayrollPage() {
                     {Array.from(new Set(payouts.map((p: any) => p.projectId?.title).filter(Boolean))).map((projectTitle: string) => {
                       const projectPayouts = payouts.filter((p: any) => p.projectId?.title === projectTitle);
                       const totalProjectProfit = Math.round(projectPayouts.reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
-                      const founderProfit = Math.round(projectPayouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
-                      const teamProfit = Math.round(projectPayouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
+                      const founderProfit = Math.round(projectPayouts.filter((p: any) => p.userId?.email === 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
+                      const teamProfit = Math.round(projectPayouts.filter((p: any) => p.userId?.email !== 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
                       
                       return (
                         <div key={projectTitle} className="p-3 bg-gray-50 rounded-lg">
@@ -660,7 +691,11 @@ export default function PayrollPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-3xl font-bold">
-                      ₹{Math.round(payouts.filter((p: any) => p.userId?.email === 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
+                      {(() => {
+                        const connectShikshaPayouts = payouts.filter((p: any) => p.userId?.email === 'founder@connectshiksha.com');
+                        const total = Math.round(connectShikshaPayouts.reduce((sum: number, p: any) => sum + (p.profitShare || p.netAmount || 0), 0));
+                        return `₹${total.toLocaleString()}`;
+                      })()}
                     </div>
                     <div className="text-purple-100 text-sm">Total Connect Shiksha Shares</div>
                   </div>
@@ -676,7 +711,7 @@ export default function PayrollPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold">
-                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email !== 'admin@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
+                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email !== 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
                   </div>
                   <div className="text-blue-100 text-sm">{isMember ? 'Total My Shares' : 'Total Team Shares'}</div>
                 </div>
@@ -700,7 +735,7 @@ export default function PayrollPage() {
                 </div>
                 
                 <div className="p-4">
-                  {payouts.filter((payout: any) => payout.userId?.email === 'admin@connectshiksha.com').map((payout: any) => (
+                  {payouts.filter((payout: any) => payout.userId?.email === 'founder@connectshiksha.com').map((payout: any) => (
                     <div key={payout._id} className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-purple-200">
                       <div className="flex justify-between items-start mb-3">
                         <div>
@@ -717,14 +752,14 @@ export default function PayrollPage() {
                       
                       <div className="flex justify-between items-center text-sm">
                         <div className="flex flex-wrap gap-2">
-                          <span className="text-gray-600 text-xs">
-                            Base: ₹{(payout.baseSalary || 0).toLocaleString()}
+                          <span className="text-green-600 text-xs">
+                            Income: ₹{(payout.projectIncome || 0).toLocaleString()}
                           </span>
-                          <span className="text-gray-600 text-xs">
-                            Bonuses: ₹{(payout.bonuses || 0).toLocaleString()}
+                          <span className="text-blue-600 text-xs">
+                            Budget: ₹{(payout.projectBudget || 0).toLocaleString()}
                           </span>
                           <span className="text-red-600 text-xs">
-                            Deductions: ₹{(payout.deductions || 0).toLocaleString()}
+                            Expenses: ₹{(payout.projectExpenses || 0).toLocaleString()}
                           </span>
                         </div>
                         <div className="text-right">
@@ -765,7 +800,7 @@ export default function PayrollPage() {
                     </div>
                   ))}
                   
-                  {payouts.filter((payout: any) => payout.userId?.email === 'admin@connectshiksha.com').length === 0 && (
+                  {payouts.filter((payout: any) => payout.userId?.email === 'founder@connectshiksha.com').length === 0 && (
                     <div className="text-center py-8 text-gray-500">
                       <FiUsers className="mx-auto mb-2 h-8 w-8" />
                       <p>No Connect Shiksha Shares found</p>
@@ -785,7 +820,7 @@ export default function PayrollPage() {
               </div>
               
               <div className="p-4 max-h-96 overflow-y-auto">
-                {payouts.filter((payout: any) => payout.userId?.email !== 'admin@connectshiksha.com').map((payout: any) => (
+                {payouts.filter((payout: any) => payout.userId?.email !== 'founder@connectshiksha.com').map((payout: any) => (
                   <div key={payout._id} className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-blue-200">
                     <div className="flex justify-between items-start mb-3">
                       <div>
@@ -851,7 +886,7 @@ export default function PayrollPage() {
                   </div>
                 ))}
                 
-                {payouts.filter((payout: any) => payout.userId?.email !== 'admin@connectshiksha.com').length === 0 && (
+                {payouts.filter((payout: any) => payout.userId?.email !== 'founder@connectshiksha.com').length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     <FiUsers className="mx-auto mb-2 h-8 w-8" />
                     <p>No team member shares found</p>

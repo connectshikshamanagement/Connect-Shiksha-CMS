@@ -157,13 +157,14 @@ router.get('/project-summary', authorize('finance.read'), async (req, res) => {
     const projectFinancials = await Promise.all(
       projects.map(async (project) => {
         // Calculate project expenses for the month
-        // Since expenses are linked to teams, we'll get expenses from the project's team
+        // Filter by both teamId AND projectId to differentiate between projects in the same team
         const teamIdForQuery = project.teamId._id || project.teamId;
         
         const projectExpenses = await Expense.aggregate([
           {
             $match: {
               teamId: teamIdForQuery,
+              projectId: project._id,
               date: { $gte: startOfMonth, $lte: endOfMonth }
             }
           },
@@ -177,11 +178,13 @@ router.get('/project-summary', authorize('finance.read'), async (req, res) => {
         ]);
 
         // Calculate project income for the month
-        // Since income is linked to teams, we'll get income from the project's team
+        // Filter by sourceRefId (project ID) and sourceRefModel to differentiate between projects
         const projectIncome = await Income.aggregate([
           {
             $match: {
               teamId: teamIdForQuery,
+              sourceRefId: project._id,
+              sourceRefModel: 'Project',
               date: { $gte: startOfMonth, $lte: endOfMonth }
             }
           },

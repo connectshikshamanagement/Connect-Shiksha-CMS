@@ -24,6 +24,7 @@ export default function FinancePage() {
   const [users, setUsers] = useState([]);
   const [teamFinancials, setTeamFinancials] = useState([]);
   const [projectFinancials, setProjectFinancials] = useState([]);
+  const [filteredProjects, setFilteredProjects] = useState([]);
   const [payrolls, setPayrolls] = useState([]);
   const [incomeHistory, setIncomeHistory] = useState([]);
   const [expenseHistory, setExpenseHistory] = useState([]);
@@ -49,7 +50,8 @@ export default function FinancePage() {
   const [filters, setFilters] = useState({
     teamId: '',
     projectId: '',
-    memberId: ''
+    memberId: '',
+    type: 'all' // 'all', 'income', 'expense'
   });
 
   // Form data
@@ -136,14 +138,106 @@ export default function FinancePage() {
       ]);
       
       if (teamsRes.data.success) setTeams(teamsRes.data.data);
-      if (projectsRes.data.success) setProjects(projectsRes.data.data);
+      
+      // Filter projects
+      let allProjects = projectsRes.data.success ? projectsRes.data.data : [];
+      if (filters.teamId) {
+        allProjects = allProjects.filter((item: any) => 
+          item.teamId?._id?.toString() === filters.teamId || 
+          item.teamId?.toString() === filters.teamId
+        );
+      }
+      if (filters.projectId) {
+        allProjects = allProjects.filter((item: any) => 
+          item._id?.toString() === filters.projectId
+        );
+      }
+      setProjects(allProjects);
+      setFilteredProjects(allProjects);
+      
       if (usersRes.data.success) setUsers(usersRes.data.data);
       if (teamFinancialsRes.data.success) setTeamFinancials(teamFinancialsRes.data.data);
       if (projectFinancialsRes.data.success) setProjectFinancials(projectFinancialsRes.data.data);
       if (payrollsRes.data.success) setPayrolls(payrollsRes.data.data);
-      if (incomeRes.data.success) setIncomeHistory(incomeRes.data.data);
-      if (expenseRes.data.success) setExpenseHistory(expenseRes.data.data);
-      if (budgetWarningsRes.data.success) setBudgetWarnings(budgetWarningsRes.data.data);
+      
+      // Filter income and expenses on client side
+      let incomeData = incomeRes.data.success ? incomeRes.data.data : [];
+      let expenseData = expenseRes.data.success ? expenseRes.data.data : [];
+      
+      // Apply filters
+      if (filters.teamId) {
+        incomeData = incomeData.filter((item: any) => 
+          item.teamId?._id?.toString() === filters.teamId || 
+          item.teamId?.toString() === filters.teamId
+        );
+        expenseData = expenseData.filter((item: any) => 
+          item.teamId?._id?.toString() === filters.teamId || 
+          item.teamId?.toString() === filters.teamId
+        );
+      }
+      
+      if (filters.projectId) {
+        incomeData = incomeData.filter((item: any) => 
+          item.sourceRefId?.toString() === filters.projectId ||
+          item.projectId?._id?.toString() === filters.projectId ||
+          item.projectId?.toString() === filters.projectId
+        );
+        expenseData = expenseData.filter((item: any) => 
+          item.projectId?._id?.toString() === filters.projectId || 
+          item.projectId?.toString() === filters.projectId
+        );
+      }
+      
+      if (filters.memberId) {
+        incomeData = incomeData.filter((item: any) => 
+          item.receivedByUserId?._id?.toString() === filters.memberId ||
+          item.receivedByUserId?.toString() === filters.memberId
+        );
+        expenseData = expenseData.filter((item: any) => 
+          item.submittedBy?._id?.toString() === filters.memberId ||
+          item.submittedBy?.toString() === filters.memberId
+        );
+      }
+      
+      setIncomeHistory(incomeData);
+      setExpenseHistory(expenseData);
+      
+      // Filter team financials
+      let filteredTeamFinancials = teamFinancialsRes.data.success ? teamFinancialsRes.data.data : [];
+      if (filters.teamId) {
+        filteredTeamFinancials = filteredTeamFinancials.filter((item: any) => 
+          item.teamId?.toString() === filters.teamId || 
+          item.teamId?._id?.toString() === filters.teamId ||
+          item.teamId?._id?.toString() === filters.teamId
+        );
+      }
+      setTeamFinancials(filteredTeamFinancials);
+      
+      // Filter project financials
+      let filteredProjectFinancials = projectFinancialsRes.data.success ? projectFinancialsRes.data.data : [];
+      if (filters.projectId) {
+        filteredProjectFinancials = filteredProjectFinancials.filter((item: any) => 
+          item.projectId?.toString() === filters.projectId || 
+          item.projectId?._id?.toString() === filters.projectId ||
+          item._id?.toString() === filters.projectId
+        );
+      }
+      if (filters.teamId) {
+        filteredProjectFinancials = filteredProjectFinancials.filter((item: any) => 
+          item.teamId?._id?.toString() === filters.teamId ||
+          item.teamId?.toString() === filters.teamId
+        );
+      }
+      setProjectFinancials(filteredProjectFinancials);
+      
+      // Filter budget warnings
+      let filteredBudgetWarnings = budgetWarningsRes.data.success ? budgetWarningsRes.data.data : [];
+      if (filters.projectId) {
+        filteredBudgetWarnings = filteredBudgetWarnings.filter((item: any) => 
+          item.projectId?.toString() === filters.projectId
+        );
+      }
+      setBudgetWarnings(filteredBudgetWarnings);
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to fetch data');
     } finally {
@@ -237,6 +331,74 @@ export default function FinancePage() {
       showToast.dismiss(loadingToast);
       showToast.error(error.response?.data?.message || 'Operation failed');
     }
+  };
+
+  const handleEditIncome = (income: any) => {
+    setEditingItem(income);
+    setIncomeFormData({
+      sourceType: income.sourceType,
+      amount: income.amount,
+      date: income.date,
+      description: income.description || '',
+      paymentMethod: income.paymentMethod || 'bank_transfer',
+      transactionId: income.transactionId || '',
+      invoiceNumber: income.invoiceNumber || '',
+      clientId: income.clientId?._id || '',
+      teamId: income.teamId?._id || income.teamId || '',
+      projectId: income.sourceRefId || '',
+      memberId: income.receivedByUserId?._id || income.receivedByUserId || '',
+    });
+    setShowIncomeModal(true);
+  };
+
+  const handleEditExpense = (expense: any) => {
+    setEditingItem(expense);
+    setExpenseFormData({
+      category: expense.category,
+      amount: expense.amount,
+      date: expense.date,
+      description: expense.description,
+      paymentMethod: expense.paymentMethod || 'bank_transfer',
+      vendorName: expense.vendorName || '',
+      billNumber: expense.billNumber || '',
+      teamId: expense.teamId?._id || expense.teamId || '',
+      projectId: expense.projectId?._id || expense.projectId || '',
+      memberId: expense.submittedBy?._id || expense.submittedBy || '',
+    });
+    setShowExpenseModal(true);
+  };
+
+  const resetIncomeForm = () => {
+    setIncomeFormData({
+      sourceType: '',
+      amount: 0,
+      date: new Date().toISOString().split('T')[0],
+      description: '',
+      paymentMethod: 'bank_transfer',
+      transactionId: '',
+      invoiceNumber: '',
+      clientId: '',
+      teamId: '',
+      projectId: '',
+      memberId: '',
+    });
+    setEditingItem(null);
+  };
+
+  const resetExpenseForm = () => {
+    setExpenseFormData({
+      category: '',
+      amount: 0,
+      date: new Date().toISOString().split('T')[0],
+      description: '',
+      paymentMethod: 'bank_transfer',
+      vendorName: '',
+      billNumber: '',
+      teamId: '',
+      projectId: '',
+      memberId: '',
+    });
+    setEditingItem(null);
   };
 
   const handlePayrollSubmit = async (e: React.FormEvent) => {
@@ -355,9 +517,25 @@ export default function FinancePage() {
     });
   };
 
-  const getUsersByTeam = (teamId: string) => {
+  const getUsersByTeam = (teamId: string, projectId?: string) => {
     const team = teams.find((t: any) => t._id === teamId) as any;
     if (!team) return [];
+    
+    // If a project is selected and it has project members, use them
+    if (projectId) {
+      const project: any = projects.find((p: any) => p._id === projectId);
+      if (project && project.projectMembers && Array.isArray(project.projectMembers) && project.projectMembers.length > 0) {
+        // Return users who are in the project's member list
+        return users.filter((user: any) => 
+          project.projectMembers.some((memberId: any) => 
+            memberId.toString() === user._id || 
+            (typeof memberId === 'object' && memberId._id && memberId._id.toString() === user._id)
+          )
+        );
+      }
+    }
+    
+    // Otherwise return all team members
     return users.filter((user: any) => team.members.includes(user._id));
   };
 
@@ -382,41 +560,9 @@ export default function FinancePage() {
     setFilters({
       teamId: '',
       projectId: '',
-      memberId: ''
-    });
-  };
-
-  const resetIncomeForm = () => {
-    setIncomeFormData({
-      sourceType: '',
-      amount: 0,
-      date: new Date().toISOString().split('T')[0],
-      description: '',
-      paymentMethod: 'bank_transfer',
-      transactionId: '',
-      invoiceNumber: '',
-      clientId: '',
-      teamId: '',
-      projectId: '',
       memberId: '',
+      type: 'all'
     });
-    setEditingItem(null);
-  };
-
-  const resetExpenseForm = () => {
-    setExpenseFormData({
-      category: '',
-      amount: 0,
-      date: new Date().toISOString().split('T')[0],
-      description: '',
-      paymentMethod: 'bank_transfer',
-      vendorName: '',
-      billNumber: '',
-      teamId: '',
-      projectId: '',
-      memberId: '',
-    });
-    setEditingItem(null);
   };
 
   const resetPayrollForm = () => {
@@ -621,25 +767,53 @@ export default function FinancePage() {
               <div className="rounded-lg bg-white p-6 shadow">
                 <h3 className="mb-4 text-lg font-semibold text-gray-900">Team Performance Overview</h3>
                 <div className="space-y-4">
-                  {teamFinancials.map((team: any) => (
-                    <div key={team.teamId} className="rounded-lg border p-4">
-                <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-gray-900">{team.teamName}</h4>
-                          <p className="text-sm text-gray-600">{team.category}</p>
-                    </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-gray-900">₹{team.netProfit.toLocaleString()}</p>
-                          <p className="text-xs text-gray-500">Net Profit</p>
-                  </div>
-                </div>
-                      <div className="mt-2 flex justify-between text-sm">
-                        <span>Income: ₹{team.totalIncome.toLocaleString()}</span>
-                        <span>Expenses: ₹{team.totalExpense.toLocaleString()}</span>
-                        <span>Payroll: ₹{team.totalPayroll.toLocaleString()}</span>
-              </div>
-                    </div>
-                  ))}
+                  {(() => {
+                    // Aggregate projectFinancials by team
+                    const teamStatsMap = new Map();
+                    
+                    projectFinancials.forEach((project: any) => {
+                      const teamId = project.teamId?._id || project.teamId;
+                      const teamName = project.teamId?.name || 'Unknown Team';
+                      
+                      if (!teamStatsMap.has(teamId)) {
+                        teamStatsMap.set(teamId, {
+                          teamId,
+                          teamName,
+                          totalIncome: 0,
+                          totalExpense: 0,
+                          netProfit: 0,
+                          projectCount: 0
+                        });
+                      }
+                      
+                      const stats = teamStatsMap.get(teamId);
+                      stats.totalIncome += project.totalIncome || 0;
+                      stats.totalExpense += project.totalExpense || 0;
+                      stats.netProfit += project.netProfit || 0;
+                      stats.projectCount += 1;
+                    });
+                    
+                    const aggregatedTeams = Array.from(teamStatsMap.values());
+                    
+                    return aggregatedTeams.map((team: any) => (
+                      <div key={team.teamId} className="rounded-lg border p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-gray-900">{team.teamName}</h4>
+                            <p className="text-sm text-gray-600">{team.projectCount} project{team.projectCount !== 1 ? 's' : ''}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-gray-900">₹{team.netProfit.toLocaleString()}</p>
+                            <p className="text-xs text-gray-500">Net Profit</p>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex justify-between text-sm">
+                          <span>Income: ₹{team.totalIncome.toLocaleString()}</span>
+                          <span>Expenses: ₹{team.totalExpense.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ));
+                  })()}
                 </div>
               </div>
 
@@ -647,14 +821,14 @@ export default function FinancePage() {
               <div className="rounded-lg bg-white p-6 shadow">
                 <h3 className="mb-4 text-lg font-semibold text-gray-900">Project Status Overview</h3>
                 <div className="space-y-4">
-                  {projects.length === 0 && (
+                  {projectFinancials.length === 0 && (
                     <div className="text-center text-gray-500">No project data available</div>
                   )}
-                  {projects.slice(0, 5).map((project: any) => (
-                    <div key={project._id} className="rounded-lg border p-4">
+                  {projectFinancials.slice(0, 5).map((project: any) => (
+                    <div key={project.projectId || project._id} className="rounded-lg border p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h4 className="font-medium text-gray-900">{project.title}</h4>
+                          <h4 className="font-medium text-gray-900">{project.projectName || project.title}</h4>
                           <p className="text-sm text-gray-600">{project.category}</p>
                           <div className="mt-1 flex gap-4 text-xs">
                             <span className="text-blue-600">Income: ₹{project.totalIncome?.toLocaleString() || '0'}</span>
@@ -1015,215 +1189,233 @@ export default function FinancePage() {
                   <h3 className="text-xl font-semibold text-gray-900">Financial History</h3>
                   <p className="text-sm text-gray-600">Track all income and expense transactions</p>
                 </div>
+                
+                {/* Type Filter */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setFilters({...filters, type: 'all'})}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      filters.type === 'all'
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-white text-gray-700 shadow hover:bg-gray-50'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setFilters({...filters, type: 'income'})}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      filters.type === 'income'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white text-gray-700 shadow hover:bg-gray-50'
+                    }`}
+                  >
+                    Income
+                  </button>
+                  <button
+                    onClick={() => setFilters({...filters, type: 'expense'})}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      filters.type === 'expense'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-white text-gray-700 shadow hover:bg-gray-50'
+                    }`}
+                  >
+                    Expense
+                  </button>
+                </div>
               </div>
 
-              {/* Income History */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <FiTrendingUp className="h-5 w-5 text-green-600" />
-                  </div>
-                  <h4 className="text-lg font-semibold text-gray-900">Income History</h4>
-                </div>
+              {/* Desktop: Side by Side Layout */}
+              <div className="hidden lg:grid lg:grid-cols-2 gap-6">
+                {/* Income Section */}
+                {(filters.type === 'all' || filters.type === 'income') && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        <FiTrendingUp className="h-5 w-5 text-green-600" />
+                      </div>
+                      <h4 className="text-lg font-semibold text-gray-900">Income History</h4>
+                      <span className="ml-auto text-sm font-medium text-green-600">({incomeHistory.length})</span>
+                    </div>
 
-                {incomeHistory.length === 0 ? (
-                  <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
-                    <FiDollarSign className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Income Records</h3>
-                    <p className="text-gray-500">Income transactions will appear here once they are recorded.</p>
+                    {incomeHistory.length === 0 ? (
+                      <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
+                        <FiDollarSign className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Income Records</h3>
+                        <p className="text-gray-500">Income transactions will appear here</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+                        {incomeHistory.map((income: any) => (
+                          <div key={income._id} className="rounded-lg bg-white p-4 shadow-sm border border-green-100 hover:shadow-md transition-all">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <h5 className="font-semibold text-gray-900">{income.sourceType}</h5>
+                                <p className="text-xs text-gray-500">{income.receivedByUserId?.name || 'N/A'}</p>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => handleEditIncome(income)}
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                >
+                                  <FiEdit className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500">{new Date(income.date).toLocaleDateString()}</span>
+                              <span className="text-lg font-bold text-green-600">₹{income.amount.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {incomeHistory.map((income: any) => (
-                      <div key={income._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-green-200">
-                        <div className="space-y-4">
-                          {/* Income Header */}
-                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <div className="p-2 bg-green-100 rounded-lg">
-                                  <FiDollarSign className="h-5 w-5 text-green-600" />
-                                </div>
+                )}
+
+                {/* Expense Section */}
+                {(filters.type === 'all' || filters.type === 'expense') && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-red-100 rounded-lg">
+                        <FiTrendingDown className="h-5 w-5 text-red-600" />
+                      </div>
+                      <h4 className="text-lg font-semibold text-gray-900">Expense History</h4>
+                      <span className="ml-auto text-sm font-medium text-red-600">({expenseHistory.length})</span>
+                    </div>
+
+                    {expenseHistory.length === 0 ? (
+                      <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
+                        <FiTrendingDown className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Expense Records</h3>
+                        <p className="text-gray-500">Expense transactions will appear here</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+                        {expenseHistory.map((expense: any) => (
+                          <div key={expense._id} className="rounded-lg bg-white p-4 shadow-sm border border-red-100 hover:shadow-md transition-all">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <h5 className="font-semibold text-gray-900">{expense.category}</h5>
+                                <p className="text-xs text-gray-500">{expense.submittedBy?.name || 'N/A'}</p>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => handleEditExpense(expense)}
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                >
+                                  <FiEdit className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500">{new Date(expense.date).toLocaleDateString()}</span>
+                              <span className="text-lg font-bold text-red-600">₹{expense.amount.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Mobile: Stacked Layout */}
+              <div className="space-y-6 lg:hidden">
+                {/* Income History */}
+                {(filters.type === 'all' || filters.type === 'income') && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        <FiTrendingUp className="h-5 w-5 text-green-600" />
+                      </div>
+                      <h4 className="text-lg font-semibold text-gray-900">Income History</h4>
+                    </div>
+
+                    {incomeHistory.length === 0 ? (
+                      <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
+                        <FiDollarSign className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Income Records</h3>
+                        <p className="text-gray-500">Income transactions will appear here once they are recorded.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4">
+                        {incomeHistory.map((income: any) => (
+                          <div key={income._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex-1">
                                 <h5 className="text-lg font-semibold text-gray-900">{income.sourceType}</h5>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
-                                  Income
-                                </span>
-                                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
-                                  {income.receivedByUserId?.name || 'N/A'}
-                                </span>
-                                <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-800">
-                                  {income.teamId?.name || 'N/A'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Income Details */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                            <div className="bg-gray-50 rounded-lg p-3">
-                              <div className="flex items-center text-gray-600 mb-1">
-                                <FiCalendar className="mr-2 h-4 w-4" />
-                                <span className="text-xs font-medium uppercase tracking-wide">Date</span>
-                              </div>
-                              <p className="text-sm font-semibold text-gray-900">{new Date(income.date).toLocaleDateString()}</p>
-                            </div>
-                            <div className="bg-gray-50 rounded-lg p-3">
-                              <div className="flex items-center text-gray-600 mb-1">
-                                <FiCreditCard className="mr-2 h-4 w-4" />
-                                <span className="text-xs font-medium uppercase tracking-wide">Payment</span>
-                              </div>
-                              <p className="text-sm font-semibold text-gray-900">{income.paymentMethod}</p>
-                            </div>
-                            {income.transactionId && (
-                              <div className="bg-gray-50 rounded-lg p-3">
-                                <div className="flex items-center text-gray-600 mb-1">
-                                  <FiFileText className="mr-2 h-4 w-4" />
-                                  <span className="text-xs font-medium uppercase tracking-wide">Transaction</span>
+                                <div className="flex gap-2 mt-2">
+                                  <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">Income</span>
+                                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">{income.receivedByUserId?.name || 'N/A'}</span>
                                 </div>
-                                <p className="text-sm font-semibold text-gray-900 font-mono">{income.transactionId}</p>
                               </div>
-                            )}
-                            {income.clientId && (
-                              <div className="bg-gray-50 rounded-lg p-3">
-                                <div className="flex items-center text-gray-600 mb-1">
-                                  <FiUsers className="mr-2 h-4 w-4" />
-                                  <span className="text-xs font-medium uppercase tracking-wide">Client</span>
-                                </div>
-                                <p className="text-sm font-semibold text-gray-900">{income.clientId?.name || 'N/A'}</p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Description */}
-                          {income.description && (
-                            <div className="bg-green-50 rounded-lg p-3 border border-green-100">
-                              <p className="text-sm text-gray-700">{income.description}</p>
+                              <button
+                                onClick={() => handleEditIncome(income)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                              >
+                                <FiEdit className="h-5 w-5" />
+                              </button>
                             </div>
-                          )}
-
-                          {/* Amount */}
-                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-100">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h6 className="text-sm font-semibold text-gray-800 mb-1">Income Amount</h6>
-                                <p className="text-xs text-gray-600">Received on {new Date(income.date).toLocaleDateString()}</p>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-2xl font-bold text-green-600">₹{income.amount.toLocaleString()}</div>
-                              </div>
+                            <div className="flex items-center justify-between pt-4 border-t">
+                              <span className="text-sm text-gray-500">{new Date(income.date).toLocaleDateString()}</span>
+                              <span className="text-2xl font-bold text-green-600">₹{income.amount.toLocaleString()}</span>
                             </div>
                           </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
-              </div>
 
-              {/* Expense History */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-red-100 rounded-lg">
-                    <FiTrendingDown className="h-5 w-5 text-red-600" />
-                  </div>
-                  <h4 className="text-lg font-semibold text-gray-900">Expense History</h4>
-                </div>
+                {/* Expense History */}
+                {(filters.type === 'all' || filters.type === 'expense') && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-red-100 rounded-lg">
+                        <FiTrendingDown className="h-5 w-5 text-red-600" />
+                      </div>
+                      <h4 className="text-lg font-semibold text-gray-900">Expense History</h4>
+                    </div>
 
-                {expenseHistory.length === 0 ? (
-                  <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
-                    <FiTrendingDown className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Expense Records</h3>
-                    <p className="text-gray-500">Expense transactions will appear here once they are recorded.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {expenseHistory.map((expense: any) => (
-                      <div key={expense._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-red-200">
-                        <div className="space-y-4">
-                          {/* Expense Header */}
-                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <div className="p-2 bg-red-100 rounded-lg">
-                                  <FiTrendingDown className="h-5 w-5 text-red-600" />
-                                </div>
+                    {expenseHistory.length === 0 ? (
+                      <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
+                        <FiTrendingDown className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Expense Records</h3>
+                        <p className="text-gray-500">Expense transactions will appear here once they are recorded.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4">
+                        {expenseHistory.map((expense: any) => (
+                          <div key={expense._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex-1">
                                 <h5 className="text-lg font-semibold text-gray-900">{expense.category}</h5>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800">
-                                  Expense
-                                </span>
-                                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
-                                  {expense.submittedBy?.name || 'N/A'}
-                                </span>
-                                <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-800">
-                                  {expense.teamId?.name || 'N/A'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Expense Details */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                            <div className="bg-gray-50 rounded-lg p-3">
-                              <div className="flex items-center text-gray-600 mb-1">
-                                <FiCalendar className="mr-2 h-4 w-4" />
-                                <span className="text-xs font-medium uppercase tracking-wide">Date</span>
-                              </div>
-                              <p className="text-sm font-semibold text-gray-900">{new Date(expense.date).toLocaleDateString()}</p>
-                            </div>
-                            <div className="bg-gray-50 rounded-lg p-3">
-                              <div className="flex items-center text-gray-600 mb-1">
-                                <FiCreditCard className="mr-2 h-4 w-4" />
-                                <span className="text-xs font-medium uppercase tracking-wide">Payment</span>
-                              </div>
-                              <p className="text-sm font-semibold text-gray-900">{expense.paymentMethod}</p>
-                            </div>
-                            {expense.vendorName && (
-                              <div className="bg-gray-50 rounded-lg p-3">
-                                <div className="flex items-center text-gray-600 mb-1">
-                                  <FiUsers className="mr-2 h-4 w-4" />
-                                  <span className="text-xs font-medium uppercase tracking-wide">Vendor</span>
+                                <div className="flex gap-2 mt-2">
+                                  <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800">Expense</span>
+                                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">{expense.submittedBy?.name || 'N/A'}</span>
                                 </div>
-                                <p className="text-sm font-semibold text-gray-900">{expense.vendorName}</p>
                               </div>
-                            )}
-                            {expense.billNumber && (
-                              <div className="bg-gray-50 rounded-lg p-3">
-                                <div className="flex items-center text-gray-600 mb-1">
-                                  <FiFileText className="mr-2 h-4 w-4" />
-                                  <span className="text-xs font-medium uppercase tracking-wide">Bill</span>
-                                </div>
-                                <p className="text-sm font-semibold text-gray-900">{expense.billNumber}</p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Description */}
-                          <div className="bg-red-50 rounded-lg p-3 border border-red-100">
-                            <p className="text-sm text-gray-700">{expense.description}</p>
-                          </div>
-
-                          {/* Amount */}
-                          <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-lg p-4 border border-red-100">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h6 className="text-sm font-semibold text-gray-800 mb-1">Expense Amount</h6>
-                                <p className="text-xs text-gray-600">Spent on {new Date(expense.date).toLocaleDateString()}</p>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-2xl font-bold text-red-600">₹{expense.amount.toLocaleString()}</div>
-                              </div>
+                              <button
+                                onClick={() => handleEditExpense(expense)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                              >
+                                <FiEdit className="h-5 w-5" />
+                              </button>
+                            </div>
+                            <div className="flex items-center justify-between pt-4 border-t">
+                              <span className="text-sm text-gray-500">{new Date(expense.date).toLocaleDateString()}</span>
+                              <span className="text-2xl font-bold text-red-600">₹{expense.amount.toLocaleString()}</span>
                             </div>
                           </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
+
+              {/* History section removed - using new responsive layout */}
             </div>
           )}
 
@@ -1530,13 +1722,10 @@ export default function FinancePage() {
               required
               value={incomeFormData.memberId}
               onChange={(e) => setIncomeFormData({ ...incomeFormData, memberId: e.target.value })}
-              options={[
-                { value: '', label: 'Select Member' },
-                ...getUsersByTeam(incomeFormData.teamId).map((user: any) => ({
-                  value: user._id,
-                  label: user.name,
-                }))
-              ]}
+              options={getUsersByTeam(incomeFormData.teamId, incomeFormData.projectId).map((user: any) => ({
+                value: user._id,
+                label: user.name,
+              }))}
             />
 
             <FormInput
@@ -1688,13 +1877,10 @@ export default function FinancePage() {
               required
               value={expenseFormData.memberId}
               onChange={(e) => setExpenseFormData({ ...expenseFormData, memberId: e.target.value })}
-              options={[
-                { value: '', label: 'Select Member' },
-                ...getUsersByTeam(expenseFormData.teamId).map((user: any) => ({
-                  value: user._id,
-                  label: user.name,
-                }))
-              ]}
+              options={getUsersByTeam(expenseFormData.teamId, expenseFormData.projectId).map((user: any) => ({
+                value: user._id,
+                label: user.name,
+              }))}
             />
 
             <FormInput
@@ -1780,13 +1966,10 @@ export default function FinancePage() {
               required
               value={payrollFormData.userId}
               onChange={(e) => setPayrollFormData({ ...payrollFormData, userId: e.target.value })}
-              options={[
-                { value: '', label: 'Select Member' },
-                ...getUsersByTeam(payrollFormData.teamId).map((user: any) => ({
-                  value: user._id,
-                  label: user.name,
-                }))
-              ]}
+              options={getUsersByTeam(payrollFormData.teamId).map((user: any) => ({
+                value: user._id,
+                label: user.name,
+              }))}
               disabled={!payrollFormData.teamId}
             />
 
@@ -1901,3 +2084,4 @@ export default function FinancePage() {
     </div>
   );
 }
+

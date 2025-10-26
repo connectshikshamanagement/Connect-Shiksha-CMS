@@ -81,14 +81,19 @@ export default function ProjectsPage() {
         user.roleIds && user.roleIds.some((role: any) => role.key === 'FOUNDER')
       );
 
+      // Ensure founder is included in project members (auto-check)
+      const founderId = founder?._id || founder?.id;
+      const memberIds = new Set(formData.projectMembers);
+      
+      // Auto-add founder if not already included
+      if (founderId && !memberIds.has(founderId)) {
+        memberIds.add(founderId);
+      }
+      
       // Prepare project data with automatic founder inclusion
       const projectData = {
         ...formData,
-        projectMembers: editingProject 
-          ? formData.projectMembers // Don't modify existing projects
-          : founder 
-            ? [...formData.projectMembers, (founder as any)._id] // Add founder to new projects
-            : formData.projectMembers
+        projectMembers: Array.from(memberIds) // Ensure founder is always included
       };
 
       if (editingProject) {

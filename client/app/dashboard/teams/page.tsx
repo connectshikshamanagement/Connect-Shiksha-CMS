@@ -188,11 +188,16 @@ export default function TeamsPage() {
   };
 
   const resetForm = () => {
+    // Auto-add founder to members when creating new team
+    const founder = users.find((user: any) => 
+      user.roleIds && user.roleIds.some((role: any) => role.key === 'FOUNDER')
+    );
+    
     setFormData({
       name: '',
       description: '',
       leadUserId: '',
-      members: [],
+      members: founder ? [founder._id] : [], // Auto-add founder
       category: '',
     });
     setEditingTeam(null);

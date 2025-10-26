@@ -67,14 +67,14 @@ export const taskAPI = {
 };
 
 export const incomeAPI = {
-  getAll: () => api.get('/income'),
+  getAll: (params?: any) => api.get('/income', { params }),
   create: (data: any) => api.post('/income', data),
   update: (id: string, data: any) => api.put(`/income/${id}`, data),
   delete: (id: string) => api.delete(`/income/${id}`),
 };
 
 export const expenseAPI = {
-  getAll: () => api.get('/expenses'),
+  getAll: (params?: any) => api.get('/expenses', { params }),
   create: (data: any) => api.post('/expenses', data),
   update: (id: string, data: any) => api.put(`/expenses/${id}`, data),
   delete: (id: string) => api.delete(`/expenses/${id}`),
