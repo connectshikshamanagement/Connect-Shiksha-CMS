@@ -43,6 +43,11 @@ router.post('/', authorize('finance.create'), async (req, res) => {
       cleanedBody.clientId = undefined;
     }
 
+    // If sourceRefId is provided but sourceRefModel is not, assume it's a Project
+    if (cleanedBody.sourceRefId && !cleanedBody.sourceRefModel) {
+      cleanedBody.sourceRefModel = 'Project';
+    }
+
     const income = await Income.create(cleanedBody);
 
     // Automatically compute profit sharing

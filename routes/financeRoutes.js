@@ -393,34 +393,30 @@ router.get('/summary', authorize('finance.read'), async (req, res) => {
     
     if (projectId) {
       // For specific project, get income by sourceRefId
-      console.log('🔍 Filtering income for projectId:', projectId);
       
       // Try both sourceRefId and team-based query
       const project = await Project.findById(projectId).populate('teamId');
       
       if (project && project.teamId) {
-        // Get income from the project's team (more inclusive)
+        // Get ONLY project-specific income (not team-wide)
+        // Match by sourceRefId only (sourceRefModel is optional)
+        // Convert string projectId to ObjectId for proper matching
         const projectIncomeResult = await Income.aggregate([
           { 
             $match: { 
               date: { $gte: startOfMonth, $lte: endOfMonth },
-              $or: [
-                { sourceRefId: projectId, sourceRefModel: 'Project' },
-                { teamId: project.teamId._id }
-              ]
+              sourceRefId: new mongoose.Types.ObjectId(projectId)
             } 
           },
           { $group: { _id: null, total: { $sum: '$amount' } } }
         ]);
         totalIncome = projectIncomeResult.length > 0 ? projectIncomeResult[0].total : 0;
-        console.log('💰 Total income found:', totalIncome);
       } else {
         const projectIncomeResult = await Income.aggregate([
           { 
             $match: { 
               date: { $gte: startOfMonth, $lte: endOfMonth },
-              sourceRefId: projectId,
-              sourceRefModel: 'Project'
+              sourceRefId: new mongoose.Types.ObjectId(projectId)
             } 
           },
           { $group: { _id: null, total: { $sum: '$amount' } } }
@@ -458,33 +454,29 @@ router.get('/summary', authorize('finance.read'), async (req, res) => {
     
     if (projectId) {
       // For specific project, get expenses by projectId
-      console.log('🔍 Filtering expenses for projectId:', projectId);
       
       // Get the project to access its teamId
       const project = await Project.findById(projectId).populate('teamId');
       
       if (project && project.teamId) {
-        // Get expenses from the project's team (more inclusive)
+        // Get ONLY project-specific expenses (not team-wide)
+        // Convert string projectId to ObjectId for proper matching
         const projectExpensesResult = await Expense.aggregate([
           { 
             $match: { 
               date: { $gte: startOfMonth, $lte: endOfMonth },
-              $or: [
-                { projectId: projectId },
-                { teamId: project.teamId._id }
-              ]
+              projectId: new mongoose.Types.ObjectId(projectId)
             } 
           },
           { $group: { _id: null, total: { $sum: '$amount' } } }
         ]);
         totalExpenses = projectExpensesResult.length > 0 ? projectExpensesResult[0].total : 0;
-        console.log('💸 Total expenses found:', totalExpenses);
       } else {
         const projectExpensesResult = await Expense.aggregate([
           { 
             $match: { 
               date: { $gte: startOfMonth, $lte: endOfMonth },
-              projectId: projectId
+              projectId: new mongoose.Types.ObjectId(projectId)
             } 
           },
           { $group: { _id: null, total: { $sum: '$amount' } } }
@@ -523,8 +515,7 @@ router.get('/summary', authorize('finance.read'), async (req, res) => {
     };
     
     if (projectId) {
-      projectBreakdownMatch.sourceRefId = projectId;
-      projectBreakdownMatch.sourceRefModel = 'Project';
+      projectBreakdownMatch.sourceRefId = new mongoose.Types.ObjectId(projectId);
     }
     
     const projectBreakdownResult = await Income.aggregate([
@@ -558,7 +549,7 @@ router.get('/summary', authorize('finance.read'), async (req, res) => {
     };
     
     if (projectId) {
-      expenseBreakdownMatch.projectId = projectId;
+      expenseBreakdownMatch.projectId = new mongoose.Types.ObjectId(projectId);
     } else if (teamId) {
       expenseBreakdownMatch.teamId = teamId;
     }
@@ -585,8 +576,7 @@ router.get('/summary', authorize('finance.read'), async (req, res) => {
     };
     
     if (projectId) {
-      topProjectsMatch.sourceRefId = projectId;
-      topProjectsMatch.sourceRefModel = 'Project';
+      topProjectsMatch.sourceRefId = new mongoose.Types.ObjectId(projectId);
     }
     
     const topProjectsResult = await Income.aggregate([
