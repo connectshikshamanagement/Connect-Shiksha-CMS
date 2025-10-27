@@ -135,10 +135,83 @@ export default function PayrollPage() {
         
         // Filter by selected project on client side if a project is selected
         if (selectedProject && Array.isArray(payoutsData)) {
+          // Get the project details to check current members
+          const project = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/${selectedProject}`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            },
+          }).then(res => res.json());
+          
+          const currentProjectMembers = project.success ? project.data?.projectMembers || [] : [];
+          
           payoutsData = payoutsData.filter((payout: any) => {
             const payoutProjectId = payout.projectId?._id || payout.projectId;
-            return payoutProjectId?.toString() === selectedProject;
+            const matchesProject = payoutProjectId?.toString() === selectedProject;
+            
+            if (!matchesProject) return false;
+            
+            // Check if this user is still a member of the project (unless they're the founder)
+            const userId = payout.userId?._id || payout.userId;
+            const isFounder = payout.userId?.email === 'founder@connectshiksha.com';
+            
+            // Founder is always included, others must be current project members
+            if (isFounder) return true;
+            
+            const isStillMember = currentProjectMembers.some((memberId: any) => 
+              memberId?.toString() === userId?.toString() || memberId?._id?.toString() === userId?.toString()
+            );
+            
+            // Only show payroll record if user is still a member of the project
+            return isStillMember;
           });
+        } else if (!selectedProject && Array.isArray(payoutsData)) {
+          // For "All Projects" view, filter out payroll records for users no longer in their projects
+          // Fetch all projects once to avoid multiple API calls
+          try {
+            const projectsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              },
+            });
+            const projectsData = await projectsResponse.json();
+            
+            const projectMembersMap = new Map();
+            if (projectsData.success && projectsData.data) {
+              projectsData.data.forEach((project: any) => {
+                projectMembersMap.set(
+                  project._id.toString(), 
+                  project.projectMembers || []
+                );
+              });
+            }
+            
+            payoutsData = payoutsData.filter((payout: any) => {
+              const payoutProjectId = payout.projectId?._id || payout.projectId;
+              
+              // Include payouts without a project
+              if (!payoutProjectId) return true;
+              
+              // Check if user is still in the project
+              const userId = payout.userId?._id || payout.userId;
+              const isFounder = payout.userId?.email === 'founder@connectshiksha.com';
+              
+              // Founder is always included
+              if (isFounder) return true;
+              
+              // Get current project members
+              const currentProjectMembers = projectMembersMap.get(payoutProjectId.toString()) || [];
+              
+              // Check if user is still a member
+              const isStillMember = currentProjectMembers.some((memberId: any) => 
+                memberId?.toString() === userId?.toString() || memberId?._id?.toString() === userId?.toString()
+              );
+              
+              return isStillMember;
+            });
+          } catch (error) {
+            console.error('Error filtering project members:', error);
+            // If error, don't filter (show all records to be safe)
+          }
         }
         
         setPayouts(payoutsData);
@@ -743,7 +816,19 @@ export default function PayrollPage() {
                       <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                         <p className="text-sm text-green-600 font-medium">Total Profit</p>
                         <p className="text-2xl font-bold text-green-700">₹{totalProfit.toLocaleString()}</p>
-                        <p className="text-xs text-green-500">{payouts.length > 0 ? `${payouts.length} payroll records` : 'No payroll records'}</p>
+                        <p className="text-xs text-green-500">
+                          {(() => {
+                            // Count actual payroll records (not filtered by profit)
+                            const allPayrollRecords = payouts.filter((p: any) => p.userId).length;
+                            if (allPayrollRecords > 0) {
+                              return `${allPayrollRecords} payroll record${allPayrollRecords > 1 ? 's' : ''}`;
+                            } else if (totalProfit > 0) {
+                              return 'Profit calculated, create records';
+                            } else {
+                              return 'No profit to distribute';
+                            }
+                          })()}
+                        </p>
                       </div>
                     </>
                   );
