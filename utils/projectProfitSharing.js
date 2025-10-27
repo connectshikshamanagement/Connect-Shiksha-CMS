@@ -35,6 +35,7 @@ exports.computeProjectProfitSharing = async (projectId) => {
     const profit = totalIncome - totalExpense;
 
     console.log(`📊 Project ${project.title}: Income: ₹${totalIncome}, Expense: ₹${totalExpense}, Profit: ₹${profit}`);
+    console.log(`📝 Income records count: ${incomeRecords.length}, Expense records count: ${expenseRecords.length}`);
 
     if (profit <= 0) {
       console.log('⚠️ No profit to distribute');
@@ -123,15 +124,19 @@ exports.computeProjectProfitSharing = async (projectId) => {
     const payrollRecords = [];
 
     for (const eligibleUser of eligibleUsers) {
-      // Check if payroll record already exists for this user/month
+      // Check if payroll record already exists for this user/month/project
+      // Try to find any record for this user + project (regardless of month to update stale data)
       let existingPayroll = await Payroll.findOne({
         userId: eligibleUser.user._id,
-        month: `${year}-${month.toString().padStart(2, '0')}`,
         projectId: projectId
-      });
+      }).sort('-createdAt'); // Get the most recent one
 
       if (existingPayroll) {
-        // Replace existing record instead of adding to it
+        // Store old amount for logging
+        const oldAmount = existingPayroll.profitShare;
+        // Always update to match current month and new profit amounts
+        existingPayroll.month = `${year}-${month.toString().padStart(2, '0')}`;
+        existingPayroll.year = year;
         existingPayroll.profitShare = eligibleUser.shareAmount;
         existingPayroll.description = eligibleUser.description;
         // Update project financial data
@@ -139,8 +144,14 @@ exports.computeProjectProfitSharing = async (projectId) => {
         existingPayroll.projectExpenses = totalExpense;
         existingPayroll.projectBudget = project.allocatedBudget || 0;
         existingPayroll.netProfit = profit;
+        // Keep the same status if already paid, otherwise set to pending
+        if (existingPayroll.status === 'paid') {
+          // Keep it as paid if it was already marked as paid
+        } else {
+          existingPayroll.status = 'pending';
+        }
         await existingPayroll.save();
-        console.log(`📝 Updated payroll for ${eligibleUser.user.name}: ₹${eligibleUser.shareAmount}`);
+        console.log(`📝 Updated payroll for ${eligibleUser.user.name}: ₹${oldAmount} → ₹${eligibleUser.shareAmount}`);
       } else {
         // Create new payroll record
         const userSalary = eligibleUser.user.salary || 0;

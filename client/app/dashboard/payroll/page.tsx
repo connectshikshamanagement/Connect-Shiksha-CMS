@@ -37,6 +37,7 @@ export default function PayrollPage() {
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [userProjects, setUserProjects] = useState([]);
+  const [projectMembers, setProjectMembers] = useState<any[]>([]);
   const { userRole, isFounder, isManager, isMember, loading: permissionsLoading } = usePermissions();
 
   // Form data states
@@ -77,6 +78,13 @@ export default function PayrollPage() {
     if (isMember) {
       fetchUserProjects();
     }
+    
+    // Fetch project members when a project is selected
+    if (selectedProject) {
+      fetchProjectMembers(selectedProject);
+    } else {
+      setProjectMembers([]);
+    }
   }, [selectedMonth, selectedYear, selectedProject, userRole, permissionsLoading]);
 
   // Removed fetchTeams - team filter removed
@@ -101,9 +109,9 @@ export default function PayrollPage() {
         params.append('month', selectedMonth.toString());
         params.append('year', selectedYear.toString());
       } else if (selectedProject) {
-        endpoint = `/project-profit/payroll/${selectedProject}`;
-        params.append('month', selectedMonth.toString());
-        params.append('year', selectedYear.toString());
+        // When a project is selected, still use the payroll endpoint with projectId filter
+        endpoint = '/payroll';
+        // Note: The backend should filter by projectId when it's in the payroll records
       } else if (isFounder || isManager) {
         // For founders and managers, use the payroll endpoint
         endpoint = '/payroll';
@@ -123,7 +131,17 @@ export default function PayrollPage() {
       console.log('Setting payouts to:', data.data.records || data.data);
       
       if (data.success) {
-        setPayouts(data.data.records || data.data);
+        let payoutsData = data.data.records || data.data;
+        
+        // Filter by selected project on client side if a project is selected
+        if (selectedProject && Array.isArray(payoutsData)) {
+          payoutsData = payoutsData.filter((payout: any) => {
+            const payoutProjectId = payout.projectId?._id || payout.projectId;
+            return payoutProjectId?.toString() === selectedProject;
+          });
+        }
+        
+        setPayouts(payoutsData);
         console.log('Payouts state updated');
       }
     } catch (error: any) {
@@ -305,6 +323,47 @@ export default function PayrollPage() {
       }
     } catch (error) {
       console.error('Error fetching user projects:', error);
+    }
+  };
+
+  const fetchProjectMembers = async (projectId: string) => {
+    if (!projectId) {
+      setProjectMembers([]);
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/${projectId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      
+      const data = await response.json();
+      if (data.success && data.data) {
+        // Get the project members (exclude founder)
+        const members = data.data.projectMembers || [];
+        // Store member data with populated info
+        const membersWithDetails = await Promise.all(
+          members.map(async (memberId: any) => {
+            try {
+              const memberResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${memberId}`, {
+                headers: {
+                  'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                },
+              });
+              const memberData = await memberResponse.json();
+              return memberData.success ? memberData.data : memberId;
+            } catch {
+              return memberId;
+            }
+          })
+        );
+        setProjectMembers(membersWithDetails);
+      }
+    } catch (error) {
+      console.error('Error fetching project members:', error);
+      setProjectMembers([]);
     }
   };
 
@@ -634,29 +693,61 @@ export default function PayrollPage() {
               </h3>
               
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
-                {!isMember && (
-                  <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                    <p className="text-sm text-purple-600 font-medium">Connect Shiksha Shares</p>
-                    <p className="text-2xl font-bold text-purple-700">
-                      ₹{Math.round(payouts.filter((p: any) => p.userId?.email === 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-purple-500">70% of total profits</p>
-                  </div>
-                )}
-                
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <p className="text-sm text-blue-600 font-medium">{isMember ? 'My Shares' : 'Team Shares'}</p>
-                  <p className="text-2xl font-bold text-blue-700">
-                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email !== 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
-                  </p>
-                  <p className="text-xs text-blue-500">30% of total profits</p>
-                </div>
-                
-                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                  <p className="text-sm text-green-600 font-medium">Total Participants</p>
-                  <p className="text-2xl font-bold text-green-700">{payouts.length}</p>
-                  <p className="text-xs text-green-500">Active payroll records</p>
-                </div>
+                {(() => {
+                  // Use financial summary if available (more accurate), otherwise calculate from payouts
+                  let totalProfit = 0;
+                  
+                  if (financialSummary?.netProfit !== undefined) {
+                    totalProfit = financialSummary.netProfit;
+                  } else {
+                    // Fallback: Calculate total profit by summing unique projects
+                    const projectsMap = new Map();
+                    payouts.forEach((p: any) => {
+                      if (p.projectId?._id || p.projectId) {
+                        const projectId = p.projectId._id || p.projectId;
+                        const profit = (p.projectIncome || 0) - (p.projectExpenses || 0);
+                        if (!projectsMap.has(projectId)) {
+                          projectsMap.set(projectId, profit);
+                        }
+                      }
+                    });
+                    totalProfit = Array.from(projectsMap.values()).reduce((sum, profit) => sum + profit, 0);
+                  }
+                  
+                  // Founder share is 70% of total profit
+                  const founderShare = Math.round(totalProfit * 0.7);
+                  
+                  // Team share is 30% of total profit
+                  const teamShare = Math.round(totalProfit * 0.3);
+                  
+                  return (
+                    <>
+                      {!isMember && (
+                        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                          <p className="text-sm text-purple-600 font-medium">Connect Shiksha Shares</p>
+                          <p className="text-2xl font-bold text-purple-700">
+                            ₹{founderShare.toLocaleString()}
+                          </p>
+                          <p className="text-xs text-purple-500">70% of total profits</p>
+                        </div>
+                      )}
+                      
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <p className="text-sm text-blue-600 font-medium">{isMember ? 'My Shares' : 'Team Shares'}</p>
+                        <p className="text-2xl font-bold text-blue-700">
+                          ₹{teamShare.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-blue-500">30% of total profits</p>
+                      </div>
+                      
+                      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <p className="text-sm text-green-600 font-medium">Total Profit</p>
+                        <p className="text-2xl font-bold text-green-700">₹{totalProfit.toLocaleString()}</p>
+                        <p className="text-xs text-green-500">{payouts.length > 0 ? `${payouts.length} payroll records` : 'No payroll records'}</p>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
               
               {payouts.length > 0 && (
@@ -665,9 +756,16 @@ export default function PayrollPage() {
                   <div className="space-y-2">
                     {Array.from(new Set(payouts.map((p: any) => p.projectId?.title).filter(Boolean))).map((projectTitle: string) => {
                       const projectPayouts = payouts.filter((p: any) => p.projectId?.title === projectTitle);
-                      const totalProjectProfit = Math.round(projectPayouts.reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
-                      const founderProfit = Math.round(projectPayouts.filter((p: any) => p.userId?.email === 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
-                      const teamProfit = Math.round(projectPayouts.filter((p: any) => p.userId?.email !== 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0));
+                      // Use the first payout record's project financial data (should be the same for all records of same project)
+                      const firstPayout: any = projectPayouts[0];
+                      if (!firstPayout) return null;
+                      // Calculate actual project profit (income - expenses) from stored data
+                      const projectIncome = firstPayout.projectIncome || 0;
+                      const projectExpenses = firstPayout.projectExpenses || 0;
+                      const totalProjectProfit = Math.round(projectIncome - projectExpenses);
+                      // Calculate founder share (70% of profit)
+                      const founderProfit = Math.round(totalProjectProfit * 0.7);
+                      const teamProfit = Math.round(totalProjectProfit * 0.3);
                       
                       return (
                         <div key={projectTitle} className="p-3 bg-gray-50 rounded-lg">
@@ -701,9 +799,24 @@ export default function PayrollPage() {
                   <div className="text-right">
                     <div className="text-3xl font-bold">
                       {(() => {
-                        const connectShikshaPayouts = payouts.filter((p: any) => p.userId?.email === 'founder@connectshiksha.com');
-                        const total = Math.round(connectShikshaPayouts.reduce((sum: number, p: any) => sum + (p.profitShare || p.netAmount || 0), 0));
-                        return `₹${total.toLocaleString()}`;
+                        // Use financial summary if available, otherwise calculate from payouts
+                        const totalProfit = financialSummary?.netProfit !== undefined 
+                          ? financialSummary.netProfit 
+                          : (() => {
+                              const projectsMap = new Map();
+                              payouts.forEach((p: any) => {
+                                if (p.projectId?._id || p.projectId) {
+                                  const projectId = p.projectId._id || p.projectId;
+                                  const profit = (p.projectIncome || 0) - (p.projectExpenses || 0);
+                                  if (!projectsMap.has(projectId)) {
+                                    projectsMap.set(projectId, profit);
+                                  }
+                                }
+                              });
+                              return Array.from(projectsMap.values()).reduce((sum, profit) => sum + profit, 0);
+                            })();
+                        const founderShare = Math.round(totalProfit * 0.7);
+                        return `₹${founderShare.toLocaleString()}`;
                       })()}
                     </div>
                     <div className="text-purple-100 text-sm">Total Connect Shiksha Shares</div>
@@ -711,7 +824,7 @@ export default function PayrollPage() {
                 </div>
               </div>
            
-            
+              
             <div className="rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -720,7 +833,26 @@ export default function PayrollPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold">
-                    ₹{Math.round(payouts.filter((p: any) => p.userId?.email !== 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + (p.profitShare || 0), 0)).toLocaleString()}
+                    {(() => {
+                      // Use financial summary if available, otherwise calculate from payouts
+                      const totalProfit = financialSummary?.netProfit !== undefined 
+                        ? financialSummary.netProfit 
+                        : (() => {
+                            const projectsMap = new Map();
+                            payouts.forEach((p: any) => {
+                              if (p.projectId?._id || p.projectId) {
+                                const projectId = p.projectId._id || p.projectId;
+                                const profit = (p.projectIncome || 0) - (p.projectExpenses || 0);
+                                if (!projectsMap.has(projectId)) {
+                                  projectsMap.set(projectId, profit);
+                                }
+                              }
+                            });
+                            return Array.from(projectsMap.values()).reduce((sum, profit) => sum + profit, 0);
+                          })();
+                      const teamShare = Math.round(totalProfit * 0.3);
+                      return `₹${teamShare.toLocaleString()}`;
+                    })()}
                   </div>
                   <div className="text-blue-100 text-sm">{isMember ? 'Total My Shares' : 'Total Team Shares'}</div>
                 </div>
@@ -744,7 +876,11 @@ export default function PayrollPage() {
                 </div>
                 
                 <div className="p-4">
-                  {payouts.filter((payout: any) => payout.userId?.email === 'founder@connectshiksha.com').map((payout: any) => (
+                  {payouts.filter((payout: any) => {
+                    const isFounder = payout.userId?.email === 'founder@connectshiksha.com';
+                    const hasProfit = (payout.projectIncome || 0) - (payout.projectExpenses || 0) > 0;
+                    return isFounder && hasProfit;
+                  }).map((payout: any) => (
                     <div key={payout._id} className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-purple-200">
                       <div className="flex justify-between items-start mb-3">
                         <div>
@@ -809,12 +945,45 @@ export default function PayrollPage() {
                     </div>
                   ))}
                   
-                  {payouts.filter((payout: any) => payout.userId?.email === 'founder@connectshiksha.com').length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      <FiUsers className="mx-auto mb-2 h-8 w-8" />
-                      <p>No Connect Shiksha Shares found</p>
+                  {(() => {
+                    const founderPayouts = payouts.filter((payout: any) => {
+                      const isFounder = payout.userId?.email === 'founder@connectshiksha.com';
+                      const hasProfit = (payout.projectIncome || 0) - (payout.projectExpenses || 0) > 0;
+                      return isFounder && hasProfit;
+                    });
+                    
+                    return founderPayouts.length === 0 && (
+                      <div className="text-center py-8">
+                        {financialSummary?.netProfit && financialSummary.netProfit > 0 ? (
+                        <>
+                          <div className="bg-white rounded-lg p-6 shadow-sm border border-purple-200">
+                            <div className="flex justify-between items-center mb-4">
+                              <div>
+                                <h4 className="font-semibold text-gray-900">Calculated Share</h4>
+                                <p className="text-sm text-gray-600">Based on current financial data</p>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-2xl font-bold text-purple-600">
+                                  ₹{Math.round((financialSummary.netProfit || 0) * 0.7).toLocaleString()}
+                                </div>
+                                <div className="text-sm text-gray-500">70% Founder Share</div>
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded">
+                              <p><strong>Note:</strong> Click "Compute Profit Sharing" to create payroll records and mark as paid.</p>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <FiUsers className="mx-auto mb-2 h-8 w-8" />
+                          <p>No Connect Shiksha Shares found</p>
+                          <p className="text-xs mt-2">Compute profit sharing to generate records</p>
+                        </div>
+                      )}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -828,84 +997,192 @@ export default function PayrollPage() {
                 </h3>
               </div>
               
-              <div className="p-4 max-h-96 overflow-y-auto">
-                {payouts.filter((payout: any) => payout.userId?.email !== 'founder@connectshiksha.com').map((payout: any) => (
-                  <div key={payout._id} className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-blue-200">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h4 className="font-semibold text-gray-900">{payout.userId?.name}</h4>
-                        <p className="text-sm text-gray-600">{payout.userId?.email}</p>
-                        <p className="text-xs text-blue-600">{payout.projectId?.title || 'N/A'}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xl font-bold text-blue-600">
-                          ₹{Math.round(payout.profitShare || 0).toLocaleString()}
-                        </div>
-                        <div className="text-sm text-gray-500">Team Share</div>
-                      </div>
-                    </div>
+              <div className="p-4 max-h-[1000px] overflow-y-auto">
+                {(() => {
+                  // Filter out payouts for projects with zero or negative profit
+                  const teamPayouts = payouts.filter((payout: any) => {
+                    const isNotFounder = payout.userId?.email !== 'founder@connectshiksha.com';
+                    const hasProfit = (payout.projectIncome || 0) - (payout.projectExpenses || 0) > 0;
+                    return isNotFounder && hasProfit;
+                  });
+                  
+                  // Group team payouts by project
+                  const projectGroups = new Map();
+                  
+                  teamPayouts.forEach((payout: any) => {
+                    const projectId = payout.projectId?._id || payout.projectId;
+                    const projectTitle = payout.projectId?.title || 'Unassigned';
                     
-                    <div className="flex justify-between items-center text-sm">
-                      <div className="flex flex-wrap gap-2">
-                        <span className="text-green-600 text-xs">
-                          Income: ₹{(payout.projectIncome || 0).toLocaleString()}
-                        </span>
-                        <span className="text-blue-600 text-xs">
-                          Budget: ₹{(payout.projectBudget || 0).toLocaleString()}
-                        </span>
-                        <span className="text-red-600 text-xs">
-                          Expenses: ₹{(payout.projectExpenses || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-semibold text-green-600">
-                          ₹{(payout.netAmount || 0).toLocaleString()}
-                        </div>
-                        <div className="text-xs text-gray-500">Net Amount</div>
-                      </div>
-                    </div>
+                    if (!projectGroups.has(projectId)) {
+                      projectGroups.set(projectId, {
+                        projectTitle,
+                        projectId,
+                        payouts: []
+                      });
+                    }
                     
-                    <div className="mt-3 flex justify-between items-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          payout.status === 'paid' ? 'bg-green-100 text-green-800' :
-                          payout.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
-                          payout.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {payout.status}
-                        </span>
+                    projectGroups.get(projectId).payouts.push(payout);
+                  });
+                  
+                  // Convert to array
+                  const projectGroupsArray = Array.from(projectGroups.values());
+                  
+                  return projectGroupsArray.map((group) => (
+                    <div key={group.projectId} className="mb-6">
+                      <div className="mb-3 border-b border-blue-200 pb-2">
+                        <h4 className="font-semibold text-blue-700">{group.projectTitle}</h4>
+                        <p className="text-xs text-gray-500">{group.payouts.length} team member{group.payouts.length !== 1 ? 's' : ''}</p>
+                      </div>
                       
-                      {canMarkAsPaid && payout.status === 'pending' && (
-                          <Button
-                            size="sm"
-                            variant="success"
-                            onClick={() => handleMarkAsPaid(payout._id)}
-                          >
-                            <FiCheck className="mr-1" />
-                            Pay
-                          </Button>
-                        )}
+                      {group.payouts.map((payout: any) => (
+                        <div key={payout._id} className="bg-white rounded-lg p-4 mb-3 shadow-sm border border-blue-200">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <h4 className="font-semibold text-gray-900">{payout.userId?.name}</h4>
+                              <p className="text-sm text-gray-600">{payout.userId?.email}</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xl font-bold text-blue-600">
+                                ₹{Math.round(payout.profitShare || 0).toLocaleString()}
+                              </div>
+                              <div className="text-sm text-gray-500">Team Share</div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center text-sm">
+                            <div className="flex flex-wrap gap-2">
+                              <span className="text-green-600 text-xs">
+                                Income: ₹{(payout.projectIncome || 0).toLocaleString()}
+                              </span>
+                              <span className="text-blue-600 text-xs">
+                                Budget: ₹{(payout.projectBudget || 0).toLocaleString()}
+                              </span>
+                              <span className="text-red-600 text-xs">
+                                Expenses: ₹{(payout.projectExpenses || 0).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-lg font-semibold text-green-600">
+                                ₹{(payout.netAmount || 0).toLocaleString()}
+                              </div>
+                              <div className="text-xs text-gray-500">Net Amount</div>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3 flex justify-between items-center">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                payout.status === 'paid' ? 'bg-green-100 text-green-800' :
+                                payout.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
+                                payout.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {payout.status}
+                              </span>
+                            
+                            {canMarkAsPaid && payout.status === 'pending' && (
+                                <Button
+                                  size="sm"
+                                  variant="success"
+                                  onClick={() => handleMarkAsPaid(payout._id)}
+                                >
+                                  <FiCheck className="mr-1" />
+                                  Pay
+                                </Button>
+                              )}
+                          </div>
+                          
+                          {payout.description && (
+                            <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                              {payout.description}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    
-                    {payout.description && (
-                      <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                        {payout.description}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  ));
+                })()}
                 
-                {payouts.filter((payout: any) => payout.userId?.email !== 'founder@connectshiksha.com').length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <FiUsers className="mx-auto mb-2 h-8 w-8" />
-                    <p>No team member shares found</p>
-                  </div>
-                )}
+                {(() => {
+                  const teamPayoutsFiltered = payouts.filter((payout: any) => {
+                    const isNotFounder = payout.userId?.email !== 'founder@connectshiksha.com';
+                    const hasProfit = (payout.projectIncome || 0) - (payout.projectExpenses || 0) > 0;
+                    return isNotFounder && hasProfit;
+                  });
+                  
+                  return teamPayoutsFiltered.length === 0 && (
+                    <div className="text-center py-8">
+                      {financialSummary?.netProfit && financialSummary.netProfit > 0 ? (
+                        <>
+                          <div className="bg-white rounded-lg p-6 shadow-sm border border-blue-200">
+                            <div className="flex justify-between items-center mb-4">
+                              <div>
+                                <h4 className="font-semibold text-gray-900">Calculated Team Share (Total)</h4>
+                                <p className="text-sm text-gray-600">Based on current financial data</p>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-2xl font-bold text-blue-600">
+                                  ₹{Math.round((financialSummary.netProfit || 0) * 0.3).toLocaleString()}
+                                </div>
+                                <div className="text-sm text-gray-500">30% Team Share</div>
+                              </div>
+                            </div>
+                            
+                            {/* Show eligible team members if project is selected */}
+                            {selectedProject && projectMembers && projectMembers.length > 0 && (
+                              <div className="mt-4 mb-4">
+                                <p className="text-sm font-medium text-gray-700 mb-2">Eligible Team Members ({projectMembers.length}):</p>
+                                <div className="space-y-2">
+                                  {projectMembers.map((member: any, index: number) => {
+                                    const individualShare = (financialSummary?.netProfit || 0) * 0.3 / projectMembers.length;
+                                    return (
+                                      <div key={index} className="flex justify-between items-center bg-blue-50 p-2 rounded border border-blue-100">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm">
+                                            {member.name?.charAt(0) || 'U'}
+                                          </div>
+                                          <div>
+                                            <p className="text-sm font-medium text-gray-900">{member.name || 'N/A'}</p>
+                                            <p className="text-xs text-gray-500">{member.email || ''}</p>
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="text-sm font-bold text-blue-600">
+                                            ₹{Math.round(individualShare).toLocaleString()}
+                                          </p>
+                                          <p className="text-xs text-gray-500">Share per member</p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            
+                            <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded">
+                              <p><strong>Note:</strong> Click "Compute Profit Sharing" to create payroll records for team members and mark as paid.</p>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <FiUsers className="mx-auto mb-2 h-8 w-8" />
+                          <p>No team member shares found</p>
+                          <p className="text-xs mt-2">
+                            {financialSummary?.netProfit === 0 
+                              ? 'This project has no profit to distribute' 
+                              : 'Compute profit sharing to generate records'
+                            }
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
 
-              {payouts.length === 0 && (
+              {payouts.length === 0 && !financialSummary?.netProfit && (
                 <div className="p-12 text-center">
                   <FiDollarSign className="mx-auto mb-4 h-12 w-12 text-gray-400" />
                   <p className="text-lg font-medium text-gray-900">
