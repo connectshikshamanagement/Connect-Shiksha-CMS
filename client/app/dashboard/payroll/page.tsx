@@ -15,6 +15,15 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { FiDownload, FiCheck, FiDollarSign, FiUsers, FiTrendingUp, FiFilter, FiRefreshCw, FiPlus, FiMinus, FiCreditCard } from 'react-icons/fi';
 
 export default function PayrollPage() {
+  // Helper function to get current date in local timezone (YYYY-MM-DD format)
+  const getCurrentDate = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [payouts, setPayouts] = useState([]);
   const [projects, setProjects] = useState([]);
   // Removed: const [teams, setTeams] = useState([]);
@@ -37,7 +46,7 @@ export default function PayrollPage() {
     sourceType: 'Product Sales',
     description: '',
     projectId: '',
-    date: new Date().toISOString().split('T')[0]
+    date: getCurrentDate()
   });
 
   const [expenseFormData, setExpenseFormData] = useState({
@@ -45,7 +54,7 @@ export default function PayrollPage() {
     category: 'Other',
     description: '',
     projectId: '',
-    date: new Date().toISOString().split('T')[0]
+    date: getCurrentDate()
   });
 
   useEffect(() => {
@@ -85,15 +94,16 @@ export default function PayrollPage() {
         month: selectedMonth.toString(),
         year: selectedYear.toString()
       });
-      
-      // Temporarily remove month/year filtering to see all records
-      // const params = new URLSearchParams();
 
       // Role-based data fetching
       if (isMember) {
         endpoint = '/project-profit/my-shares';
+        params.append('month', selectedMonth.toString());
+        params.append('year', selectedYear.toString());
       } else if (selectedProject) {
         endpoint = `/project-profit/payroll/${selectedProject}`;
+        params.append('month', selectedMonth.toString());
+        params.append('year', selectedYear.toString());
       } else if (isFounder || isManager) {
         // For founders and managers, use the payroll endpoint
         endpoint = '/payroll';
@@ -162,6 +172,7 @@ export default function PayrollPage() {
         }
       );
       const data = await response.json();
+      
       if (data.success) {
         setFinancialSummary(data.data);
       }
@@ -319,7 +330,7 @@ export default function PayrollPage() {
       
       showToast.success('Income entry added successfully!');
       setShowIncomeModal(false);
-      setIncomeFormData({ amount: '', source: '', sourceType: 'Product Sales', description: '', projectId: '', date: new Date().toISOString().split('T')[0] });
+      setIncomeFormData({ amount: '', source: '', sourceType: 'Product Sales', description: '', projectId: '', date: getCurrentDate() });
       
       // Add small delay to ensure backend processing is complete
       setTimeout(() => {
@@ -352,7 +363,7 @@ export default function PayrollPage() {
       
       showToast.success('Expense entry added successfully!');
       setShowExpenseModal(false);
-      setExpenseFormData({ amount: '', category: 'Other', description: '', projectId: '', date: new Date().toISOString().split('T')[0] });
+      setExpenseFormData({ amount: '', category: 'Other', description: '', projectId: '', date: getCurrentDate() });
       
       // Add small delay to ensure backend processing is complete
       setTimeout(() => {
@@ -463,17 +474,17 @@ export default function PayrollPage() {
               </select>
             </div>
             {!isMember && (
-              <div>
+              <div className="flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Project</label>
                 <select
                   value={selectedProject}
                   onChange={(e) => setSelectedProject(e.target.value)}
-                  className="rounded-lg border border-gray-300 px-3 py-2"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
                 >
                   <option value="">All Projects</option>
                   {projects.map((project: any) => (
                     <option key={project._id} value={project._id}>
-                      {project.title}
+                      {project.title} ({project.category || 'N/A'})
                     </option>
                   ))}
                 </select>
@@ -500,7 +511,7 @@ export default function PayrollPage() {
                     </div>
                     <FiDollarSign className="h-8 w-8 text-green-200" />
                   </div>
-                  {financialSummary.projectBreakdown && (
+                  {financialSummary.projectBreakdown && Object.keys(financialSummary.projectBreakdown).length > 0 && (
                     <div className="mt-2 text-xs text-green-100">
                       {Object.entries(financialSummary.projectBreakdown).map(([project, income]: [string, any]) => (
                         <div key={project} className="flex justify-between">
@@ -509,6 +520,9 @@ export default function PayrollPage() {
                         </div>
                       ))}
                     </div>
+                  )}
+                  {financialSummary.projectBreakdown && Object.keys(financialSummary.projectBreakdown).length === 0 && (
+                    <div className="mt-2 text-xs text-green-100">No project-linked income</div>
                   )}
                 </div>
                 
@@ -522,7 +536,7 @@ export default function PayrollPage() {
                     </div>
                     <FiDollarSign className="h-8 w-8 text-red-200" />
                   </div>
-                  {financialSummary.expenseBreakdown && (
+                  {financialSummary.expenseBreakdown && Object.keys(financialSummary.expenseBreakdown).length > 0 && (
                     <div className="mt-2 text-xs text-red-100">
                       {Object.entries(financialSummary.expenseBreakdown).map(([category, amount]: [string, any]) => (
                         <div key={category} className="flex justify-between">
@@ -531,6 +545,9 @@ export default function PayrollPage() {
                         </div>
                       ))}
                     </div>
+                  )}
+                  {financialSummary.expenseBreakdown && Object.keys(financialSummary.expenseBreakdown).length === 0 && (
+                    <div className="mt-2 text-xs text-red-100">No expenses</div>
                   )}
                 </div>
                 
@@ -569,7 +586,7 @@ export default function PayrollPage() {
           )}
 
           {/* Summary Cards */}
-          <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-5">
+          <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
             <div className="rounded-lg bg-white p-6 shadow">
               <p className="text-sm font-medium text-gray-600">Income</p>
               <p className="mt-2 text-2xl font-bold text-green-600">
@@ -598,20 +615,12 @@ export default function PayrollPage() {
               </p>
             </div>
             <div className="rounded-lg bg-white p-6 shadow">
-              <p className="text-sm font-medium text-gray-600">Profit Shares</p>
-              <p className="mt-2 text-2xl font-bold text-purple-600">
-                ₹{totalShares.toLocaleString()}
-              </p>
-              {analytics && (
-                <p className="mt-1 text-xs text-gray-500">
-                  {analytics.summary?.founderShares > 0 && `Founder: ₹${analytics.summary.founderShares.toLocaleString()}`}
-                </p>
-              )}
-            </div>
-            <div className="rounded-lg bg-white p-6 shadow">
-              <p className="text-sm font-medium text-gray-600">Net Amount</p>
+              <p className="text-sm font-medium text-gray-600">Net Profit</p>
               <p className="mt-2 text-2xl font-bold text-gray-900">
-                ₹{totalPayout.toLocaleString()}
+                ₹{isMember 
+                  ? payouts.filter((p: any) => p.userId?.email !== 'founder@connectshiksha.com').reduce((sum: number, p: any) => sum + ((p.projectIncome || 0) - (p.projectExpenses || 0)), 0).toLocaleString()
+                  : (financialSummary?.netProfit?.toLocaleString() || '0')
+                }
               </p>
             </div>
           </div>

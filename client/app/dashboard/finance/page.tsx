@@ -54,11 +54,20 @@ export default function FinancePage() {
     type: 'all' // 'all', 'income', 'expense'
   });
 
+  // Helper function to get current date in local timezone (YYYY-MM-DD format)
+  const getCurrentDate = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Form data
   const [incomeFormData, setIncomeFormData] = useState({
     sourceType: '',
-    amount: 0,
-    date: new Date().toISOString().split('T')[0],
+    amount: '',
+    date: getCurrentDate(),
     description: '',
     paymentMethod: 'bank_transfer',
     transactionId: '',
@@ -71,8 +80,8 @@ export default function FinancePage() {
 
   const [expenseFormData, setExpenseFormData] = useState({
     category: '',
-    amount: 0,
-    date: new Date().toISOString().split('T')[0],
+    amount: '',
+    date: getCurrentDate(),
     description: '',
     paymentMethod: 'bank_transfer',
     vendorName: '',
@@ -86,13 +95,13 @@ export default function FinancePage() {
     userId: '',
     teamId: '',
     month: '',
-    salaryAmount: 0,
+    salaryAmount: '',
     notes: '',
   });
 
   const [budgetFormData, setBudgetFormData] = useState({
-    monthlyBudget: 0,
-    creditLimit: 0,
+    monthlyBudget: '',
+    creditLimit: '',
   });
 
   useEffect(() => {
@@ -248,7 +257,7 @@ export default function FinancePage() {
   const handleIncomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!incomeFormData.sourceType || incomeFormData.amount <= 0 || !incomeFormData.teamId || !incomeFormData.memberId) {
+    if (!incomeFormData.sourceType || !incomeFormData.amount || Number(incomeFormData.amount) <= 0 || !incomeFormData.teamId || !incomeFormData.memberId) {
       showToast.error('Please fill in all required fields including team and member selection');
       return;
     }
@@ -259,6 +268,7 @@ export default function FinancePage() {
       // Clean the form data to handle empty clientId and convert projectId to sourceRefId/sourceRefModel
       const cleanedIncomeData = {
         ...incomeFormData,
+        amount: Number(incomeFormData.amount),
         clientId: incomeFormData.clientId === '' ? undefined : incomeFormData.clientId,
         // Convert projectId to sourceRefId and sourceRefModel for proper linking
         sourceRefId: incomeFormData.projectId || undefined,
@@ -298,7 +308,7 @@ export default function FinancePage() {
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!expenseFormData.category || expenseFormData.amount <= 0 || !expenseFormData.description || !expenseFormData.teamId || !expenseFormData.memberId) {
+    if (!expenseFormData.category || !expenseFormData.amount || Number(expenseFormData.amount) <= 0 || !expenseFormData.description || !expenseFormData.teamId || !expenseFormData.memberId) {
       showToast.error('Please fill in all required fields including team and member selection');
       return;
     }
@@ -306,11 +316,16 @@ export default function FinancePage() {
     const loadingToast = showToast.loading(editingItem ? 'Updating expense...' : 'Creating expense...');
 
     try {
+      const formDataWithNumber = {
+        ...expenseFormData,
+        amount: Number(expenseFormData.amount)
+      };
+
       if (editingItem) {
-        await expenseAPI.update(editingItem._id, expenseFormData);
+        await expenseAPI.update(editingItem._id, formDataWithNumber);
         showToast.success('Expense updated successfully!');
       } else {
-        await expenseAPI.create(expenseFormData);
+        await expenseAPI.create(formDataWithNumber);
         showToast.success('Expense created successfully! Awaiting approval.');
       }
       
@@ -337,7 +352,7 @@ export default function FinancePage() {
     setEditingItem(income);
     setIncomeFormData({
       sourceType: income.sourceType,
-      amount: income.amount,
+      amount: income.amount.toString(),
       date: income.date,
       description: income.description || '',
       paymentMethod: income.paymentMethod || 'bank_transfer',
@@ -355,7 +370,7 @@ export default function FinancePage() {
     setEditingItem(expense);
     setExpenseFormData({
       category: expense.category,
-      amount: expense.amount,
+      amount: expense.amount.toString(),
       date: expense.date,
       description: expense.description,
       paymentMethod: expense.paymentMethod || 'bank_transfer',
@@ -371,8 +386,8 @@ export default function FinancePage() {
   const resetIncomeForm = () => {
     setIncomeFormData({
       sourceType: '',
-      amount: 0,
-      date: new Date().toISOString().split('T')[0],
+      amount: '',
+      date: getCurrentDate(),
       description: '',
       paymentMethod: 'bank_transfer',
       transactionId: '',
@@ -388,8 +403,8 @@ export default function FinancePage() {
   const resetExpenseForm = () => {
     setExpenseFormData({
       category: '',
-      amount: 0,
-      date: new Date().toISOString().split('T')[0],
+      amount: '',
+      date: getCurrentDate(),
       description: '',
       paymentMethod: 'bank_transfer',
       vendorName: '',
@@ -404,7 +419,7 @@ export default function FinancePage() {
   const handlePayrollSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!payrollFormData.userId || !payrollFormData.teamId || !payrollFormData.month || payrollFormData.salaryAmount <= 0) {
+    if (!payrollFormData.userId || !payrollFormData.teamId || !payrollFormData.month || !payrollFormData.salaryAmount || Number(payrollFormData.salaryAmount) <= 0) {
       showToast.error('Please fill in all required fields');
       return;
     }
@@ -412,11 +427,16 @@ export default function FinancePage() {
     const loadingToast = showToast.loading(editingItem ? 'Updating payroll...' : 'Creating payroll...');
 
     try {
+      const formDataWithNumber = {
+        ...payrollFormData,
+        salaryAmount: Number(payrollFormData.salaryAmount)
+      };
+
       if (editingItem) {
-        await payrollAPI.update(editingItem._id, payrollFormData);
+        await payrollAPI.update(editingItem._id, formDataWithNumber);
         showToast.success('Payroll updated successfully!');
       } else {
-        await payrollAPI.create(payrollFormData);
+        await payrollAPI.create(formDataWithNumber);
         showToast.success('Payroll created successfully!');
       }
       
@@ -446,11 +466,21 @@ export default function FinancePage() {
       return;
     }
 
+    if (!budgetFormData.monthlyBudget || Number(budgetFormData.monthlyBudget) <= 0) {
+      showToast.error('Please enter a valid monthly budget');
+      return;
+    }
+
     const loadingToast = showToast.loading('Updating team budget...');
 
     try {
-      console.log('Updating budget for team:', selectedTeam._id, 'with data:', budgetFormData);
-      await financeAPI.updateTeamBudget(selectedTeam._id, budgetFormData);
+      const budgetDataWithNumbers = {
+        monthlyBudget: Number(budgetFormData.monthlyBudget),
+        creditLimit: Number(budgetFormData.creditLimit) || 0
+      };
+
+      console.log('Updating budget for team:', selectedTeam._id, 'with data:', budgetDataWithNumbers);
+      await financeAPI.updateTeamBudget(selectedTeam._id, budgetDataWithNumbers);
       showToast.dismiss(loadingToast);
       showToast.success('Team budget updated successfully!');
       setShowBudgetModal(false);
@@ -570,7 +600,7 @@ export default function FinancePage() {
       userId: '',
       teamId: '',
       month: selectedMonth,
-      salaryAmount: 0,
+      salaryAmount: '',
       notes: '',
     });
     setEditingItem(null);
@@ -578,8 +608,8 @@ export default function FinancePage() {
 
   const resetBudgetForm = () => {
     setBudgetFormData({
-      monthlyBudget: 0,
-      creditLimit: 0,
+      monthlyBudget: '',
+      creditLimit: '',
     });
     setSelectedTeam(null);
   };
@@ -587,14 +617,25 @@ export default function FinancePage() {
   const handleOpenBudgetModal = (team: any) => {
     setSelectedTeam(team);
     setBudgetFormData({
-      monthlyBudget: team.monthlyBudget || 0,
-      creditLimit: team.creditLimit || 0,
+      monthlyBudget: team.monthlyBudget?.toString() || '',
+      creditLimit: team.creditLimit?.toString() || '',
     });
     setShowBudgetModal(true);
   };
 
-  const totalIncome = teamFinancials.reduce((sum: number, team: any) => sum + team.totalIncome, 0);
-  const totalExpenses = teamFinancials.reduce((sum: number, team: any) => sum + team.totalExpense, 0);
+  // Calculate filtered totals based on active filters
+  const totalIncome = filters.teamId || filters.projectId || filters.memberId 
+    ? (filters.projectId 
+        ? projectFinancials.reduce((sum: number, proj: any) => sum + (proj.totalIncome || 0), 0)
+        : teamFinancials.reduce((sum: number, team: any) => sum + team.totalIncome, 0))
+    : teamFinancials.reduce((sum: number, team: any) => sum + team.totalIncome, 0);
+  
+  const totalExpenses = filters.teamId || filters.projectId || filters.memberId
+    ? (filters.projectId 
+        ? projectFinancials.reduce((sum: number, proj: any) => sum + (proj.totalExpense || 0), 0)
+        : teamFinancials.reduce((sum: number, team: any) => sum + team.totalExpense, 0))
+    : teamFinancials.reduce((sum: number, team: any) => sum + team.totalExpense, 0);
+  
   const totalPayroll = teamFinancials.reduce((sum: number, team: any) => sum + team.totalPayroll, 0);
   const netProfit = totalIncome - totalExpenses - totalPayroll;
 
@@ -654,7 +695,7 @@ export default function FinancePage() {
                 Clear Filters
               </Button>
             </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormSelect
                 label="Filter by Team"
                 value={filters.teamId}
@@ -677,20 +718,6 @@ export default function FinancePage() {
                   ...getProjectsByTeam(filters.teamId).map((project: any) => ({
                     value: project._id,
                     label: project.title,
-                  }))
-                ]}
-                disabled={!filters.teamId}
-              />
-              
-              <FormSelect
-                label="Filter by Member"
-                value={filters.memberId}
-                onChange={(e) => handleFilterChange('memberId', e.target.value)}
-                options={[
-                  { value: '', label: 'All Members' },
-                  ...getUsersByTeam(filters.teamId).map((user: any) => ({
-                    value: user._id,
-                    label: user.name,
                   }))
                 ]}
                 disabled={!filters.teamId}
@@ -1187,7 +1214,7 @@ export default function FinancePage() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900">Financial History</h3>
-                  <p className="text-sm text-gray-600">Track all income and expense transactions</p>
+                  <p className="text-sm text-gray-600">Track all income and expense transactions grouped by project</p>
                 </div>
                 
                 {/* Type Filter */}
@@ -1225,197 +1252,196 @@ export default function FinancePage() {
                 </div>
               </div>
 
-              {/* Desktop: Side by Side Layout */}
-              <div className="hidden lg:grid lg:grid-cols-2 gap-6">
-                {/* Income Section */}
-                {(filters.type === 'all' || filters.type === 'income') && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <FiTrendingUp className="h-5 w-5 text-green-600" />
-                      </div>
-                      <h4 className="text-lg font-semibold text-gray-900">Income History</h4>
-                      <span className="ml-auto text-sm font-medium text-green-600">({incomeHistory.length})</span>
+              {/* Project-wise Combined History */}
+              {(() => {
+                // Group income and expenses by project
+                const projectMap = new Map<any, { project: any; income: any[]; expenses: any[] }>();
+                
+                // Add income items
+                incomeHistory.forEach((income: any) => {
+                  const projectId = income.sourceRefId || income.projectId?._id || income.projectId || 'no-project';
+                  const projectName = income.sourceRefId 
+                    ? (projects.find((p: any) => p._id.toString() === income.sourceRefId) as any)?.title || 'Unknown Project'
+                    : 'No Project';
+                  
+                  if (!projectMap.has(projectId)) {
+                    projectMap.set(projectId, { 
+                      project: { id: projectId, name: projectName },
+                      income: [], 
+                      expenses: [] 
+                    });
+                  }
+                  
+                  projectMap.get(projectId)!.income.push(income);
+                });
+                
+                // Add expense items
+                expenseHistory.forEach((expense: any) => {
+                  const projectId = expense.projectId?._id || expense.projectId || 'no-project';
+                  const projectName = expense.projectId?._id
+                    ? (projects.find((p: any) => p._id.toString() === expense.projectId._id) as any)?.title || 'Unknown Project'
+                    : 'No Project';
+                  
+                  if (!projectMap.has(projectId)) {
+                    projectMap.set(projectId, { 
+                      project: { id: projectId, name: projectName },
+                      income: [], 
+                      expenses: [] 
+                    });
+                  }
+                  
+                  projectMap.get(projectId)!.expenses.push(expense);
+                });
+                
+                const projectList = Array.from(projectMap.values());
+                
+                // Filter based on type
+                const filteredProjects = projectList.filter(item => {
+                  if (filters.type === 'income') return item.income.length > 0;
+                  if (filters.type === 'expense') return item.expenses.length > 0;
+                  return true;
+                });
+                
+                if (filteredProjects.length === 0) {
+                  return (
+                    <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
+                      <FiFolder className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Financial Records</h3>
+                      <p className="text-gray-500">Financial transactions will appear here once they are recorded.</p>
                     </div>
-
-                    {incomeHistory.length === 0 ? (
-                      <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
-                        <FiDollarSign className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Income Records</h3>
-                        <p className="text-gray-500">Income transactions will appear here</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                        {incomeHistory.map((income: any) => (
-                          <div key={income._id} className="rounded-lg bg-white p-4 shadow-sm border border-green-100 hover:shadow-md transition-all">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <h5 className="font-semibold text-gray-900">{income.sourceType}</h5>
-                                <p className="text-xs text-gray-500">{income.receivedByUserId?.name || 'N/A'}</p>
-                              </div>
-                              <div className="flex gap-1">
-                                <button
-                                  onClick={() => handleEditIncome(income)}
-                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                >
-                                  <FiEdit className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
+                  );
+                }
+                
+                return (
+                  <div className="space-y-6">
+                    {filteredProjects.map((item, index) => {
+                      const totalIncome = item.income.reduce((sum, i) => sum + i.amount, 0);
+                      const totalExpenses = item.expenses.reduce((sum, e) => sum + e.amount, 0);
+                      const netAmount = totalIncome - totalExpenses;
+                      
+                      return (
+                        <div key={index} className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+                          {/* Project Header */}
+                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
                             <div className="flex items-center justify-between">
-                              <span className="text-xs text-gray-500">{new Date(income.date).toLocaleDateString()}</span>
-                              <span className="text-lg font-bold text-green-600">₹{income.amount.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Expense Section */}
-                {(filters.type === 'all' || filters.type === 'expense') && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-red-100 rounded-lg">
-                        <FiTrendingDown className="h-5 w-5 text-red-600" />
-                      </div>
-                      <h4 className="text-lg font-semibold text-gray-900">Expense History</h4>
-                      <span className="ml-auto text-sm font-medium text-red-600">({expenseHistory.length})</span>
-                    </div>
-
-                    {expenseHistory.length === 0 ? (
-                      <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
-                        <FiTrendingDown className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Expense Records</h3>
-                        <p className="text-gray-500">Expense transactions will appear here</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                        {expenseHistory.map((expense: any) => (
-                          <div key={expense._id} className="rounded-lg bg-white p-4 shadow-sm border border-red-100 hover:shadow-md transition-all">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <h5 className="font-semibold text-gray-900">{expense.category}</h5>
-                                <p className="text-xs text-gray-500">{expense.submittedBy?.name || 'N/A'}</p>
-                              </div>
-                              <div className="flex gap-1">
-                                <button
-                                  onClick={() => handleEditExpense(expense)}
-                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                >
-                                  <FiEdit className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-gray-500">{new Date(expense.date).toLocaleDateString()}</span>
-                              <span className="text-lg font-bold text-red-600">₹{expense.amount.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Mobile: Stacked Layout */}
-              <div className="space-y-6 lg:hidden">
-                {/* Income History */}
-                {(filters.type === 'all' || filters.type === 'income') && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <FiTrendingUp className="h-5 w-5 text-green-600" />
-                      </div>
-                      <h4 className="text-lg font-semibold text-gray-900">Income History</h4>
-                    </div>
-
-                    {incomeHistory.length === 0 ? (
-                      <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
-                        <FiDollarSign className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Income Records</h3>
-                        <p className="text-gray-500">Income transactions will appear here once they are recorded.</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-4">
-                        {incomeHistory.map((income: any) => (
-                          <div key={income._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-start justify-between mb-4">
-                              <div className="flex-1">
-                                <h5 className="text-lg font-semibold text-gray-900">{income.sourceType}</h5>
-                                <div className="flex gap-2 mt-2">
-                                  <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">Income</span>
-                                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">{income.receivedByUserId?.name || 'N/A'}</span>
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-primary-100 rounded-lg">
+                                  <FiFolder className="h-5 w-5 text-primary-600" />
+                                </div>
+                                <div>
+                                  <h4 className="text-lg font-semibold text-gray-900">Project: {item.project.name}</h4>
+                                  <p className="text-sm text-gray-600">
+                                    {item.income.length} income • {item.expenses.length} expenses
+                                  </p>
                                 </div>
                               </div>
-                              <button
-                                onClick={() => handleEditIncome(income)}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                              >
-                                <FiEdit className="h-5 w-5" />
-                              </button>
-                            </div>
-                            <div className="flex items-center justify-between pt-4 border-t">
-                              <span className="text-sm text-gray-500">{new Date(income.date).toLocaleDateString()}</span>
-                              <span className="text-2xl font-bold text-green-600">₹{income.amount.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Expense History */}
-                {(filters.type === 'all' || filters.type === 'expense') && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-red-100 rounded-lg">
-                        <FiTrendingDown className="h-5 w-5 text-red-600" />
-                      </div>
-                      <h4 className="text-lg font-semibold text-gray-900">Expense History</h4>
-                    </div>
-
-                    {expenseHistory.length === 0 ? (
-                      <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100">
-                        <FiTrendingDown className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Expense Records</h3>
-                        <p className="text-gray-500">Expense transactions will appear here once they are recorded.</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-4">
-                        {expenseHistory.map((expense: any) => (
-                          <div key={expense._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-start justify-between mb-4">
-                              <div className="flex-1">
-                                <h5 className="text-lg font-semibold text-gray-900">{expense.category}</h5>
-                                <div className="flex gap-2 mt-2">
-                                  <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800">Expense</span>
-                                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">{expense.submittedBy?.name || 'N/A'}</span>
-                                </div>
+                              <div className="text-right">
+                                <p className={`text-2xl font-bold ${netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  ₹{Math.abs(netAmount).toLocaleString()}
+                                </p>
+                                <p className="text-xs text-gray-500">Net Amount</p>
                               </div>
-                              <button
-                                onClick={() => handleEditExpense(expense)}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                              >
-                                <FiEdit className="h-5 w-5" />
-                              </button>
                             </div>
-                            <div className="flex items-center justify-between pt-4 border-t">
-                              <span className="text-sm text-gray-500">{new Date(expense.date).toLocaleDateString()}</span>
-                              <span className="text-2xl font-bold text-red-600">₹{expense.amount.toLocaleString()}</span>
+                            
+                            {/* Summary Bar */}
+                            <div className="mt-4 grid grid-cols-3 gap-4">
+                              <div className="text-center">
+                                <p className="text-sm text-gray-600">Total Income</p>
+                                <p className="text-lg font-bold text-green-600">₹{totalIncome.toLocaleString()}</p>
+                              </div>
+                              <div className="text-center border-x border-gray-300">
+                                <p className="text-sm text-gray-600">Total Expenses</p>
+                                <p className="text-lg font-bold text-red-600">₹{totalExpenses.toLocaleString()}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm text-gray-600">Transactions</p>
+                                <p className="text-lg font-bold text-gray-900">{item.income.length + item.expenses.length}</p>
+                              </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          
+                          {/* Combined Transactions */}
+                          <div className="p-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                              {/* Income Section */}
+                              {item.income.length > 0 && (filters.type === 'all' || filters.type === 'income') && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-4">
+                                    <FiTrendingUp className="h-5 w-5 text-green-600" />
+                                    <h5 className="text-lg font-semibold text-gray-900">Income</h5>
+                                    <span className="ml-auto text-sm text-gray-500">({item.income.length})</span>
+                                  </div>
+                                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                                    {item.income.map((income: any) => (
+                                      <div key={income._id} className="rounded-lg bg-green-50 border border-green-100 p-4 hover:shadow-md transition-all">
+                                        <div className="flex items-start justify-between mb-2">
+                                          <div className="flex-1">
+                                            <h6 className="font-semibold text-gray-900">{income.sourceType}</h6>
+                                            <p className="text-xs text-gray-600 mt-1">{income.receivedByUserId?.name || 'N/A'}</p>
+                                            {income.description && (
+                                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">{income.description}</p>
+                                            )}
+                                          </div>
+                                          <button
+                                            onClick={() => handleEditIncome(income)}
+                                            className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+                                          >
+                                            <FiEdit className="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                        <div className="flex items-center justify-between pt-2 border-t border-green-200">
+                                          <span className="text-xs text-gray-500">{new Date(income.date).toLocaleDateString()}</span>
+                                          <span className="text-lg font-bold text-green-600">₹{income.amount.toLocaleString()}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Expense Section */}
+                              {item.expenses.length > 0 && (filters.type === 'all' || filters.type === 'expense') && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-4">
+                                    <FiTrendingDown className="h-5 w-5 text-red-600" />
+                                    <h5 className="text-lg font-semibold text-gray-900">Expenses</h5>
+                                    <span className="ml-auto text-sm text-gray-500">({item.expenses.length})</span>
+                                  </div>
+                                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                                    {item.expenses.map((expense: any) => (
+                                      <div key={expense._id} className="rounded-lg bg-red-50 border border-red-100 p-4 hover:shadow-md transition-all">
+                                        <div className="flex items-start justify-between mb-2">
+                                          <div className="flex-1">
+                                            <h6 className="font-semibold text-gray-900">{expense.category}</h6>
+                                            <p className="text-xs text-gray-600 mt-1">{expense.submittedBy?.name || 'N/A'}</p>
+                                            {expense.description && (
+                                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">{expense.description}</p>
+                                            )}
+                                          </div>
+                                          <button
+                                            onClick={() => handleEditExpense(expense)}
+                                            className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+                                          >
+                                            <FiEdit className="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                        <div className="flex items-center justify-between pt-2 border-t border-red-200">
+                                          <span className="text-xs text-gray-500">{new Date(expense.date).toLocaleDateString()}</span>
+                                          <span className="text-lg font-bold text-red-600">₹{expense.amount.toLocaleString()}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-
-              {/* History section removed - using new responsive layout */}
+                );
+              })()}
             </div>
           )}
 
@@ -1661,8 +1687,8 @@ export default function FinancePage() {
               required
               min="0"
               value={incomeFormData.amount}
-              onChange={(e) => setIncomeFormData({ ...incomeFormData, amount: Number(e.target.value) })}
-              placeholder="0"
+              onChange={(e) => setIncomeFormData({ ...incomeFormData, amount: e.target.value })}
+              placeholder="Enter amount"
             />
 
             <FormInput
@@ -1832,8 +1858,8 @@ export default function FinancePage() {
               required
               min="0"
               value={expenseFormData.amount}
-              onChange={(e) => setExpenseFormData({ ...expenseFormData, amount: Number(e.target.value) })}
-              placeholder="0"
+              onChange={(e) => setExpenseFormData({ ...expenseFormData, amount: e.target.value })}
+              placeholder="Enter amount"
             />
 
             <FormInput
@@ -1987,8 +2013,8 @@ export default function FinancePage() {
               required
               min="0"
               value={payrollFormData.salaryAmount}
-              onChange={(e) => setPayrollFormData({ ...payrollFormData, salaryAmount: Number(e.target.value) })}
-              placeholder="0"
+              onChange={(e) => setPayrollFormData({ ...payrollFormData, salaryAmount: e.target.value })}
+              placeholder="Enter salary amount"
             />
 
             <div className="col-span-2">
@@ -2041,8 +2067,8 @@ export default function FinancePage() {
               required
               min="0"
               value={budgetFormData.monthlyBudget}
-              onChange={(e) => setBudgetFormData({ ...budgetFormData, monthlyBudget: Number(e.target.value) })}
-              placeholder="0"
+              onChange={(e) => setBudgetFormData({ ...budgetFormData, monthlyBudget: e.target.value })}
+              placeholder="Enter monthly budget"
             />
 
             <FormInput
@@ -2051,8 +2077,8 @@ export default function FinancePage() {
               required
               min="0"
               value={budgetFormData.creditLimit}
-              onChange={(e) => setBudgetFormData({ ...budgetFormData, creditLimit: Number(e.target.value) })}
-              placeholder="0"
+              onChange={(e) => setBudgetFormData({ ...budgetFormData, creditLimit: e.target.value })}
+              placeholder="Enter credit limit"
             />
 
             <div className="rounded bg-blue-50 p-3 text-sm text-blue-800">

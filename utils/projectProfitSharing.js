@@ -134,6 +134,11 @@ exports.computeProjectProfitSharing = async (projectId) => {
         // Replace existing record instead of adding to it
         existingPayroll.profitShare = eligibleUser.shareAmount;
         existingPayroll.description = eligibleUser.description;
+        // Update project financial data
+        existingPayroll.projectIncome = totalIncome;
+        existingPayroll.projectExpenses = totalExpense;
+        existingPayroll.projectBudget = project.allocatedBudget || 0;
+        existingPayroll.netProfit = profit;
         await existingPayroll.save();
         console.log(`📝 Updated payroll for ${eligibleUser.user.name}: ₹${eligibleUser.shareAmount}`);
       } else {
@@ -152,7 +157,12 @@ exports.computeProjectProfitSharing = async (projectId) => {
           deductions: 0,
           status: 'pending',
           description: eligibleUser.description,
-          createdBy: founder ? founder._id : eligibleUser.user._id
+          createdBy: founder ? founder._id : eligibleUser.user._id,
+          // Store project financial data
+          projectIncome: totalIncome,
+          projectExpenses: totalExpense,
+          projectBudget: project.allocatedBudget || 0,
+          netProfit: profit
         });
 
         await newPayroll.save();

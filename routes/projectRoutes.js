@@ -4,6 +4,8 @@ const Project = require('../models/Project');
 const Expense = require('../models/Expense');
 const Income = require('../models/Income');
 const Team = require('../models/Team');
+const Payroll = require('../models/Payroll');
+const Task = require('../models/Task');
 const { protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -255,12 +257,55 @@ router.get('/my-project-financials', authorize('projects.read'), async (req, res
   }
 });
 
+// Custom delete route with cascade deletion
+router.delete('/:id', authorize('projects.delete'), async (req, res) => {
+  try {
+    const projectId = req.params.id;
+
+    // Find the project first
+    const project = await Project.findById(projectId);
+    
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    // Delete all related data
+    const [expensesDeleted, incomeDeleted, payrollDeleted, tasksDeleted] = await Promise.all([
+      Expense.deleteMany({ projectId: projectId }),
+      Income.deleteMany({ sourceRefId: projectId, sourceRefModel: 'Project' }),
+      Payroll.deleteMany({ projectId: projectId }),
+      Task.deleteMany({ projectId: projectId })
+    ]);
+
+    // Delete the project
+    await Project.findByIdAndDelete(projectId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Project and all related data deleted successfully',
+      deletedCounts: {
+        expenses: expensesDeleted.deletedCount || 0,
+        income: incomeDeleted.deletedCount || 0,
+        payroll: payrollDeleted.deletedCount || 0,
+        tasks: tasksDeleted.deletedCount || 0
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 // Generic routes for individual project operations (must be last)
 router
   .route('/:id')
   .get(projectController.getOne)
-  .put(authorize('projects.update'), projectController.update)
-  .delete(authorize('projects.delete'), projectController.delete);
+  .put(authorize('projects.update'), projectController.update);
 
 module.exports = router;
 

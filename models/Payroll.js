@@ -109,7 +109,16 @@ const payrollSchema = new mongoose.Schema({
 // Calculate net amount before saving
 payrollSchema.pre('save', function(next) {
   const salary = this.salaryAmount || this.baseSalary || 0;
-  this.netAmount = salary + this.profitShare + this.bonuses - this.deductions;
+  
+  // If we have project financial data, use it for accurate calculation
+  if (this.projectIncome && this.projectExpenses) {
+    // netAmount should be the profit share only (since base salary is separate)
+    this.netAmount = this.profitShare || 0;
+  } else {
+    // Fallback to traditional calculation
+    this.netAmount = salary + this.profitShare + this.bonuses - this.deductions;
+  }
+  
   next();
 });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
@@ -10,6 +10,11 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +38,22 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (!mounted) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100">
+        <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-2xl">
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-bold text-primary-700">Connect Shiksha</h1>
+            <p className="mt-2 text-gray-600">Company Management System</p>
+          </div>
+          <div className="flex items-center justify-center py-8">
+            <div className="text-gray-500">Loading...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100">

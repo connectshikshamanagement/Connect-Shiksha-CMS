@@ -157,7 +157,7 @@ router.get('/project-summary', authorize('finance.read'), async (req, res) => {
     const projectFinancials = await Promise.all(
       projects.map(async (project) => {
         // Calculate project expenses for the month
-        // Filter by both teamId AND projectId to differentiate between projects in the same team
+        // Only include expenses with projectId matching this project
         const teamIdForQuery = project.teamId._id || project.teamId;
         
         const projectExpenses = await Expense.aggregate([
@@ -178,7 +178,7 @@ router.get('/project-summary', authorize('finance.read'), async (req, res) => {
         ]);
 
         // Calculate project income for the month
-        // Filter by sourceRefId (project ID) and sourceRefModel to differentiate between projects
+        // Only include income with sourceRefId matching this project
         const projectIncome = await Income.aggregate([
           {
             $match: {
@@ -372,38 +372,169 @@ router.get('/summary', authorize('finance.read'), async (req, res) => {
     };
 
     if (projectId) {
-      // If projectId is specified, get the team for that project
+      // If projectId is specified, get income by sourceRefId for that project
       const project = await Project.findById(projectId).populate('teamId');
       if (project && project.teamId) {
-        incomeQuery.teamId = project.teamId._id;
+        // Use $or to check both teamId and sourceRefId
+        incomeQuery.$or = [
+          { teamId: project.teamId._id },
+          { sourceRefId: projectId }
+        ];
         expenseQuery.teamId = project.teamId._id;
+        expenseQuery.projectId = projectId;
       }
     } else if (teamId) {
       incomeQuery.teamId = teamId;
       expenseQuery.teamId = teamId;
     }
 
-    // Get total income
-    const totalIncomeResult = await Income.aggregate([
-      { $match: incomeQuery },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]);
-    const totalIncome = totalIncomeResult.length > 0 ? totalIncomeResult[0].total : 0;
+    // Get total income - prioritize project-linked income (sourceRefId) over team income
+    let totalIncome = 0;
+    
+    if (projectId) {
+      // For specific project, get income by sourceRefId
+      console.log('🔍 Filtering income for projectId:', projectId);
+      
+      // Try both sourceRefId and team-based query
+      const project = await Project.findById(projectId).populate('teamId');
+      
+      if (project && project.teamId) {
+        // Get income from the project's team (more inclusive)
+        const projectIncomeResult = await Income.aggregate([
+          { 
+            $match: { 
+              date: { $gte: startOfMonth, $lte: endOfMonth },
+              $or: [
+                { sourceRefId: projectId, sourceRefModel: 'Project' },
+                { teamId: project.teamId._id }
+              ]
+            } 
+          },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]);
+        totalIncome = projectIncomeResult.length > 0 ? projectIncomeResult[0].total : 0;
+        console.log('💰 Total income found:', totalIncome);
+      } else {
+        const projectIncomeResult = await Income.aggregate([
+          { 
+            $match: { 
+              date: { $gte: startOfMonth, $lte: endOfMonth },
+              sourceRefId: projectId,
+              sourceRefModel: 'Project'
+            } 
+          },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]);
+        totalIncome = projectIncomeResult.length > 0 ? projectIncomeResult[0].total : 0;
+      }
+    } else if (teamId) {
+      // For specific team, get income by teamId
+      const teamIncomeResult = await Income.aggregate([
+        { 
+          $match: { 
+            date: { $gte: startOfMonth, $lte: endOfMonth },
+            teamId: teamId
+          } 
+        },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      totalIncome = teamIncomeResult.length > 0 ? teamIncomeResult[0].total : 0;
+    } else {
+      // For all data, get all income records
+      // This will include both project-linked (sourceRefId) and team-linked (teamId only) income
+      const allIncomeResult = await Income.aggregate([
+        { 
+          $match: { 
+            date: { $gte: startOfMonth, $lte: endOfMonth }
+          } 
+        },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      totalIncome = allIncomeResult.length > 0 ? allIncomeResult[0].total : 0;
+    }
 
-    // Get total expenses
-    const totalExpensesResult = await Expense.aggregate([
-      { $match: expenseQuery },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]);
-    const totalExpenses = totalExpensesResult.length > 0 ? totalExpensesResult[0].total : 0;
+    // Get total expenses - use a single query to avoid duplicates
+    let totalExpenses = 0;
+    
+    if (projectId) {
+      // For specific project, get expenses by projectId
+      console.log('🔍 Filtering expenses for projectId:', projectId);
+      
+      // Get the project to access its teamId
+      const project = await Project.findById(projectId).populate('teamId');
+      
+      if (project && project.teamId) {
+        // Get expenses from the project's team (more inclusive)
+        const projectExpensesResult = await Expense.aggregate([
+          { 
+            $match: { 
+              date: { $gte: startOfMonth, $lte: endOfMonth },
+              $or: [
+                { projectId: projectId },
+                { teamId: project.teamId._id }
+              ]
+            } 
+          },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]);
+        totalExpenses = projectExpensesResult.length > 0 ? projectExpensesResult[0].total : 0;
+        console.log('💸 Total expenses found:', totalExpenses);
+      } else {
+        const projectExpensesResult = await Expense.aggregate([
+          { 
+            $match: { 
+              date: { $gte: startOfMonth, $lte: endOfMonth },
+              projectId: projectId
+            } 
+          },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]);
+        totalExpenses = projectExpensesResult.length > 0 ? projectExpensesResult[0].total : 0;
+      }
+    } else if (teamId) {
+      // For specific team, get expenses by teamId
+      const teamExpensesResult = await Expense.aggregate([
+        { 
+          $match: { 
+            date: { $gte: startOfMonth, $lte: endOfMonth },
+            teamId: teamId
+          } 
+        },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      totalExpenses = teamExpensesResult.length > 0 ? teamExpensesResult[0].total : 0;
+    } else {
+      // For all data, get all expenses
+      const allExpensesResult = await Expense.aggregate([
+        { 
+          $match: { 
+            date: { $gte: startOfMonth, $lte: endOfMonth }
+          } 
+        },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      totalExpenses = allExpensesResult.length > 0 ? allExpensesResult[0].total : 0;
+    }
 
     // Get project breakdown for income
+    // Use sourceRefId to get project name for project-linked income
+    const projectBreakdownMatch = { 
+      date: { $gte: startOfMonth, $lte: endOfMonth }
+    };
+    
+    if (projectId) {
+      projectBreakdownMatch.sourceRefId = projectId;
+      projectBreakdownMatch.sourceRefModel = 'Project';
+    }
+    
     const projectBreakdownResult = await Income.aggregate([
-      { $match: incomeQuery },
+      { 
+        $match: projectBreakdownMatch
+      },
       {
         $lookup: {
           from: 'projects',
-          localField: 'projectId',
+          localField: 'sourceRefId',
           foreignField: '_id',
           as: 'project'
         }
@@ -422,8 +553,20 @@ router.get('/summary', authorize('finance.read'), async (req, res) => {
     });
 
     // Get expense breakdown by category
+    const expenseBreakdownMatch = { 
+      date: { $gte: startOfMonth, $lte: endOfMonth }
+    };
+    
+    if (projectId) {
+      expenseBreakdownMatch.projectId = projectId;
+    } else if (teamId) {
+      expenseBreakdownMatch.teamId = teamId;
+    }
+    
     const expenseBreakdownResult = await Expense.aggregate([
-      { $match: expenseQuery },
+      { 
+        $match: expenseBreakdownMatch
+      },
       {
         $group: {
           _id: '$category',
@@ -436,13 +579,24 @@ router.get('/summary', authorize('finance.read'), async (req, res) => {
       expenseBreakdown[item._id || 'Uncategorized'] = item.total;
     });
 
-    // Get top performing projects
+    // Get top performing projects - use sourceRefId for project-linked income
+    const topProjectsMatch = { 
+      date: { $gte: startOfMonth, $lte: endOfMonth }
+    };
+    
+    if (projectId) {
+      topProjectsMatch.sourceRefId = projectId;
+      topProjectsMatch.sourceRefModel = 'Project';
+    }
+    
     const topProjectsResult = await Income.aggregate([
-      { $match: incomeQuery },
+      { 
+        $match: topProjectsMatch
+      },
       {
         $lookup: {
           from: 'projects',
-          localField: 'projectId',
+          localField: 'sourceRefId',
           foreignField: '_id',
           as: 'project'
         }
@@ -500,12 +654,35 @@ router.get('/summary', authorize('finance.read'), async (req, res) => {
     const netProfit = totalIncome - totalExpenses;
     const profitMargin = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
 
+    // Get total budget from all projects
+    // Use allocatedBudget if available, otherwise fallback to budget field
+    let totalBudget = 0;
+    if (!projectId && !teamId) {
+      // Get all projects with their budgets
+      const projects = await Project.find({}).select('allocatedBudget budget');
+      totalBudget = projects.reduce((sum, project) => {
+        const budget = project.allocatedBudget || project.budget || 0;
+        return sum + budget;
+      }, 0);
+    } else if (projectId) {
+      const project = await Project.findById(projectId);
+      totalBudget = project ? (project.allocatedBudget || project.budget || 0) : 0;
+    } else if (teamId) {
+      // Get projects for the specified team
+      const projects = await Project.find({ teamId: teamId }).select('allocatedBudget budget');
+      totalBudget = projects.reduce((sum, project) => {
+        const budget = project.allocatedBudget || project.budget || 0;
+        return sum + budget;
+      }, 0);
+    }
+
     res.status(200).json({
       success: true,
       data: {
         totalIncome,
         totalExpenses,
         netProfit,
+        totalBudget,
         profitMargin,
         projectBreakdown,
         expenseBreakdown,
