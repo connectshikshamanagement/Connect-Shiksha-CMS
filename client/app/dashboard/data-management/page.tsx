@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
-import { dataManagementAPI } from '@/lib/api';
+import { dataManagementAPI, projectAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import FABMenu from '@/components/FABMenu';
@@ -22,7 +22,9 @@ import {
   FiFolder,
   FiDollarSign,
   FiCalendar,
-  FiUpload
+  FiUpload,
+  FiFile,
+  FiFileMinus
 } from 'react-icons/fi';
 
 export default function DataManagementPage() {
@@ -46,6 +48,10 @@ export default function DataManagementPage() {
   });
   const [loadingStats, setLoadingStats] = useState(true);
   const [hasCheckedPermissions, setHasCheckedPermissions] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [isExportingProject, setIsExportingProject] = useState(false);
 
   // Check if user has data management access
   const hasDataManagementAccess = isFounder || hasPermission('users.delete') || userRole === 'FOUNDER';
@@ -80,6 +86,26 @@ export default function DataManagementPage() {
 
     if (shouldAllowAccess && !isLoading) {
       fetchStats();
+    }
+  }, [shouldAllowAccess, isLoading]);
+
+  // Fetch projects
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const response = await projectAPI.getAll();
+        if (response.data.success) {
+          setProjects(response.data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch projects:', error);
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    if (shouldAllowAccess && !isLoading) {
+      fetchProjects();
     }
   }, [shouldAllowAccess, isLoading]);
 
@@ -236,6 +262,64 @@ export default function DataManagementPage() {
     }
   };
 
+  const handleExportProjectExcel = async () => {
+    if (!selectedProject) {
+      showToast.error('Please select a project');
+      return;
+    }
+
+    setIsExportingProject(true);
+    try {
+      const response = await dataManagementAPI.exportProjectExcel(selectedProject);
+      
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `project-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      showToast.success('Project exported to Excel successfully!');
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Export failed');
+    } finally {
+      setIsExportingProject(false);
+    }
+  };
+
+  const handleExportProjectPDF = async () => {
+    if (!selectedProject) {
+      showToast.error('Please select a project');
+      return;
+    }
+
+    setIsExportingProject(true);
+    try {
+      const response = await dataManagementAPI.exportProjectPDF(selectedProject);
+      
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `project-export-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      showToast.success('Project exported to PDF successfully!');
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Export failed');
+    } finally {
+      setIsExportingProject(false);
+    }
+  };
+
   const statsCards = [
     { label: 'Users', count: loadingStats ? 'Loading...' : dataStats.users.toLocaleString(), icon: FiUsers, color: 'text-blue-600' },
     { label: 'Projects', count: loadingStats ? 'Loading...' : dataStats.projects.toLocaleString(), icon: FiFolder, color: 'text-green-600' },
@@ -277,6 +361,78 @@ export default function DataManagementPage() {
             </div>
           </div>
 
+          {/* Project Export Section */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Project-Wise Export</h2>
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Project
+                </label>
+                <select
+                  value={selectedProject}
+                  onChange={(e) => setSelectedProject(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loadingProjects}
+                >
+                  <option value="">-- Select a project --</option>
+                  {projects.map((project) => (
+                    <option key={project._id} value={project._id}>
+                      {project.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex space-x-4">
+                <Button
+                  onClick={handleExportProjectExcel}
+                  disabled={!selectedProject || isExportingProject}
+                  className="flex-1"
+                  variant="outline"
+                >
+                  {isExportingProject ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <FiFile className="mr-2" />
+                      Export as Excel
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  onClick={handleExportProjectPDF}
+                  disabled={!selectedProject || isExportingProject}
+                  className="flex-1"
+                  variant="outline"
+                >
+                  {isExportingProject ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <FiFileMinus className="mr-2" />
+                      Export as PDF
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>What's included in project export:</strong> Project details, tasks, income records, 
+                  expenses, payroll with profit sharing data, and financial summary.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Action Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Export Data Card */}
@@ -295,7 +451,8 @@ export default function DataManagementPage() {
                   <ul className="text-sm text-blue-800 space-y-1">
                     <li>• All user accounts and profiles</li>
                     <li>• Complete project and team data</li>
-                    <li>• All financial records (income, expenses, payroll)</li>
+                    <li>• All financial records (income, expenses)</li>
+                    <li>• Payroll with profit sharing data</li>
                     <li>• Task assignments and progress</li>
                     <li>• Client information and contacts</li>
                   </ul>
@@ -408,7 +565,8 @@ export default function DataManagementPage() {
             <ul className="text-sm text-gray-700 space-y-1 ml-4">
               <li>• User accounts and roles</li>
               <li>• Teams and project data</li>
-              <li>• Financial records (income, expenses, payroll)</li>
+              <li>• Financial records (income, expenses)</li>
+              <li>• Payroll with profit sharing data</li>
               <li>• Task assignments and progress</li>
               <li>• Client information</li>
             </ul>

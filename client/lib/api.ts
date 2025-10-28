@@ -216,6 +216,8 @@ export const teamPerformanceAPI = {
 export const dataManagementAPI = {
   getStats: () => api.get('/data/stats'),
   exportData: () => api.get('/data/export', { responseType: 'blob' }),
+  exportProjectExcel: (projectId: string) => api.get(`/data/export/project/${projectId}/excel`, { responseType: 'blob' }),
+  exportProjectPDF: (projectId: string) => api.get(`/data/export/project/${projectId}/pdf`, { responseType: 'blob' }),
   clearData: () => api.delete('/data/clear'),
   importData: (formData: FormData) => api.post('/data/import', formData, {
     headers: {
