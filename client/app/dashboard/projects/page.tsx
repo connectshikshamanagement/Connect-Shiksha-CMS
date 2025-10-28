@@ -107,7 +107,23 @@ export default function ProjectsPage() {
         userAPI.getAll()
       ]);
       
-      if (projectsRes.data.success) setProjects(projectsRes.data.data);
+      if (projectsRes.data.success) {
+        let list: Project[] = projectsRes.data.data;
+        const raw = localStorage.getItem('user');
+        const me = raw ? JSON.parse(raw) as User : null;
+        const myId = me?._id || me?.id;
+        if (myId) {
+          // For Team Managers and Team Members, restrict to projects they own or are explicitly a member of
+          if (isManager || (isMember && !isManager)) {
+            list = list.filter((p) => {
+              const ownerId = typeof p.ownerId === 'string' ? p.ownerId : p.ownerId?._id;
+              const members = (p.projectMembers || []).map((m) => typeof m === 'string' ? m : (m._id || ''));
+              return ownerId === myId || members.includes(myId);
+            });
+          }
+        }
+        setProjects(list);
+      }
       if (teamsRes.data.success) setTeams(teamsRes.data.data);
       if (usersRes.data.success) setUsers(usersRes.data.data);
     } catch (error: any) {

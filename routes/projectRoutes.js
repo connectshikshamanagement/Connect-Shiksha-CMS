@@ -59,15 +59,18 @@ router
   .route('/')
   .post(authorize('projects.create'), projectController.create);
 
-// Get team projects for team members
+// Get projects relevant to the current user (member or manager)
 router.get('/my-team-projects', authorize('projects.read'), async (req, res) => {
   try {
     const userId = req.user.id;
     
-    // Find teams where the user is a member
+    // Find teams where the user is a member OR the team lead
     const userTeams = await Team.find({ 
-      members: userId,
-      active: true 
+      active: true,
+      $or: [
+        { members: userId },
+        { leadUserId: userId }
+      ]
     }).select('_id name');
     
     if (userTeams.length === 0) {
@@ -80,10 +83,14 @@ router.get('/my-team-projects', authorize('projects.read'), async (req, res) => 
     
     const teamIds = userTeams.map(team => team._id);
     
-    // Get projects for these teams
-    const projects = await Project.find({ 
-      teamId: { $in: teamIds },
-      status: { $ne: 'cancelled' }
+    // Get projects related to these teams OR explicitly involving the user
+    const projects = await Project.find({
+      status: { $ne: 'cancelled' },
+      $or: [
+        { teamId: { $in: teamIds } },
+        { ownerId: userId },
+        { projectMembers: userId }
+      ]
     })
     .populate('teamId', 'name category')
     .populate('ownerId', 'name email')
