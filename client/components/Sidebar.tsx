@@ -33,6 +33,8 @@ const navigation = [
   { name: 'Advance Payments', href: '/dashboard/advance-payments', icon: FiCreditCard, permission: 'payroll.read', role: 'FOUNDER' },
   { name: 'My Advance Payments', href: '/dashboard/my-advance-payments', icon: FiCreditCard, permission: null, role: 'TEAM_MEMBER' },
   { name: 'My Finance History', href: '/dashboard/finance-history', icon: FiClock, permission: null, role: 'TEAM_MEMBER' },
+  { name: 'My Advance Payments', href: '/dashboard/my-advance-payments', icon: FiCreditCard, permission: null, role: 'TEAM_MANAGER' },
+  { name: 'My Finance History', href: '/dashboard/finance-history', icon: FiClock, permission: null, role: 'TEAM_MANAGER' },
   { name: 'Data Management', href: '/dashboard/data-management', icon: FiDatabase, permission: null, role: 'FOUNDER' },
   { name: 'Settings', href: '/dashboard/settings', icon: FiSettings, permission: 'users.read' },
   { name: 'Members', href: '/dashboard/members', icon: FiUsers, permission: 'users.create', role: 'FOUNDER' },

@@ -14,15 +14,67 @@ import FormSelect from '@/components/FormSelect';
 import { showToast } from '@/lib/toast';
 import { FiEdit, FiTrash2, FiPlus, FiFolder, FiClock, FiDollarSign, FiUsers } from 'react-icons/fi';
 
+// Types
+interface RoleRef { key: string }
+interface User {
+  _id: string;
+  id?: string;
+  name: string;
+  email?: string;
+  roleIds?: RoleRef[];
+  active?: boolean;
+}
+
+interface Team {
+  _id: string;
+  name: string;
+}
+
+interface ProjectMember { _id?: string; name?: string }
+
+interface Project {
+  _id: string;
+  title: string;
+  description?: string;
+  category: string;
+  status: 'planned' | 'active' | 'completed' | 'on-hold' | 'cancelled';
+  teamId?: string | Team;
+  ownerId?: string | User;
+  projectMembers?: (string | ProjectMember)[];
+  budget?: number;
+  totalDealAmount?: number;
+  startDate?: string | Date;
+  endDate?: string | Date;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  progress?: number;
+  totalExpense?: number;
+}
+
+interface ProjectFormData {
+  title: string;
+  description: string;
+  category: string;
+  status: Project['status'];
+  teamId: string;
+  ownerId: string;
+  projectMembers: string[];
+  budget: number;
+  totalDealAmount: number;
+  startDate: string;
+  endDate: string;
+  priority: Project['priority'];
+  progress: number;
+}
+
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
   const { isFounder, isManager, isMember } = usePermissions();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ProjectFormData>({
     title: '',
     description: '',
     category: '',
@@ -40,14 +92,14 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     fetchData();
-  }, [isMember]);
+  }, [isManager, isMember]);
 
   const fetchData = async () => {
     try {
       // Use role-based API calls
-      const projectsPromise = isMember 
-        ? projectAPI.getMyTeamProjects() 
-        : projectAPI.getAll();
+      const projectsPromise = (isFounder)
+        ? projectAPI.getAll()
+        : projectAPI.getMyTeamProjects();
       
       const [projectsRes, teamsRes, usersRes] = await Promise.all([
         projectsPromise,
@@ -77,8 +129,8 @@ export default function ProjectsPage() {
 
     try {
       // Find founder user
-      const founder = users.find((user: any) => 
-        user.roleIds && user.roleIds.some((role: any) => role.key === 'FOUNDER')
+      const founder = users.find((user: User) => 
+        (user.roleIds || []).some((role: RoleRef) => role.key === 'FOUNDER')
       );
 
       // Ensure founder is included in project members (auto-check)
@@ -117,20 +169,24 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleEdit = (project: any) => {
+  const handleEdit = (project: Project) => {
     setEditingProject(project);
+    // Ensure founder is included in edit state
+    const founder = users.find((u: User) => (u.roleIds || []).some((r: RoleRef) => r.key === 'FOUNDER')) as User | undefined;
+    const existingMembers = (project.projectMembers || []).map((m) => typeof m === 'string' ? m : (m._id || ''));
+    const withFounder = founder ? Array.from(new Set([...(existingMembers || []), founder._id])) : existingMembers;
     setFormData({
       title: project.title,
       description: project.description || '',
       category: project.category,
       status: project.status,
-      teamId: project.teamId?._id || project.teamId,
-      ownerId: project.ownerId?._id || project.ownerId,
-      projectMembers: project.projectMembers?.map((member: any) => member._id || member) || [],
+      teamId: typeof project.teamId === 'string' ? project.teamId : (project.teamId?._id || ''),
+      ownerId: typeof project.ownerId === 'string' ? project.ownerId : (project.ownerId?._id || ''),
+      projectMembers: withFounder || [],
       budget: project.budget || 0,
       totalDealAmount: project.totalDealAmount || 0,
-      startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
-      endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
+      startDate: project.startDate ? new Date(project.startDate as any).toISOString().split('T')[0] : '',
+      endDate: project.endDate ? new Date(project.endDate as any).toISOString().split('T')[0] : '',
       priority: project.priority,
       progress: project.progress || 0,
     });
@@ -193,6 +249,13 @@ export default function ProjectsPage() {
     return colors[priority] || 'text-gray-600';
   };
 
+const toCap = (value: string) => value.replace(/\b\w/g, (c) => c.toUpperCase());
+
+const diffDays = (a: Date, b: Date) => {
+  const ms = a.getTime() - b.getTime();
+  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+};
+
   if (loading) {
     return (
       <div className="flex h-screen bg-gray-50">
@@ -232,8 +295,8 @@ export default function ProjectsPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-6">
-            {projects.map((project: any) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-6">
+            {projects.map((project: Project) => (
               <div key={project._id} className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:border-primary-200">
                 <div className="space-y-4">
                   {/* Project Header */}
@@ -246,11 +309,11 @@ export default function ProjectsPage() {
                         <h3 className="text-xl font-semibold text-gray-900">{project.title}</h3>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(project.status)}`}>
-                          {project.status}
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold tracking-wide ${getStatusColor(project.status)}`}>
+                          {toCap(project.status)}
                         </span>
-                        <span className={`text-sm font-medium ${getPriorityColor(project.priority)}`}>
-                          ● {project.priority}
+                        <span className={`inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold ${getPriorityColor(project.priority)}`}>
+                          Priority: {toCap(project.priority)}
                         </span>
                       </div>
                     </div>
@@ -262,10 +325,10 @@ export default function ProjectsPage() {
                   )}
 
                   {/* Project Details Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="bg-gray-50 rounded-lg p-3">
                       <div className="flex items-center text-gray-600 mb-1">
-                        <FiFolder className="mr-2 h-4 w-4" />
+                        
                         <span className="text-xs font-medium uppercase tracking-wide">Category</span>
                       </div>
                       <p className="text-sm font-semibold text-gray-900">{project.category}</p>
@@ -273,58 +336,100 @@ export default function ProjectsPage() {
                     
                     <div className="bg-gray-50 rounded-lg p-3">
                       <div className="flex items-center text-gray-600 mb-1">
-                        <FiDollarSign className="mr-2 h-4 w-4" />
+                        
                         <span className="text-xs font-medium uppercase tracking-wide">Budget</span>
                       </div>
                       <p className="text-sm font-semibold text-gray-900">₹{project.budget?.toLocaleString()}</p>
                     </div>
                     
-                    {project.totalDealAmount > 0 && (
+                    {(project.totalDealAmount ?? 0) > 0 && (
                       <div className="bg-gray-50 rounded-lg p-3">
                         <div className="flex items-center text-gray-600 mb-1">
-                          <FiDollarSign className="mr-2 h-4 w-4" />
+                         
                           <span className="text-xs font-medium uppercase tracking-wide">Deal Amount</span>
                         </div>
-                        <p className="text-sm font-semibold text-gray-900">₹{project.totalDealAmount?.toLocaleString()}</p>
+                        <p className="text-sm font-semibold text-gray-900">₹{(project.totalDealAmount ?? 0).toLocaleString()}</p>
                       </div>
                     )}
                     
-                    {project.startDate && (
-                      <div className="bg-gray-50 rounded-lg p-3">
-                        <div className="flex items-center text-gray-600 mb-1">
-                          <FiClock className="mr-2 h-4 w-4" />
-                          <span className="text-xs font-medium uppercase tracking-wide">Start Date</span>
+                    {/* Timeline (combined dates) */}
+                    {(project.startDate || project.endDate) && (
+                      <div className={`rounded-lg p-3 col-span-3 lg:col-span-3 border ${(() => {
+                        const start = project.startDate ? new Date(project.startDate as any) : null;
+                        const end = project.endDate ? new Date(project.endDate as any) : null;
+                        const today = new Date();
+                        const total = start && end ? diffDays(end, start) : 0;
+                        const elapsed = start ? diffDays(today, start) : 0;
+                        const remaining = Math.max(0, total - elapsed);
+                        if (end && today > end) return 'bg-red-50 border-red-200';
+                        if (total > 0 && remaining / total <= 0.2) return 'bg-yellow-50 border-yellow-200';
+                        return 'bg-blue-50 border-blue-200';
+                      })()}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center text-gray-700">
+                            <FiClock className="mr-2 h-4 w-4" />
+                            <span className="text-xs font-semibold uppercase tracking-wide">Timeline</span>
+                          </div>
+                          {(() => {
+                            const start = project.startDate ? new Date(project.startDate as any) : null;
+                            const end = project.endDate ? new Date(project.endDate as any) : null;
+                            const today = new Date();
+                            const overdue = end && today > end;
+                            const total = start && end ? diffDays(end, start) : 0;
+                            const elapsed = start ? diffDays(today, start) : 0;
+                            const remaining = Math.max(0, total - elapsed);
+                            const near = total > 0 && remaining / total <= 0.2 && !overdue;
+                            return (
+                              <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${
+                                overdue ? 'bg-red-100 text-red-800' : near ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                {overdue ? 'Overdue' : near ? 'Near Deadline' : 'On Track'}
+                              </span>
+                            );
+                          })()}
                         </div>
-                        <p className="text-sm font-semibold text-gray-900">{new Date(project.startDate).toLocaleDateString()}</p>
-                      </div>
-                    )}
-                    
-                    {project.endDate && (
-                      <div className="bg-gray-50 rounded-lg p-3">
-                        <div className="flex items-center text-gray-600 mb-1">
-                          <FiClock className="mr-2 h-4 w-4" />
-                          <span className="text-xs font-medium uppercase tracking-wide">End Date</span>
-                        </div>
-                        <p className="text-sm font-semibold text-gray-900">{new Date(project.endDate).toLocaleDateString()}</p>
+                        {(() => {
+                          const start = project.startDate ? new Date(project.startDate as any) : null;
+                          const end = project.endDate ? new Date(project.endDate as any) : null;
+                          const today = new Date();
+                          const total = start && end ? diffDays(end, start) : 0;
+                          const elapsed = start ? diffDays(today, start) : 0;
+                          const remaining = Math.max(0, total - elapsed);
+                          const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
+                          return (
+                            <div>
+                              <div className="flex flex-wrap gap-4 text-sm font-medium text-gray-900">
+                                <span>Start: {start ? start.toLocaleDateString() : 'N/A'}</span>
+                                <span>End: {end ? end.toLocaleDateString() : 'N/A'}</span>
+                                <span>Total: {total} days</span>
+                                <span>Elapsed: {elapsed}</span>
+                                <span>Remaining: {remaining}</span>
+                              </div>
+                              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/50">
+                                <div className={`h-full transition-all ${pct >= 100 ? 'bg-red-500' : 'bg-primary-500'}`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
 
                   {/* Budget Utilization Status */}
-                  {project.budget > 0 && (
+                  {(project.budget ?? 0) > 0 && (
                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-sm font-semibold text-gray-800">Budget Status</h4>
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          project.totalExpense > project.budget 
+                          (project.totalExpense ?? 0) > (project.budget ?? 0)
                             ? 'bg-red-100 text-red-800' 
-                            : project.totalExpense > (project.budget * 0.8)
+                            : (project.totalExpense ?? 0) > ((project.budget ?? 0) * 0.8)
                             ? 'bg-yellow-100 text-yellow-800'
                             : 'bg-green-100 text-green-800'
                         }`}>
-                          {project.totalExpense > project.budget 
+                          {(project.totalExpense ?? 0) > (project.budget ?? 0)
                             ? 'Over Budget' 
-                            : project.totalExpense > (project.budget * 0.8)
+                            : (project.totalExpense ?? 0) > ((project.budget ?? 0) * 0.8)
                             ? 'Near Limit'
                             : 'Within Budget'
                           }
@@ -334,23 +439,23 @@ export default function ProjectsPage() {
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-600">Utilization</span>
                           <span className="font-semibold text-gray-900">
-                            {project.budget > 0 ? Math.round((project.totalExpense || 0) / project.budget * 100) : 0}%
+                            {(project.budget ?? 0) > 0 ? Math.round(((project.totalExpense ?? 0) / (project.budget ?? 0)) * 100) : 0}%
                           </span>
                         </div>
                         <div className="text-xs text-gray-500">
-                          ₹{project.totalExpense?.toLocaleString() || 0} / ₹{project.budget?.toLocaleString()}
+                          ₹{(project.totalExpense ?? 0).toLocaleString()} / ₹{(project.budget ?? 0).toLocaleString()}
                         </div>
                         <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
                           <div 
                             className={`h-full transition-all duration-500 ${
-                              project.totalExpense > project.budget 
+                              (project.totalExpense ?? 0) > (project.budget ?? 0)
                                 ? 'bg-red-500' 
-                                : project.totalExpense > (project.budget * 0.8)
+                                : (project.totalExpense ?? 0) > ((project.budget ?? 0) * 0.8)
                                 ? 'bg-yellow-500'
                                 : 'bg-green-500'
                             }`}
                             style={{ 
-                              width: `${Math.min((project.totalExpense || 0) / project.budget * 100, 100)}%` 
+                              width: `${Math.min(((project.totalExpense ?? 0) / (project.budget ?? 0)) * 100 || 0, 100)}%` 
                             }}
                           ></div>
                         </div>
@@ -358,25 +463,8 @@ export default function ProjectsPage() {
                     </div>
                   )}
 
-                  {/* Project Members */}
-                  {project.projectMembers && project.projectMembers.length > 0 && (
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex items-center text-gray-700 mb-3">
-                        <FiUsers className="mr-2 h-4 w-4" />
-                        <span className="text-sm font-semibold">Project Members</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {project.projectMembers.map((member: any, index: number) => (
-                          <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {member.name || member}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Project Progress */}
-                  {project.progress !== undefined && (
+{/* Project Progress */}
+{project.progress !== undefined && (
                     <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-100">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-sm font-semibold text-gray-800">Project Progress</h4>
@@ -391,9 +479,31 @@ export default function ProjectsPage() {
                     </div>
                   )}
 
+                  {/* Project Members */}
+                  {project.projectMembers && project.projectMembers.length > 0 && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center text-gray-700 mb-3">
+                        <FiUsers className="mr-2 h-4 w-4" />
+                        <span className="text-sm font-semibold">Project Members</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {project.projectMembers.map((member, index: number) => {
+                          const label = typeof member === 'string' ? member : (member.name || member._id || '');
+                          return (
+                            <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  
+
                   {/* Action Buttons */}
                   {(isFounder || isManager) && (
-                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
+                    <div className="flex  flex-row gap-3 pt-4 border-t border-gray-100">
                       <Button
                         variant="outline"
                         size="sm"
@@ -479,7 +589,7 @@ export default function ProjectsPage() {
               label="Status"
               required
               value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as Project['status'] })}
               options={[
                 { value: 'planned', label: 'Planned' },
                 { value: 'active', label: 'Active' },
@@ -493,7 +603,7 @@ export default function ProjectsPage() {
               label="Priority"
               required
               value={formData.priority}
-              onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, priority: e.target.value as Project['priority'] })}
               options={[
                 { value: 'low', label: 'Low' },
                 { value: 'medium', label: 'Medium' },
@@ -517,34 +627,41 @@ export default function ProjectsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Project Members (Optional)
               </label>
-              <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+            <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
                 {users
                   .filter((user: any) => user.active)
-                  .map((user: any) => (
-                    <label key={user._id} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.projectMembers.includes(user._id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setFormData({
-                              ...formData,
-                              projectMembers: [...formData.projectMembers, user._id]
-                            });
-                          } else {
-                            setFormData({
-                              ...formData,
-                              projectMembers: formData.projectMembers.filter(id => id !== user._id)
-                            });
-                          }
-                        }}
-                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                      />
-                      <span className="text-sm text-gray-700">
-                        {user.name}
-                      </span>
-                    </label>
-                  ))}
+                  .map((user: any) => {
+                    const isFounderUser = (user.roleIds || []).some((r: any) => r.key === 'FOUNDER');
+                    const checked = formData.projectMembers.includes(user._id) || isFounderUser;
+                    const disabled = isFounderUser; // Founder cannot be removed
+                    return (
+                      <label key={user._id} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={(e) => {
+                            if (disabled) return;
+                            if (e.target.checked) {
+                              setFormData({
+                                ...formData,
+                                projectMembers: Array.from(new Set([...(formData.projectMembers || []), user._id]))
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                projectMembers: (formData.projectMembers || []).filter(id => id !== user._id)
+                              });
+                            }
+                          }}
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span className="text-sm text-gray-700">
+                          {user.name}{disabled ? ' — Founder' : ''}
+                        </span>
+                      </label>
+                    );
+                  })}
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 Select specific team members for this project. If none selected, all team members will be eligible for profit sharing.

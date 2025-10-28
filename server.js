@@ -122,7 +122,7 @@ const PORT = process.env.PORT || 10000;
 const HOST = process.env.HOST || '0.0.0.0'; // Listen on all network interfaces
 server.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on http://${HOST}:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-  console.log(`📱 Access from other devices: http://192.168.1.2:${PORT}`);
+  console.log(`📱 Access from other devices: 3:${PORT}`);
 });
 
 module.exports = { app, io };

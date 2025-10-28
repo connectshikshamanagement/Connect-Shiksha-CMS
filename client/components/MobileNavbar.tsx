@@ -17,12 +17,21 @@ export default function MobileNavbar() {
       { name: 'Projects', href: '/dashboard/projects', icon: FiFolder },
     ];
 
-    if (isFounder || isManager) {
+    // Founder: keep Payroll and Profile
+    if (isFounder) {
       baseItems.push({ name: 'Payroll', href: '/dashboard/payroll', icon: FiDollarSign });
+      baseItems.push({ name: 'Profile', href: '/dashboard/profile', icon: FiUser });
+      return baseItems;
     }
 
-    baseItems.push({ name: 'Profile', href: '/dashboard/profile', icon: FiUser });
+    // Team Manager and Team Member: replace Profile with Payroll
+    if (isManager || isMember) {
+      baseItems.push({ name: 'Payroll', href: '/dashboard/payroll', icon: FiDollarSign });
+      return baseItems;
+    }
 
+    // Default: show Profile
+    baseItems.push({ name: 'Profile', href: '/dashboard/profile', icon: FiUser });
     return baseItems;
   };
 

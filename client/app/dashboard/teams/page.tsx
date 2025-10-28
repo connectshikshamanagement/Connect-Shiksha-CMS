@@ -30,6 +30,8 @@ export default function TeamsPage() {
     members: [] as string[],
     category: '',
   });
+  // Cached founder id for enforcing membership
+  const getFounderUser = () => users.find((u: any) => (u.roleIds || []).some((r: any) => r.key === 'FOUNDER')) as any;
   const [showAddMember, setShowAddMember] = useState(false);
   const [newMember, setNewMember] = useState({
     name: '',
@@ -141,11 +143,17 @@ export default function TeamsPage() {
     const loadingToast = showToast.loading(editingTeam ? 'Updating team...' : 'Creating team...');
 
     try {
+      // Ensure founder is always included
+      const founder = getFounderUser();
+      const ensuredMembers = founder
+        ? Array.from(new Set([...(formData.members || []), founder._id]))
+        : formData.members;
+      const payload = { ...formData, members: ensuredMembers } as any;
       if (editingTeam) {
-        await teamAPI.update(editingTeam._id, formData);
+        await teamAPI.update(editingTeam._id, payload);
         showToast.success('Team updated successfully!');
       } else {
-        await teamAPI.create(formData);
+        await teamAPI.create(payload);
         showToast.success('Team created successfully!');
       }
       
@@ -161,11 +169,15 @@ export default function TeamsPage() {
 
   const handleEdit = (team: any) => {
     setEditingTeam(team);
+    // Ensure founder is present in edit state
+    const founder = getFounderUser();
+    const existingMemberIds = (team.members || []).map((m: any) => m._id || m);
+    const withFounder = founder ? Array.from(new Set([...existingMemberIds, founder._id])) : existingMemberIds;
     setFormData({
       name: team.name,
       description: team.description || '',
       leadUserId: team.leadUserId?._id || team.leadUserId,
-      members: team.members?.map((m: any) => m._id || m) || [],
+      members: withFounder || [],
       category: team.category,
     });
     setShowModal(true);
@@ -293,10 +305,12 @@ export default function TeamsPage() {
               <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Team Management</h2>
               <p className="mt-1 text-sm text-gray-600">Manage your organization's teams and members</p>
             </div>
-            <Button onClick={handleOpenModal} className="w-full sm:w-auto">
-              <FiPlus className="mr-2" />
-              Add Team
-            </Button>
+            {(isFounder || isManager) && (
+              <Button onClick={handleOpenModal} className="w-full sm:w-auto">
+                <FiPlus className="mr-2" />
+                Add Team
+              </Button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -330,28 +344,30 @@ export default function TeamsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleEdit(team)}
-                    >
-                      <FiEdit className="mr-1" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleDelete(team._id)}
-                    >
-                      <FiTrash2 className="mr-1" />
-                      Delete
-                    </Button>
+                {(isFounder || isManager) && (
+                  <div className="mt-4">
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleEdit(team)}
+                      >
+                        <FiEdit className="mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleDelete(team._id)}
+                      >
+                        <FiTrash2 className="mr-1" />
+                        Delete
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             ))}
           </div>
@@ -419,29 +435,36 @@ export default function TeamsPage() {
               Team Members
             </label>
             <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-gray-300 p-3">
-              {users.map((user: any) => (
-                <label key={user._id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
-                  <input
-                    type="checkbox"
-                    checked={formData.members.includes(user._id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setFormData({
-                          ...formData,
-                          members: [...formData.members, user._id]
-                        });
-                      } else {
-                        setFormData({
-                          ...formData,
-                          members: formData.members.filter(id => id !== user._id)
-                        });
-                      }
-                    }}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  <span className="text-sm text-gray-700">{user.name} ({user.email})</span>
-                </label>
-              ))}
+              {users.map((user: any) => {
+                const isFounderUser = (user.roleIds || []).some((r: any) => r.key === 'FOUNDER');
+                const checked = formData.members.includes(user._id) || isFounderUser;
+                const disabled = isFounderUser; // Founder must always be in the team
+                return (
+                  <label key={user._id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={disabled}
+                      onChange={(e) => {
+                        if (disabled) return;
+                        if (e.target.checked) {
+                          setFormData({
+                            ...formData,
+                            members: Array.from(new Set([...(formData.members || []), user._id]))
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            members: (formData.members || []).filter(id => id !== user._id)
+                          });
+                        }
+                      }}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-gray-700">{user.name} ({user.email}){disabled ? ' — Founder' : ''}</span>
+                  </label>
+                );
+              })}
             </div>
             <p className="mt-1 text-xs text-gray-500">
               Select team members ({formData.members.length} selected)

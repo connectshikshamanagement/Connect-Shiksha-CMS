@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { dashboardAPI } from '@/lib/api';
+import { dashboardAPI, enhancedTaskAPI, enhancedExpenseAPI, financeAPI, projectAPI, teamPerformanceAPI } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
@@ -49,12 +49,126 @@ export default function DashboardPage() {
     fetchAnalytics();
   }, [router]);
 
+  const getCurrentUserAndTeam = () => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (!raw) return { userId: null, teamId: null };
+      const user = JSON.parse(raw);
+      const userId = user?._id || null;
+      const history = Array.isArray(user?.teamHistory) ? user.teamHistory : [];
+      const active = history.find((h: any) => h.isActive) || history[history.length - 1];
+      const teamId = active?.teamId || null;
+      return { userId, teamId };
+    } catch {
+      return { userId: null, teamId: null };
+    }
+  };
+
   const fetchAnalytics = async () => {
     try {
-      const response = await dashboardAPI.getAnalytics();
-      if (response.data.success) {
-        setAnalytics(response.data.data);
+      if (isFounder) {
+        const response = await dashboardAPI.getAnalytics();
+        if (response.data.success) {
+          setAnalytics(response.data.data);
+        }
+        return;
       }
+
+      const { userId, teamId } = getCurrentUserAndTeam();
+
+      // Fallback to global if missing identifiers
+      if (!userId) {
+        const response = await dashboardAPI.getAnalytics();
+        if (response.data.success) setAnalytics(response.data.data);
+        return;
+      }
+
+      // Build scoped analytics for Manager/Member
+      const requests: Promise<any>[] = [];
+
+      // Tasks
+      if (isManager && teamId) {
+        requests.push(enhancedTaskAPI.getTaskAnalytics(teamId));
+      } else {
+        requests.push(enhancedTaskAPI.getTasksByUser(userId));
+      }
+
+      // Expenses (summary by team if manager)
+      if (isManager && teamId) {
+        requests.push(enhancedExpenseAPI.getExpenseAnalytics(teamId));
+      } else {
+        requests.push(enhancedExpenseAPI.getExpensesByUser(userId));
+      }
+
+      // Finance team summary (manager only)
+      if (isManager && teamId) {
+        requests.push(financeAPI.getTeamSummary({ teamId }));
+      } else {
+        requests.push(Promise.resolve({ data: { data: null, success: true } }));
+      }
+
+      // Projects
+      if (isManager) {
+        requests.push(projectAPI.getMyTeamProjects());
+      } else {
+        requests.push(projectAPI.getMyProjectFinancials());
+      }
+
+      // Team performance (manager scoped)
+      if (isManager && teamId) {
+        requests.push(teamPerformanceAPI.getTeamAnalytics(teamId));
+      } else {
+        requests.push(Promise.resolve({ data: { data: [] , success: true } }));
+      }
+
+      const [taskRes, expenseRes, teamFinRes, projectsRes, teamPerfRes] = await Promise.all(requests);
+
+      // Derive task status counts
+      let taskStatuses = { todo: 0, in_progress: 0, review: 0, done: 0 } as any;
+      if (isManager) {
+        const analyticsData = taskRes?.data?.data || {};
+        taskStatuses = {
+          todo: analyticsData.todo || 0,
+          in_progress: analyticsData.in_progress || 0,
+          review: analyticsData.review || 0,
+          done: analyticsData.done || 0,
+        };
+      } else {
+        const tasks = taskRes?.data?.data || [];
+        tasks.forEach((t: any) => {
+          if (taskStatuses[t.status] !== undefined) taskStatuses[t.status] += 1;
+        });
+      }
+
+      // Financials minimal (scope-aware)
+      const incomeTotal = isManager ? (teamFinRes?.data?.data?.incomeTotal || 0) : 0;
+      const incomeCount = isManager ? (teamFinRes?.data?.data?.incomeCount || 0) : 0;
+      const expenseTotal = isManager ? (teamFinRes?.data?.data?.expenseTotal || 0) : (Array.isArray(expenseRes?.data?.data) ? expenseRes.data.data.reduce((s: number, e: any) => s + (e.amount || 0), 0) : 0);
+      const expenseCount = isManager ? (teamFinRes?.data?.data?.expenseCount || 0) : (Array.isArray(expenseRes?.data?.data) ? expenseRes.data.data.length : 0);
+
+      const overview = {
+        totalUsers: isManager ? (teamFinRes?.data?.data?.memberCount || 0) : undefined,
+        totalTeams: isManager ? 1 : undefined,
+        totalProjects: Array.isArray(projectsRes?.data?.data) ? projectsRes.data.data.length : (projectsRes?.data?.data?.length || 0),
+        totalTasks: isManager ? (taskStatuses.todo + taskStatuses.in_progress + taskStatuses.review + taskStatuses.done) : undefined,
+        totalClients: undefined,
+      } as any;
+
+      const monthlyFinancials = {
+        income: { total: incomeTotal, count: incomeCount },
+        expenses: { total: expenseTotal, count: expenseCount },
+        payroll: { total: 0, count: 0 },
+        netProfit: incomeTotal - expenseTotal,
+      };
+
+      const analyticsScoped = {
+        overview,
+        monthlyFinancials,
+        taskStatuses,
+        teamPerformance: teamPerfRes?.data?.data || [],
+      };
+
+      setAnalytics(analyticsScoped);
     } catch (error) {
       console.error('Error fetching analytics:', error);
     } finally {
@@ -113,27 +227,31 @@ export default function DashboardPage() {
         <div className="p-4 md:p-8">
           {/* Stats Grid */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-            <StatCard
-              title="Total Income"
-              value={`₹${(monthlyFinancials?.income?.total || 0).toLocaleString()}`}
-              icon={<FiDollarSign className="h-8 w-8" />}
-              color="bg-green-500"
-              subtitle={`${monthlyFinancials?.income?.count || 0} transactions`}
-            />
-            <StatCard
-              title="Total Expenses"
-              value={`₹${(monthlyFinancials?.expenses?.total || 0).toLocaleString()}`}
-              icon={<FiTrendingDown className="h-8 w-8" />}
-              color="bg-red-500"
-              subtitle={`${monthlyFinancials?.expenses?.count || 0} transactions`}
-            />
-            <StatCard
-              title="Net Profit"
-              value={`₹${(monthlyFinancials?.netProfit || 0).toLocaleString()}`}
-              icon={<FiTrendingUp className="h-8 w-8" />}
-              color={(monthlyFinancials?.netProfit || 0) >= 0 ? 'bg-blue-500' : 'bg-orange-500'}
-              subtitle={monthlyFinancials?.netProfit >= 0 ? 'Profitable' : 'In Loss'}
-            />
+            {isFounder && (
+              <>
+                <StatCard
+                  title="Total Income"
+                  value={`₹${(monthlyFinancials?.income?.total || 0).toLocaleString()}`}
+                  icon={<FiDollarSign className="h-8 w-8" />}
+                  color="bg-green-500"
+                  subtitle={`${monthlyFinancials?.income?.count || 0} transactions`}
+                />
+                <StatCard
+                  title="Total Expenses"
+                  value={`₹${(monthlyFinancials?.expenses?.total || 0).toLocaleString()}`}
+                  icon={<FiTrendingDown className="h-8 w-8" />}
+                  color="bg-red-500"
+                  subtitle={`${monthlyFinancials?.expenses?.count || 0} transactions`}
+                />
+                <StatCard
+                  title="Net Profit"
+                  value={`₹${(monthlyFinancials?.netProfit || 0).toLocaleString()}`}
+                  icon={<FiTrendingUp className="h-8 w-8" />}
+                  color={(monthlyFinancials?.netProfit || 0) >= 0 ? 'bg-blue-500' : 'bg-orange-500'}
+                  subtitle={monthlyFinancials?.netProfit >= 0 ? 'Profitable' : 'In Loss'}
+                />
+              </>
+            )}
             <StatCard
               title="Total Projects"
               value={overview?.totalProjects || 0}
@@ -179,27 +297,28 @@ export default function DashboardPage() {
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Financial Overview */}
-            <div className="rounded-lg bg-white p-6 shadow-sm">
-              <h3 className="mb-4 text-lg font-semibold text-gray-800">Financial Overview</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={[
-                  {
-                    category: 'Current',
-                    income: monthlyFinancials?.income?.total || 0,
-                    expenses: monthlyFinancials?.expenses?.total || 0,
-                  }
-                ]}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="category" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => `₹${Number(value).toLocaleString()}`} />
-                  <Legend />
-                  <Bar dataKey="income" fill="#10b981" name="Income" />
-                  <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {isFounder && (
+              <div className="rounded-lg bg-white p-6 shadow-sm">
+                <h3 className="mb-4 text-lg font-semibold text-gray-800">Financial Overview</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={[
+                    {
+                      category: 'Current',
+                      income: monthlyFinancials?.income?.total || 0,
+                      expenses: monthlyFinancials?.expenses?.total || 0,
+                    }
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="category" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => `₹${Number(value).toLocaleString()}`} />
+                    <Legend />
+                    <Bar dataKey="income" fill="#10b981" name="Income" />
+                    <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
 
             {/* Task Distribution */}
             <div className="rounded-lg bg-white p-6 shadow-sm">
