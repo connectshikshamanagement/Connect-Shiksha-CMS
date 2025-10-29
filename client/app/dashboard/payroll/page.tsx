@@ -29,6 +29,9 @@ import {
   FiPlus,
   FiMinus,
   FiCreditCard,
+  FiInfo,
+  FiX,
+  FiFileText,
 } from "react-icons/fi";
 
 export default function PayrollPage() {
@@ -80,6 +83,10 @@ export default function PayrollPage() {
     projectId: "",
     date: getCurrentDate(),
   });
+
+  // State for calculation details modal
+  const [selectedPayoutForDetails, setSelectedPayoutForDetails] = useState<any>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
     // Wait for permissions to load before making API calls
@@ -1194,7 +1201,7 @@ export default function PayrollPage() {
                     <h3 className="text-lg font-semibold">
                       {isMember ? "My Shares" : "Team Members"}
                     </h3>
-                    <p className="text-blue-100 text-sm">30% shared equally</p>
+                    <p className="text-blue-100 text-sm">30% team pool (custom % × working days)</p>
                   </div>
                   <div className="text-right">
                     <div className="text-3xl font-bold">
@@ -1290,6 +1297,23 @@ export default function PayrollPage() {
                               70% Founder Share
                             </div>
                           </div>
+                        </div>
+
+                        <div className="mb-2 text-xs text-gray-600 space-y-1">
+                          {payout.projectStartDate && (
+                            <div>
+                              <span className="font-medium">Project Started:</span>{" "}
+                              {new Date(payout.projectStartDate).toLocaleDateString()}
+                            </div>
+                          )}
+                          {payout.workDurationDays > 0 && (
+                            <div>
+                              <span className="font-medium">Duration:</span>{" "}
+                              <span className="text-purple-600 font-semibold">
+                                {payout.workDurationDays} days
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex justify-between items-center text-sm">
@@ -1473,13 +1497,20 @@ export default function PayrollPage() {
                         </p>
                       </div>
 
-                      {group.payouts.map((payout: any) => (
+                      {group.payouts.map((payout: any) => {
+                        // Calculate member's percentage
+                        const totalProfit = (payout.projectIncome || 0) - (payout.projectExpenses || 0);
+                        const memberPercentage = totalProfit > 0 
+                          ? ((payout.profitShare || 0) / totalProfit * 100).toFixed(2)
+                          : 0;
+
+                        return (
                         <div
                           key={payout._id}
                           className="bg-white rounded-lg p-4 mb-3 shadow-sm border border-blue-200"
                         >
                           <div className="flex justify-between items-start mb-3">
-                            <div>
+                            <div className="flex-1">
                               <h4 className="font-semibold text-gray-900">
                                 {payout.userId?.name}
                               </h4>
@@ -1494,28 +1525,174 @@ export default function PayrollPage() {
                                   payout.profitShare || 0
                                 ).toLocaleString()}
                               </div>
-                              <div className="text-sm text-gray-500">
-                                Team Share
+                              <div className="text-xs text-gray-500">
+                                {memberPercentage}% of profit
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex justify-between items-center text-sm">
-                            <div className="flex flex-wrap gap-2">
-                              <span className="text-green-600 text-xs">
-                                Income: ₹
-                                {(payout.projectIncome || 0).toLocaleString()}
-                              </span>
-                              <span className="text-blue-600 text-xs">
-                                Budget: ₹
-                                {(payout.projectBudget || 0).toLocaleString()}
-                              </span>
-                              <span className="text-red-600 text-xs">
-                                Expenses: ₹
-                                {(payout.projectExpenses || 0).toLocaleString()}
-                              </span>
+                          {/* Member Timeline & Stats */}
+                          <div className="mb-3 p-2 bg-blue-50 rounded-lg">
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              {payout.memberJoinedDate && (
+                                <div>
+                                  <span className="text-gray-600">Joined:</span>{" "}
+                                  <span className="font-semibold text-gray-900">
+                                    {new Date(payout.memberJoinedDate).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              )}
+                              {payout.projectStartDate && (
+                                <div>
+                                  <span className="text-gray-600">Project Start:</span>{" "}
+                                  <span className="font-semibold text-gray-900">
+                                    {new Date(payout.projectStartDate).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              )}
+                              {payout.workDurationDays > 0 && (
+                                <div>
+                                  <span className="text-gray-600">Working Days:</span>{" "}
+                                  <span className="font-semibold text-blue-600">
+                                    {payout.workDurationDays} days
+                                  </span>
+                                </div>
+                              )}
+                              <div>
+                                <span className="text-gray-600">Share %:</span>{" "}
+                                <span className="font-semibold text-purple-600">
+                                  {memberPercentage}%
+                                </span>
+                              </div>
                             </div>
-                            <div className="text-right">
+                            {payout.isProjectOwner && (
+                              <div className="mt-2 text-xs text-purple-600 font-medium bg-purple-100 px-2 py-1 rounded">
+                                👑 Project Owner (+3% bonus = ₹{Math.round(payout.ownerBonus || 0).toLocaleString()})
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Financial Summary (Member's Period) */}
+                          <div className="mb-3 p-2 bg-gray-50 rounded-lg">
+                            <div className="text-xs font-medium text-gray-700 mb-2">
+                              📊 Member's Period Financial Summary:
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div>
+                                <div className="text-gray-600">Income</div>
+                                <div className="font-semibold text-green-600">
+                                  ₹{(payout.projectIncome || 0).toLocaleString()}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-gray-600">Expenses</div>
+                                <div className="font-semibold text-red-600">
+                                  ₹{(payout.projectExpenses || 0).toLocaleString()}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-gray-600">Profit</div>
+                                <div className="font-semibold text-blue-600">
+                                  ₹{totalProfit.toLocaleString()}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500 italic">
+                              * Only from {payout.memberJoinedDate ? new Date(payout.memberJoinedDate).toLocaleDateString() : 'N/A'} onwards
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            <button
+                              onClick={() => {
+                                setSelectedPayoutForDetails(payout);
+                                setShowDetailsModal(true);
+                              }}
+                              className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition"
+                            >
+                              <FiInfo className="text-sm" />
+                              View Details
+                            </button>
+                            <button
+                              onClick={() => {
+                                const totalProfit = (payout.projectIncome || 0) - (payout.projectExpenses || 0);
+                                const memberPercentage = totalProfit > 0 ? ((payout.profitShare || 0) / totalProfit * 100).toFixed(2) : 0;
+                                
+                                // Generate PDF
+                                const printWindow = window.open('', '', 'height=600,width=800');
+                                if (printWindow) {
+                                  printWindow.document.write(`
+                                    <html>
+                                      <head>
+                                        <title>Profit Share Report - ${payout.userId?.name}</title>
+                                        <style>
+                                          body { font-family: Arial, sans-serif; padding: 20px; }
+                                          h1 { color: #333; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }
+                                          h2 { color: #555; margin-top: 20px; }
+                                          table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+                                          th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+                                          th { background-color: #f3f4f6; font-weight: bold; }
+                                          .highlight { background-color: #dbeafe; font-weight: bold; }
+                                          .total { font-size: 18px; font-weight: bold; color: #3b82f6; }
+                                          .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
+                                        </style>
+                                      </head>
+                                      <body>
+                                        <h1>Profit Share Report</h1>
+                                        <h2>Member Information</h2>
+                                        <table>
+                                          <tr><th>Name</th><td>${payout.userId?.name || 'N/A'}</td></tr>
+                                          <tr><th>Email</th><td>${payout.userId?.email || 'N/A'}</td></tr>
+                                          <tr><th>Project</th><td>${payout.projectId?.title || 'N/A'}</td></tr>
+                                          <tr><th>Month</th><td>${payout.month || 'N/A'}</td></tr>
+                                          ${payout.isProjectOwner ? '<tr><th>Role</th><td>👑 Project Owner</td></tr>' : ''}
+                                        </table>
+                                        
+                                        <h2>Timeline & Contribution</h2>
+                                        <table>
+                                          <tr><th>Project Started</th><td>${payout.projectStartDate ? new Date(payout.projectStartDate).toLocaleDateString() : 'N/A'}</td></tr>
+                                          <tr><th>Member Joined</th><td>${payout.memberJoinedDate ? new Date(payout.memberJoinedDate).toLocaleDateString() : 'N/A'}</td></tr>
+                                          <tr><th>Working Days</th><td class="highlight">${payout.workDurationDays || 0} days</td></tr>
+                                          <tr><th>Profit Share %</th><td class="highlight">${memberPercentage}%</td></tr>
+                                        </table>
+                                        
+                                        <h2>Financial Summary (Member's Period)</h2>
+                                        <table>
+                                          <tr><th>Income (from join date)</th><td>₹${(payout.projectIncome || 0).toLocaleString()}</td></tr>
+                                          <tr><th>Expenses (from join date)</th><td>₹${(payout.projectExpenses || 0).toLocaleString()}</td></tr>
+                                          <tr class="highlight"><th>Net Profit</th><td>₹${totalProfit.toLocaleString()}</td></tr>
+                                        </table>
+                                        
+                                        <h2>Profit Share Calculation</h2>
+                                        <table>
+                                          <tr><th>Base Share (${memberPercentage}% of ₹${totalProfit.toLocaleString()})</th><td>₹${Math.round(payout.profitShare - (payout.ownerBonus || 0)).toLocaleString()}</td></tr>
+                                          ${payout.isProjectOwner ? `<tr><th>Owner Bonus (3%)</th><td>₹${Math.round(payout.ownerBonus || 0).toLocaleString()}</td></tr>` : ''}
+                                          <tr class="highlight total"><th>Total Profit Share</th><td>₹${Math.round(payout.profitShare || 0).toLocaleString()}</td></tr>
+                                        </table>
+                                        
+                                        <div class="footer">
+                                          <p><strong>Note:</strong> Income and expenses are calculated only from the member's join date (${payout.memberJoinedDate ? new Date(payout.memberJoinedDate).toLocaleDateString() : 'N/A'}) onwards.</p>
+                                          <p>Generated on: ${new Date().toLocaleString()}</p>
+                                          <p>Status: ${payout.status || 'pending'}</p>
+                                        </div>
+                                      </body>
+                                    </html>
+                                  `);
+                                  printWindow.document.close();
+                                  setTimeout(() => {
+                                    printWindow.print();
+                                  }, 250);
+                                }
+                              }}
+                              className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 transition"
+                            >
+                              <FiFileText className="text-sm" />
+                              Download PDF
+                            </button>
+                          </div>
+
+                          <div className="flex justify-between items-center text-sm">
                               <div className="text-lg font-semibold text-green-600">
                                 ₹{(payout.netAmount || 0).toLocaleString()}
                               </div>
@@ -1523,7 +1700,6 @@ export default function PayrollPage() {
                                 Net Amount
                               </div>
                             </div>
-                          </div>
 
                           <div className="mt-3 flex justify-between items-center">
                             <span
@@ -1558,7 +1734,8 @@ export default function PayrollPage() {
                             </div>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ));
                 })()}
@@ -1985,6 +2162,188 @@ export default function PayrollPage() {
             </div>
           </form>
         </Modal>
+
+        {/* Detailed Calculation Modal */}
+        {selectedPayoutForDetails && (
+          <Modal
+            isOpen={showDetailsModal}
+            onClose={() => {
+              setShowDetailsModal(false);
+              setSelectedPayoutForDetails(null);
+            }}
+            title="Profit Share Calculation Details"
+            size="lg"
+          >
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+              {(() => {
+                const payout = selectedPayoutForDetails;
+                const totalProfit = (payout.projectIncome || 0) - (payout.projectExpenses || 0);
+                const memberPercentage = totalProfit > 0 
+                  ? ((payout.profitShare || 0) / totalProfit * 100).toFixed(2)
+                  : 0;
+
+                return (
+                  <>
+                    {/* Member Info */}
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <h3 className="font-semibold text-lg text-blue-900 mb-2">
+                        {payout.userId?.name}
+                      </h3>
+                      <p className="text-sm text-gray-600">{payout.userId?.email}</p>
+                      <p className="text-sm text-gray-600">
+                        Project: <span className="font-medium">{payout.projectId?.title}</span>
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Period: <span className="font-medium">{payout.month}</span>
+                      </p>
+                      {payout.isProjectOwner && (
+                        <div className="mt-2 inline-block bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-medium">
+                          👑 Project Owner
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Timeline */}
+                    <div className="border rounded-lg p-4">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <span>📅</span> Timeline & Contribution
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Project Started:</span>
+                          <span className="font-medium">
+                            {payout.projectStartDate ? new Date(payout.projectStartDate).toLocaleDateString() : 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Member Joined:</span>
+                          <span className="font-medium text-blue-600">
+                            {payout.memberJoinedDate ? new Date(payout.memberJoinedDate).toLocaleDateString() : 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Working Days:</span>
+                          <span className="font-bold text-blue-600">
+                            {payout.workDurationDays || 0} days
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Profit Share %:</span>
+                          <span className="font-bold text-purple-600">
+                            {memberPercentage}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Financial Summary */}
+                    <div className="border rounded-lg p-4">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <span>💰</span> Financial Summary (Member&apos;s Period)
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center py-2 border-b">
+                          <span className="text-gray-600">Income (from join date):</span>
+                          <span className="font-semibold text-green-600">
+                            ₹{(payout.projectIncome || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b">
+                          <span className="text-gray-600">Expenses (from join date):</span>
+                          <span className="font-semibold text-red-600">
+                            ₹{(payout.projectExpenses || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 bg-blue-50 rounded px-2">
+                          <span className="font-medium text-gray-800">Net Profit:</span>
+                          <span className="font-bold text-blue-600 text-lg">
+                            ₹{totalProfit.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs text-gray-500 italic">
+                        * Calculated only from {payout.memberJoinedDate ? new Date(payout.memberJoinedDate).toLocaleDateString() : 'N/A'} onwards
+                      </p>
+                    </div>
+
+                    {/* Calculation Breakdown */}
+                    <div className="border rounded-lg p-4 bg-gradient-to-br from-purple-50 to-blue-50">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <span>🧮</span> Profit Share Calculation
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="bg-white rounded p-3 space-y-2">
+                          <div className="font-medium text-gray-700">Step 1: Total Profit Distribution</div>
+                          <div className="pl-4 space-y-1 text-xs">
+                            <div>• Founder receives: <span className="font-semibold">70%</span> of profit</div>
+                            <div>• Remaining pool: <span className="font-semibold">30%</span> of profit</div>
+                            {payout.isProjectOwner && (
+                              <div>• Project owner bonus: <span className="font-semibold">3%</span> of profit</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="bg-white rounded p-3 space-y-2">
+                          <div className="font-medium text-gray-700">Step 2: Member&apos;s Share Calculation</div>
+                          <div className="pl-4 space-y-1 text-xs">
+                            <div>Member&apos;s profit: <span className="font-semibold">₹{totalProfit.toLocaleString()}</span></div>
+                            <div>Remaining pool (30%): <span className="font-semibold">₹{Math.round(totalProfit * 0.30).toLocaleString()}</span></div>
+                            {payout.isProjectOwner ? (
+                              <>
+                                <div>Pool after owner bonus (27%): <span className="font-semibold">₹{Math.round(totalProfit * 0.27).toLocaleString()}</span></div>
+                                <div>Base share ({memberPercentage}%): <span className="font-semibold">₹{Math.round(payout.profitShare - (payout.ownerBonus || 0)).toLocaleString()}</span></div>
+                                <div>Owner bonus (3%): <span className="font-semibold text-purple-600">₹{Math.round(payout.ownerBonus || 0).toLocaleString()}</span></div>
+                              </>
+                            ) : (
+                              <div>Member&apos;s share ({memberPercentage}%): <span className="font-semibold">₹{Math.round(payout.profitShare || 0).toLocaleString()}</span></div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded p-4">
+                          <div className="flex justify-between items-center">
+                            <span className="font-semibold text-lg">Total Profit Share:</span>
+                            <span className="font-bold text-2xl">
+                              ₹{Math.round(payout.profitShare || 0).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="text-xs mt-1 opacity-90">
+                            {memberPercentage}% of ₹{totalProfit.toLocaleString()} profit from member&apos;s period
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status */}
+                    <div className="border rounded-lg p-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Payment Status:</span>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          payout.status === 'paid' ? 'bg-green-100 text-green-700' :
+                          payout.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {payout.status || 'pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Footer Note */}
+                    <div className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600">
+                      <p className="font-medium mb-1">📝 Important Notes:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Income and expenses are calculated only from the member&apos;s join date onwards</li>
+                        <li>This ensures fair profit distribution based on actual contribution period</li>
+                        <li>Founder always receives 70% from total project profit</li>
+                        {payout.isProjectOwner && <li>Project owner receives an additional 3% bonus for managing the project</li>}
+                      </ul>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </Modal>
+        )}
 
         {/* Mobile Components */}
         <FABMenu />

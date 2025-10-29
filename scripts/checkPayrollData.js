@@ -1,74 +1,50 @@
 const mongoose = require('mongoose');
-const dotenv = require('dotenv');
+require('dotenv').config();
 
-// Load env vars
-dotenv.config();
-
-// Import models
+// Load all models
 const Project = require('../models/Project');
 const User = require('../models/User');
-const Payroll = require('../models/Payroll');
+const Team = require('../models/Team');
 const Role = require('../models/Role');
 const Income = require('../models/Income');
 const Expense = require('../models/Expense');
+const Payroll = require('../models/Payroll');
 
-mongoose
-  .connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ MongoDB Connected'))
   .catch((err) => console.error('❌ MongoDB Connection Error:', err));
 
-const checkPayrollData = async () => {
+const checkData = async () => {
   try {
-    console.log('🔍 Checking database for payroll issues...');
+    const project = await Project.findOne({ title: 'demo' });
     
-    // Check all projects
-    const projects = await Project.find({}).populate('projectMembers', 'name email');
-    console.log('\n📋 Projects:');
-    projects.forEach(p => {
-      console.log(`- ${p.title}: Members: ${p.projectMembers.map(m => m.name).join(', ')}`);
-    });
+    console.log('\n🔍 CHECKING PAYROLL RECORD DATA\n');
     
-    // Check all users and their roles
-    const users = await User.find({}).populate('roleIds');
-    console.log('\n👥 Users and Roles:');
-    users.forEach(u => {
-      const roles = u.roleIds.map(r => r.key).join(', ');
-      console.log(`- ${u.name} (${u.email}): Roles: [${roles}]`);
-    });
+    const payrolls = await Payroll.find({
+      projectId: project._id,
+      month: '2025-10'
+    }).populate('userId', 'name email');
     
-    // Check payroll records
-    const payrolls = await Payroll.find({}).populate('userId', 'name email').populate('projectId', 'title');
-    console.log('\n💰 Payroll Records:');
     payrolls.forEach(p => {
-      console.log(`- ${p.userId?.name}: Project: ${p.projectId?.title || 'N/A'}, Profit: ₹${p.profitShare || 0}, Status: ${p.status}`);
+      console.log(`\n👤 ${p.userId.name} (${p.userId.email}):`);
+      console.log(`  profitShare: ₹${p.profitShare}`);
+      console.log(`  projectIncome: ₹${p.projectIncome}`);
+      console.log(`  projectExpenses: ₹${p.projectExpenses}`);
+      console.log(`  netProfit (calc): ₹${(p.projectIncome || 0) - (p.projectExpenses || 0)}`);
+      console.log(`  netProfit (stored): ₹${p.netProfit}`);
+      
+      const totalProfit = (p.projectIncome || 0) - (p.projectExpenses || 0);
+      const percentage = totalProfit > 0 ? ((p.profitShare / totalProfit) * 100).toFixed(2) : 0;
+      console.log(`  Percentage: ${percentage}%`);
+      console.log(`  ownerBonus: ₹${p.ownerBonus || 0}`);
+      console.log(`  isProjectOwner: ${p.isProjectOwner || false}`);
     });
     
-    // Check income records
-    const incomes = await Income.find({}).populate('receivedByUserId', 'name email');
-    console.log('\n💵 Income Records:');
-    incomes.forEach(i => {
-      console.log(`- ${i.sourceType}: ₹${i.amount}, Received by: ${i.receivedByUserId?.name}, Profit Shared: ${i.profitShared}`);
-    });
-    
-    // Check expenses
-    const expenses = await Expense.find({}).populate('userId', 'name email').populate('projectId', 'title');
-    console.log('\n💸 Expense Records:');
-    expenses.forEach(e => {
-      console.log(`- ${e.category}: ₹${e.amount}, User: ${e.userId?.name}, Project: ${e.projectId?.title || 'N/A'}`);
-    });
-    
-    // Check roles
-    const roles = await Role.find({});
-    console.log('\n🎭 Roles:');
-    roles.forEach(r => {
-      console.log(`- ${r.key}: ${r.name}`);
-    });
-
     process.exit(0);
-  } catch (err) {
-    console.error('❌ Error checking database:', err);
+  } catch (error) {
+    console.error('❌ Error:', error);
     process.exit(1);
   }
 };
 
-checkPayrollData();
+checkData();

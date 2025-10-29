@@ -116,10 +116,7 @@ exports.createController = (Model) => {
     // Update
     update: async (req, res) => {
       try {
-        const doc = await Model.findByIdAndUpdate(req.params.id, req.body, {
-          new: true,
-          runValidators: true
-        });
+        const doc = await Model.findById(req.params.id);
 
         if (!doc) {
           return res.status(404).json({
@@ -127,6 +124,21 @@ exports.createController = (Model) => {
             message: 'Resource not found'
           });
         }
+
+        // Apply incoming updates using Mongoose document setters so that hooks run
+        doc.set(req.body);
+
+        // Ensure Mixed-type fields are marked as modified when provided
+        if (req.body && typeof req.body === 'object') {
+          Object.keys(req.body).forEach((key) => {
+            const path = doc.schema?.path?.(key);
+            if (path && path.instance === 'Mixed') {
+              doc.markModified(key);
+            }
+          });
+        }
+
+        await doc.save();
 
         res.status(200).json({
           success: true,

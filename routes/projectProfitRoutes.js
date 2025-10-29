@@ -69,7 +69,9 @@ router.post('/compute-all',
   restrictToRole('FOUNDER'),
   async (req, res) => {
     try {
-      const results = await computeAllProjectsProfitSharing();
+      const { month, year } = req.body;
+      
+      const results = await computeAllProjectsProfitSharing(month, year);
       
       res.status(200).json({
         success: true,

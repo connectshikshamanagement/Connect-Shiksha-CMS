@@ -90,6 +90,11 @@ export default function ProjectsPage() {
     progress: 0,
   });
 
+  // Track member join dates
+  const [memberJoinDates, setMemberJoinDates] = useState<Record<string, string>>({});
+  // Track custom share percentages (of the 30% team pool) for members
+  const [memberSharePercents, setMemberSharePercents] = useState<Record<string, number>>({});
+
   useEffect(() => {
     fetchData();
   }, [isManager, isMember]);
@@ -156,12 +161,18 @@ export default function ProjectsPage() {
       // Auto-add founder if not already included
       if (founderId && !memberIds.has(founderId)) {
         memberIds.add(founderId);
+        // Set founder's join date to project start date
+        if (formData.startDate) {
+          memberJoinDates[founderId] = formData.startDate;
+        }
       }
       
-      // Prepare project data with automatic founder inclusion
+      // Prepare project data with automatic founder inclusion and member join dates
       const projectData = {
         ...formData,
-        projectMembers: Array.from(memberIds) // Ensure founder is always included
+        projectMembers: Array.from(memberIds), // Ensure founder is always included
+        memberJoinDates: memberJoinDates, // Include join dates for each member
+        memberSharePercents: memberSharePercents // Include custom share percentages
       };
 
       if (editingProject) {
@@ -185,12 +196,36 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleEdit = (project: Project) => {
+  const handleEdit = async (project: Project) => {
     setEditingProject(project);
     // Ensure founder is included in edit state
     const founder = users.find((u: User) => (u.roleIds || []).some((r: RoleRef) => r.key === 'FOUNDER')) as User | undefined;
     const existingMembers = (project.projectMembers || []).map((m) => typeof m === 'string' ? m : (m._id || ''));
     const withFounder = founder ? Array.from(new Set([...(existingMembers || []), founder._id])) : existingMembers;
+    
+    // Fetch project details to get member join dates and share %
+    const joinDates: Record<string, string> = {};
+    const sharePercents: Record<string, number> = {};
+    try {
+      const response = await projectAPI.getOne(project._id);
+      if (response.data.success && response.data.data.memberDetails) {
+        // Extract join dates from memberDetails
+        response.data.data.memberDetails.forEach((detail: any) => {
+          const memberId = typeof detail.userId === 'string' ? detail.userId : detail.userId?._id;
+          if (memberId && detail.joinedDate) {
+            joinDates[memberId] = new Date(detail.joinedDate).toISOString().split('T')[0];
+          }
+          if (memberId && typeof detail.sharePercentage === 'number') {
+            sharePercents[memberId] = detail.sharePercentage;
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching project details:', error);
+    }
+    
+    setMemberJoinDates(joinDates);
+    setMemberSharePercents(sharePercents);
     setFormData({
       title: project.title,
       description: project.description || '',
@@ -241,6 +276,8 @@ export default function ProjectsPage() {
       priority: 'medium',
       progress: 0,
     });
+    setMemberJoinDates({});
+    setMemberSharePercents({});
     setEditingProject(null);
   };
 
@@ -643,7 +680,7 @@ const diffDays = (a: Date, b: Date) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Project Members (Optional)
               </label>
-            <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+            <div className="space-y-3 max-h-96 overflow-y-auto border rounded-md p-3">
                 {users
                   .filter((user: any) => user.active)
                   .map((user: any) => {
@@ -651,36 +688,107 @@ const diffDays = (a: Date, b: Date) => {
                     const checked = formData.projectMembers.includes(user._id) || isFounderUser;
                     const disabled = isFounderUser; // Founder cannot be removed
                     return (
-                      <label key={user._id} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={(e) => {
-                            if (disabled) return;
-                            if (e.target.checked) {
-                              setFormData({
-                                ...formData,
-                                projectMembers: Array.from(new Set([...(formData.projectMembers || []), user._id]))
-                              });
-                            } else {
-                              setFormData({
-                                ...formData,
-                                projectMembers: (formData.projectMembers || []).filter(id => id !== user._id)
-                              });
-                            }
-                          }}
-                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                        />
-                        <span className="text-sm text-gray-700">
-                          {user.name}{disabled ? ' — Founder' : ''}
-                        </span>
-                      </label>
+                      <div key={user._id} className="space-y-2 p-2 bg-gray-50 rounded">
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={(e) => {
+                              if (disabled) return;
+                              if (e.target.checked) {
+                                setFormData({
+                                  ...formData,
+                                  projectMembers: Array.from(new Set([...(formData.projectMembers || []), user._id]))
+                                });
+                                // Set default join date to project start date or today
+                                const defaultDate = formData.startDate || new Date().toISOString().split('T')[0];
+                                setMemberJoinDates({
+                                  ...memberJoinDates,
+                                  [user._id]: defaultDate
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  projectMembers: (formData.projectMembers || []).filter(id => id !== user._id)
+                                });
+                                // Remove join date when unchecking
+                                const newDates = { ...memberJoinDates };
+                                delete newDates[user._id];
+                                setMemberJoinDates(newDates);
+                            // Remove custom share percent when unchecking
+                            setMemberSharePercents((prev) => {
+                              const next = { ...prev } as Record<string, number>;
+                              delete next[user._id];
+                              return next;
+                            });
+                              }
+                            }}
+                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          <span className="text-sm font-medium text-gray-700">
+                            {user.name}{disabled ? ' — Founder' : ''}
+                          </span>
+                        </label>
+                        {checked && (
+                          <div className="ml-6">
+                            <label className="block text-xs text-gray-600 mb-1">
+                              Joining Date {disabled ? '(auto-set to project start)' : ''}
+                            </label>
+                            <input
+                              type="date"
+                              disabled={disabled}
+                              value={
+                                disabled 
+                                  ? formData.startDate || '' 
+                                  : memberJoinDates[user._id] || ''
+                              }
+                              onChange={(e) => {
+                                setMemberJoinDates({
+                                  ...memberJoinDates,
+                                  [user._id]: e.target.value
+                                });
+                              }}
+                              className="w-full text-sm rounded border-gray-300 px-2 py-1 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                              placeholder="Select join date"
+                            />
+                            {!disabled && (
+                              <div className="mt-2">
+                                <label className="block text-xs text-gray-600 mb-1">
+                                  Share % (of 30% team pool)
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  value={memberSharePercents[user._id] ?? ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    const num = val === '' ? undefined : Number(val);
+                                    setMemberSharePercents((prev) => {
+                                      const next = { ...prev } as Record<string, number>;
+                                      if (num === undefined || Number.isNaN(num)) {
+                                        delete next[user._id];
+                                      } else {
+                                        next[user._id] = num;
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  className="w-full text-sm rounded border-gray-300 px-2 py-1 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                                  placeholder="Auto"
+                                />
+                                <p className="text-[10px] text-gray-500 mt-1">Leave blank to auto-distribute equally. Project owner gets +3% bonus.</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Select specific team members for this project. If none selected, all team members will be eligible for profit sharing.
+                Select team members and set their joining dates. Join dates are used for profit share calculations.
               </p>
             </div>
 

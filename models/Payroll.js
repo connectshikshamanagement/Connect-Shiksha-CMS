@@ -101,6 +101,33 @@ const payrollSchema = new mongoose.Schema({
   netProfit: {
     type: Number,
     default: 0
+  },
+  // Member work tracking
+  memberJoinedDate: {
+    type: Date
+  },
+  workDurationDays: {
+    type: Number,
+    default: 0
+  },
+  projectStartDate: {
+    type: Date
+  },
+  // Project owner bonus tracking
+  isProjectOwner: {
+    type: Boolean,
+    default: false
+  },
+  ownerBonus: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  // Optional: stored configured share percentage from project settings for visibility
+  configuredSharePercent: {
+    type: Number,
+    required: false,
+    min: 0
   }
 }, {
   timestamps: true
