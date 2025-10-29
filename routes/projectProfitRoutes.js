@@ -22,8 +22,9 @@ router.post('/compute/:projectId',
   async (req, res) => {
     try {
       const { projectId } = req.params;
+      const { month, year } = req.body;
       
-      const result = await computeProjectProfitSharing(projectId);
+      const result = await computeProjectProfitSharing(projectId, month, year);
       
       res.status(200).json({
         success: true,
@@ -46,8 +47,9 @@ router.get('/summary/:projectId',
   async (req, res) => {
     try {
       const { projectId } = req.params;
+      const { month, year } = req.query;
       
-      const summary = await getProjectProfitSummary(projectId);
+      const summary = await getProjectProfitSummary(projectId, month, year);
       
       res.status(200).json({
         success: true,

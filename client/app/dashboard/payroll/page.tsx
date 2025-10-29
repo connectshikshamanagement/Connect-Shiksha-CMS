@@ -202,21 +202,18 @@ export default function PayrollPage() {
 
             if (!matchesProject) return false;
 
-            // Check if this user is still a member of the project (unless they're the founder)
+            // Check if this user is still a member of the project
+            // Note: Backend now handles removing old members, but this is extra protection
             const userId = payout.userId?._id || payout.userId;
-            const isFounder =
-              payout.userId?.email === "founder@connectshiksha.com";
 
-            // Founder is always included, others must be current project members
-            if (isFounder) return true;
-
+            // Check if user is still a member of the project
             const isStillMember = currentProjectMembers.some(
               (memberId: any) =>
                 memberId?.toString() === userId?.toString() ||
                 memberId?._id?.toString() === userId?.toString()
             );
 
-            // Only show payroll record if user is still a member of the project
+            // Show payroll record only if user is still a member (backend should handle this)
             return isStillMember;
           });
         } else if (!selectedProject && Array.isArray(payoutsData)) {
@@ -250,14 +247,10 @@ export default function PayrollPage() {
               if (!payoutProjectId) return true;
 
               // Check if user is still in the project
+              // Note: Backend now handles removing old members, but this is extra protection
               const userId = payout.userId?._id || payout.userId;
-              const isFounder =
-                payout.userId?.email === "founder@connectshiksha.com";
 
-              // Founder is always included
-              if (isFounder) return true;
-
-              // Get current project members
+              // Get current project members (founder is always included via pre-save hook)
               const currentProjectMembers =
                 projectMembersMap.get(payoutProjectId.toString()) || [];
 
@@ -345,6 +338,13 @@ export default function PayrollPage() {
         endpoint = `/project-profit/compute/${projectId}`;
       }
 
+      // Prepare request body with selected month and year
+      const requestBody: any = {};
+      if (selectedMonth && selectedYear) {
+        requestBody.month = selectedMonth;
+        requestBody.year = selectedYear;
+      }
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}${endpoint}`,
         {
@@ -353,6 +353,7 @@ export default function PayrollPage() {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
             "Content-Type": "application/json",
           },
+          body: JSON.stringify(requestBody),
         }
       );
 
@@ -674,7 +675,7 @@ export default function PayrollPage() {
               {canComputeProfitSharing && (
                 <Button
                   variant="primary"
-                  onClick={() => handleComputeProfitSharing()}
+                  onClick={() => handleComputeProfitSharing(selectedProject || undefined)}
                   className="flex-1 sm:flex-none"
                 >
                   <FiRefreshCw className="mr-2" />
@@ -1702,7 +1703,7 @@ export default function PayrollPage() {
                 <div className="mt-4">
                   <Button
                     variant="primary"
-                    onClick={() => handleComputeProfitSharing()}
+                    onClick={() => handleComputeProfitSharing(selectedProject || undefined)}
                   >
                     <FiRefreshCw className="mr-2" />
                     Compute Profit Sharing

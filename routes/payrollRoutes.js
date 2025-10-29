@@ -20,9 +20,24 @@ router.get('/', authorize('finance.read'), async (req, res) => {
     const { month, year, teamId, status } = req.query;
     
     let query = {};
+    let dateFilter = {}; // Filter for income/expense dates
+    
     if (month && year) {
       // Format: YYYY-MM (e.g., 2025-10)
       query.month = `${year}-${month.toString().padStart(2, '0')}`;
+      
+      // Create date range for filtering income and expenses
+      const yearNum = parseInt(year);
+      const monthNum = parseInt(month);
+      const startDate = new Date(yearNum, monthNum - 1, 1); // First day of month
+      const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59, 999); // Last day of month
+      
+      dateFilter = {
+        date: {
+          $gte: startDate,
+          $lte: endDate
+        }
+      };
     } else if (month) {
       query.month = month;
     }
@@ -31,6 +46,7 @@ router.get('/', authorize('finance.read'), async (req, res) => {
     if (status) query.status = status;
 
     console.log('Payroll query:', query);
+    console.log('Date filter for income/expenses:', dateFilter);
 
     const payrolls = await Payroll.find(query)
       .populate('userId', 'name email')
@@ -50,33 +66,52 @@ router.get('/', authorize('finance.read'), async (req, res) => {
 
         // If payroll has a projectId, get project-specific data
         if (payroll.projectId) {
-          // Get project income (using sourceRefId and sourceRefModel)
-          const incomes = await Income.find({ 
+          // Get project income (using sourceRefId and sourceRefModel) - WITH date filter
+          const incomeQuery = { 
             sourceRefId: payroll.projectId._id,
             sourceRefModel: 'Project'
-          });
+          };
+          if (dateFilter.date) {
+            incomeQuery.date = dateFilter.date;
+          }
+          
+          const incomes = await Income.find(incomeQuery);
           projectIncome = incomes.reduce((sum, income) => sum + income.amount, 0);
 
-          // Get project expenses (using projectId)
-          const expenses = await Expense.find({ 
-            projectId: payroll.projectId._id 
-          });
+          // Get project expenses (using projectId) - WITH date filter
+          const expenseQuery = { 
+            projectId: payroll.projectId._id
+          };
+          if (dateFilter.date) {
+            expenseQuery.date = dateFilter.date;
+          }
+          
+          const expenses = await Expense.find(expenseQuery);
           projectExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
           // Get project budget
           projectBudget = payroll.projectId.allocatedBudget || 0;
         } else {
-          // If no projectId, get team-level data as fallback
-          // Get team income
-          const teamIncomes = await Income.find({ 
-            teamId: payroll.teamId._id 
-          });
+          // If no projectId, get team-level data as fallback - WITH date filter
+          const teamIncomeQuery = { 
+            teamId: payroll.teamId._id
+          };
+          if (dateFilter.date) {
+            teamIncomeQuery.date = dateFilter.date;
+          }
+          
+          const teamIncomes = await Income.find(teamIncomeQuery);
           projectIncome = teamIncomes.reduce((sum, income) => sum + income.amount, 0);
 
           // Get team expenses
-          const teamExpenses = await Expense.find({ 
-            teamId: payroll.teamId._id 
-          });
+          const teamExpenseQuery = { 
+            teamId: payroll.teamId._id
+          };
+          if (dateFilter.date) {
+            teamExpenseQuery.date = dateFilter.date;
+          }
+          
+          const teamExpenses = await Expense.find(teamExpenseQuery);
           projectExpenses = teamExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
           // Get team budget

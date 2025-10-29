@@ -6,9 +6,12 @@ const Income = require('../models/Income');
 const Expense = require('../models/Expense');
 
 // Compute project-based profit sharing (70% Founder, 30% shared among eligible members)
-exports.computeProjectProfitSharing = async (projectId) => {
+exports.computeProjectProfitSharing = async (projectId, month = null, year = null) => {
   try {
     console.log(`🔄 Computing profit sharing for project: ${projectId}`);
+    if (month && year) {
+      console.log(`📅 Filtering for month: ${month}, year: ${year}`);
+    }
 
     // Find project with related data
     const project = await Project.findById(projectId)
@@ -19,15 +22,38 @@ exports.computeProjectProfitSharing = async (projectId) => {
       throw new Error('Project not found');
     }
 
-    // Get all income and expense records for this project
-    const incomeRecords = await Income.find({ 
+    // Build date filter if month and year are provided
+    let dateFilter = {};
+    if (month && year) {
+      const yearNum = parseInt(year);
+      const monthNum = parseInt(month);
+      const startDate = new Date(yearNum, monthNum - 1, 1); // First day of month
+      const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59, 999); // Last day of month
+      
+      dateFilter = {
+        $gte: startDate,
+        $lte: endDate
+      };
+    }
+
+    // Get income and expense records for this project - with optional date filter
+    const incomeQuery = { 
       sourceRefId: projectId,
       sourceRefModel: 'Project'
-    });
-
-    const expenseRecords = await Expense.find({ 
+    };
+    if (Object.keys(dateFilter).length > 0) {
+      incomeQuery.date = dateFilter;
+    }
+    
+    const expenseQuery = { 
       projectId: projectId 
-    });
+    };
+    if (Object.keys(dateFilter).length > 0) {
+      expenseQuery.date = dateFilter;
+    }
+
+    const incomeRecords = await Income.find(incomeQuery);
+    const expenseRecords = await Expense.find(expenseQuery);
 
     // Calculate project profit
     const totalIncome = incomeRecords.reduce((sum, record) => sum + record.amount, 0);
@@ -116,27 +142,51 @@ exports.computeProjectProfitSharing = async (projectId) => {
 
     console.log(`👥 Eligible users: ${eligibleUsers.length} (Founder: 1, Others: ${nonFounderCount})`);
 
-    // Create payroll records
+    // Use provided month/year or default to current month/year
     const currentDate = new Date();
-    const month = currentDate.getMonth() + 1;
-    const year = currentDate.getFullYear();
+    const monthToUse = month || (currentDate.getMonth() + 1);
+    const yearToUse = year || currentDate.getFullYear();
+    const monthString = `${yearToUse}-${monthToUse.toString().padStart(2, '0')}`;
+
+    console.log(`📅 Computing for period: ${monthString}`);
 
     const payrollRecords = [];
+    
+    // Get all current payroll records for this project and month
+    const existingPayrolls = await Payroll.find({
+      projectId: projectId,
+      month: monthString
+    });
+
+    // Get list of current eligible user IDs
+    const eligibleUserIds = eligibleUsers.map(u => u.user._id.toString());
+
+    // Cancel/delete payroll records for users no longer in the project
+    for (const existingPayroll of existingPayrolls) {
+      const userIdStr = existingPayroll.userId.toString();
+      if (!eligibleUserIds.includes(userIdStr)) {
+        // This user is no longer part of the project, cancel their payroll
+        if (existingPayroll.status === 'paid') {
+          console.log(`⚠️ Keeping paid payroll for removed user ${existingPayroll.userId} (already paid)`);
+        } else {
+          await Payroll.findByIdAndDelete(existingPayroll._id);
+          console.log(`🗑️ Deleted payroll record for removed user`);
+        }
+      }
+    }
 
     for (const eligibleUser of eligibleUsers) {
       // Check if payroll record already exists for this user/month/project
-      // Try to find any record for this user + project (regardless of month to update stale data)
       let existingPayroll = await Payroll.findOne({
         userId: eligibleUser.user._id,
-        projectId: projectId
-      }).sort('-createdAt'); // Get the most recent one
+        projectId: projectId,
+        month: monthString
+      });
 
       if (existingPayroll) {
         // Store old amount for logging
         const oldAmount = existingPayroll.profitShare;
-        // Always update to match current month and new profit amounts
-        existingPayroll.month = `${year}-${month.toString().padStart(2, '0')}`;
-        existingPayroll.year = year;
+        // Update with new profit amounts
         existingPayroll.profitShare = eligibleUser.shareAmount;
         existingPayroll.description = eligibleUser.description;
         // Update project financial data
@@ -160,8 +210,8 @@ exports.computeProjectProfitSharing = async (projectId) => {
           userId: eligibleUser.user._id,
           teamId: project.teamId._id,
           projectId: projectId,
-          month: `${year}-${month.toString().padStart(2, '0')}`,
-          year: year,
+          month: monthString,
+          year: yearToUse,
           baseSalary: userSalary,
           profitShare: eligibleUser.shareAmount,
           bonuses: 0,
@@ -208,21 +258,44 @@ exports.computeProjectProfitSharing = async (projectId) => {
 };
 
 // Get project profit summary
-exports.getProjectProfitSummary = async (projectId) => {
+exports.getProjectProfitSummary = async (projectId, month = null, year = null) => {
   try {
     const project = await Project.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
     }
 
-    const incomeRecords = await Income.find({ 
+    // Build date filter if month and year are provided
+    let dateFilter = {};
+    if (month && year) {
+      const yearNum = parseInt(year);
+      const monthNum = parseInt(month);
+      const startDate = new Date(yearNum, monthNum - 1, 1);
+      const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
+      
+      dateFilter = {
+        $gte: startDate,
+        $lte: endDate
+      };
+    }
+
+    const incomeQuery = { 
       sourceRefId: projectId,
       sourceRefModel: 'Project'
-    });
+    };
+    if (Object.keys(dateFilter).length > 0) {
+      incomeQuery.date = dateFilter;
+    }
 
-    const expenseRecords = await Expense.find({ 
+    const expenseQuery = { 
       projectId: projectId 
-    });
+    };
+    if (Object.keys(dateFilter).length > 0) {
+      expenseQuery.date = dateFilter;
+    }
+
+    const incomeRecords = await Income.find(incomeQuery);
+    const expenseRecords = await Expense.find(expenseQuery);
 
     const totalIncome = incomeRecords.reduce((sum, record) => sum + record.amount, 0);
     const totalExpense = expenseRecords.reduce((sum, record) => sum + record.amount, 0);
