@@ -620,7 +620,7 @@ router.get('/export/project/:projectId/pdf', async (req, res) => {
        .text('Reg. UDYAM-MP-06-0024200', 50, 70)
        .text('Address: Balaghat, Madhya Pradesh', 50, 85)
        .text('Web: www.connectshiksha.com', 50, 100)
-       .text('Mobile: 9131782103, ', 50, 115)
+       .text('Mobile: 9131782103, 7748893097 ', 50, 115)
        .text('Email: connectshikshaofficial@gmail.com', 50, 130);
 
     // Add a line separator

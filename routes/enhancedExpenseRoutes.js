@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Expense = require('../models/Expense');
 const Team = require('../models/Team');
 const User = require('../models/User');
@@ -147,7 +148,7 @@ router.get('/user/:userId', async (req, res) => {
     const monthlyExpenses = await Expense.aggregate([
       {
         $match: {
-          submittedBy: userId,
+          submittedBy: mongoose.Types.ObjectId(userId),
           date: { $gte: startOfMonth, $lte: endOfMonth }
         }
       },

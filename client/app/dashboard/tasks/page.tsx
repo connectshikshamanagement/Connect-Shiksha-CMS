@@ -86,7 +86,7 @@ export default function TasksPage() {
   };
 
   const [taskFormData, setTaskFormData] = useState(formData);
-  const [bulkTasks, setBulkTasks] = useState<Array<{id: string, title: string, description: string}>>([]);
+  const [bulkTasks, setBulkTasks] = useState<Array<{id: string, title: string, description: string, assignedTo?: string[]}>>([]);
   const [showBulkMode, setShowBulkMode] = useState(false);
 
   useEffect(() => {
@@ -181,6 +181,7 @@ export default function TasksPage() {
           ...taskFormData,
           title: task.title,
           description: task.description,
+          assignedTo: (task.assignedTo && task.assignedTo.length > 0) ? task.assignedTo : taskFormData.assignedTo,
         }));
 
         const promises = tasksToCreate.map(taskData => taskAPI.create(taskData));
@@ -265,7 +266,8 @@ export default function TasksPage() {
     const newTask = {
       id: Date.now().toString(),
       title: '',
-      description: ''
+      description: '',
+      assignedTo: [] as string[]
     };
     setBulkTasks([...bulkTasks, newTask]);
   };
@@ -618,6 +620,34 @@ export default function TasksPage() {
                         rows={2}
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                       />
+
+                      {/* Per-task assignees */}
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">Assign To (override)</label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
+                          {users.map((user: any) => (
+                            <label key={user._id} className="flex items-center space-x-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={(task.assignedTo || []).includes(user._id)}
+                                onChange={(e) => {
+                                  setBulkTasks(prev => prev.map(t => {
+                                    if (t.id !== task.id) return t;
+                                    const current = t.assignedTo || [];
+                                    const next = e.target.checked
+                                      ? Array.from(new Set([...current, user._id]))
+                                      : current.filter((id) => id !== user._id);
+                                    return { ...t, assignedTo: next };
+                                  }));
+                                }}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span>{user.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">If none selected, uses the common selection above.</p>
+                      </div>
                     </div>
                   </div>
                 ))}

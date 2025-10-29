@@ -35,6 +35,7 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressData, setProgressData] = useState({ progress: 0, note: '', status: '' });
+  const canMarkDone = userRole === 'FOUNDER' || userRole === 'TEAM_MANAGER';
 
   const getPriorityColor = (priority: string) => {
     const colors = {
@@ -215,7 +216,7 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
             Update
           </Button>
           
-          {task.status !== 'done' && (
+          {canMarkDone && task.status !== 'done' && (
             <Button
               size="sm"
               variant="success"
@@ -312,7 +313,7 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
                 <option value="todo">To Do</option>
                 <option value="in_progress">In Progress</option>
                 <option value="review">Review</option>
-                <option value="done">Done</option>
+                {canMarkDone && <option value="done">Done</option>}
               </select>
             </div>
 
