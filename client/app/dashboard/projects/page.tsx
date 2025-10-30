@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { projectAPI, teamAPI, userAPI } from '@/lib/api';
+import { formatDDMMYY } from '@/lib/date';
 import { usePermissions } from '@/hooks/usePermissions';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
@@ -58,12 +59,12 @@ interface ProjectFormData {
   teamId: string;
   ownerId: string;
   projectMembers: string[];
-  budget: number;
-  totalDealAmount: number;
+  budget: string; // UI accepts empty string
+  totalDealAmount: string; // UI accepts empty string
   startDate: string;
   endDate: string;
   priority: Project['priority'];
-  progress: number;
+  progress: string; // UI accepts empty string
 }
 
 export default function ProjectsPage() {
@@ -82,18 +83,24 @@ export default function ProjectsPage() {
     teamId: '',
     ownerId: '',
     projectMembers: [] as string[],
-    budget: 0,
-    totalDealAmount: 0,
+    budget: '',
+    totalDealAmount: '',
     startDate: '',
     endDate: '',
     priority: 'medium',
-    progress: 0,
+    progress: '',
   });
 
   // Track member join dates
   const [memberJoinDates, setMemberJoinDates] = useState<Record<string, string>>({});
+  // Track member end dates (left dates)
+  const [memberEndDates, setMemberEndDates] = useState<Record<string, string>>({});
   // Track custom share percentages (of the 30% team pool) for members
   const [memberSharePercents, setMemberSharePercents] = useState<Record<string, number>>({});
+  // Track per-member active state
+  const [memberActiveStates, setMemberActiveStates] = useState<Record<string, boolean>>({});
+  // Track existing members (cannot be removed after creation)
+  const [existingMemberIds, setExistingMemberIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchData();
@@ -168,12 +175,19 @@ export default function ProjectsPage() {
       }
       
       // Prepare project data with automatic founder inclusion and member join dates
-      const projectData = {
+      const projectData: any = {
         ...formData,
         projectMembers: Array.from(memberIds), // Ensure founder is always included
         memberJoinDates: memberJoinDates, // Include join dates for each member
-        memberSharePercents: memberSharePercents // Include custom share percentages
+        memberLeftDates: memberEndDates, // Include left dates for each member
+        memberSharePercents: memberSharePercents, // Include custom share percentages
+        memberActiveStates: memberActiveStates // Include active/deactive states
       };
+
+      // Coerce numeric fields only if provided
+      if (formData.budget !== '') projectData.budget = Number(formData.budget);
+      if (formData.totalDealAmount !== '') projectData.totalDealAmount = Number(formData.totalDealAmount);
+      if (formData.progress !== '') projectData.progress = Number(formData.progress);
 
       if (editingProject) {
         await projectAPI.update(editingProject._id, projectData);
@@ -203,9 +217,11 @@ export default function ProjectsPage() {
     const existingMembers = (project.projectMembers || []).map((m) => typeof m === 'string' ? m : (m._id || ''));
     const withFounder = founder ? Array.from(new Set([...(existingMembers || []), founder._id])) : existingMembers;
     
-    // Fetch project details to get member join dates and share %
-    const joinDates: Record<string, string> = {};
-    const sharePercents: Record<string, number> = {};
+  // Fetch project details to get member join dates and share %
+  const joinDates: Record<string, string> = {};
+  const endDates: Record<string, string> = {};
+  const sharePercents: Record<string, number> = {};
+  const activeStates: Record<string, boolean> = {};
     try {
       const response = await projectAPI.getOne(project._id);
       if (response.data.success && response.data.data.memberDetails) {
@@ -215,17 +231,26 @@ export default function ProjectsPage() {
           if (memberId && detail.joinedDate) {
             joinDates[memberId] = new Date(detail.joinedDate).toISOString().split('T')[0];
           }
+          if (memberId && detail.leftDate) {
+            endDates[memberId] = new Date(detail.leftDate).toISOString().split('T')[0];
+          }
           if (memberId && typeof detail.sharePercentage === 'number') {
             sharePercents[memberId] = detail.sharePercentage;
           }
+          if (memberId && typeof detail.isActive === 'boolean') {
+            activeStates[memberId] = !!detail.isActive;
+          }
         });
+        setExistingMemberIds(new Set(response.data.data.memberDetails.map((d: any) => (typeof d.userId === 'string' ? d.userId : d.userId?._id))));
       }
     } catch (error) {
       console.error('Error fetching project details:', error);
     }
     
     setMemberJoinDates(joinDates);
+    setMemberEndDates(endDates);
     setMemberSharePercents(sharePercents);
+    setMemberActiveStates(activeStates);
     setFormData({
       title: project.title,
       description: project.description || '',
@@ -234,12 +259,12 @@ export default function ProjectsPage() {
       teamId: typeof project.teamId === 'string' ? project.teamId : (project.teamId?._id || ''),
       ownerId: typeof project.ownerId === 'string' ? project.ownerId : (project.ownerId?._id || ''),
       projectMembers: withFounder || [],
-      budget: project.budget || 0,
-      totalDealAmount: project.totalDealAmount || 0,
+      budget: project.budget ? String(project.budget) : '',
+      totalDealAmount: project.totalDealAmount ? String(project.totalDealAmount) : '',
       startDate: project.startDate ? new Date(project.startDate as any).toISOString().split('T')[0] : '',
       endDate: project.endDate ? new Date(project.endDate as any).toISOString().split('T')[0] : '',
       priority: project.priority,
-      progress: project.progress || 0,
+      progress: typeof project.progress === 'number' && project.progress > 0 ? String(project.progress) : '',
     });
     setShowModal(true);
   };
@@ -269,15 +294,18 @@ export default function ProjectsPage() {
       teamId: '',
       ownerId: '',
       projectMembers: [],
-      budget: 0,
-      totalDealAmount: 0,
+      budget: '',
+      totalDealAmount: '',
       startDate: '',
       endDate: '',
       priority: 'medium',
-      progress: 0,
+      progress: '',
     });
     setMemberJoinDates({});
     setMemberSharePercents({});
+    setMemberEndDates({});
+    setMemberActiveStates({});
+    setExistingMemberIds(new Set());
     setEditingProject(null);
   };
 
@@ -451,9 +479,9 @@ const diffDays = (a: Date, b: Date) => {
                           const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
                           return (
                             <div>
-                              <div className="flex flex-wrap gap-4 text-sm font-medium text-gray-900">
-                                <span>Start: {start ? start.toLocaleDateString() : 'N/A'}</span>
-                                <span>End: {end ? end.toLocaleDateString() : 'N/A'}</span>
+                      <div className="flex flex-wrap gap-4 text-sm font-medium text-gray-900">
+                                <span>Start: {start ? formatDDMMYY(start) : 'N/A'}</span>
+                                <span>End: {end ? formatDDMMYY(end) : 'N/A'}</span>
                                 <span>Total: {total} days</span>
                                 <span>Elapsed: {elapsed}</span>
                                 <span>Remaining: {remaining}</span>
@@ -676,6 +704,60 @@ const diffDays = (a: Date, b: Date) => {
               }))}
             />
 
+
+            <FormSelect
+              label="Project Owner"
+              required
+              value={formData.ownerId}
+              onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
+              options={users.map((user: any) => ({
+                value: user._id,
+                label: user.name,
+              }))}
+            />
+
+            <FormInput
+              label="Budget (₹)"
+              type="number"
+              min="0"
+              value={formData.budget}
+              onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+              placeholder="0"
+            />
+
+            <FormInput
+              label="Total Deal Amount (₹)"
+              type="number"
+              min="0"
+              value={formData.totalDealAmount}
+              onChange={(e) => setFormData({ ...formData, totalDealAmount: e.target.value })}
+              placeholder="0"
+            />
+
+            <FormInput
+              label="Progress (%)"
+              type="number"
+              min="0"
+              max="100"
+              value={formData.progress}
+              onChange={(e) => setFormData({ ...formData, progress: e.target.value })}
+              placeholder="0"
+            />
+
+            <FormInput
+              label="Start Date"
+              type="date"
+              value={formData.startDate}
+              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+            />
+
+            <FormInput
+              label="End Date"
+              type="date"
+              value={formData.endDate}
+              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+            />
+            
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Project Members (Optional)
@@ -685,17 +767,19 @@ const diffDays = (a: Date, b: Date) => {
                   .filter((user: any) => user.active)
                   .map((user: any) => {
                     const isFounderUser = (user.roleIds || []).some((r: any) => r.key === 'FOUNDER');
-                    const checked = formData.projectMembers.includes(user._id) || isFounderUser;
-                    const disabled = isFounderUser; // Founder cannot be removed
+                    const isExisting = existingMemberIds.has(user._id);
+                    const checked = formData.projectMembers.includes(user._id) || isFounderUser || isExisting;
+                    const checkboxDisabled = isFounderUser || (editingProject && isExisting); // cannot uncheck founder or existing members
+                    const fieldsDisabled = isFounderUser; // only founder's fields are locked; others remain editable
                     return (
                       <div key={user._id} className="space-y-2 p-2 bg-gray-50 rounded">
                         <label className="flex items-center space-x-2">
                           <input
                             type="checkbox"
                             checked={checked}
-                            disabled={disabled}
+                            disabled={checkboxDisabled}
                             onChange={(e) => {
-                              if (disabled) return;
+                              if (checkboxDisabled) return;
                               if (e.target.checked) {
                                 setFormData({
                                   ...formData,
@@ -707,6 +791,14 @@ const diffDays = (a: Date, b: Date) => {
                                   ...memberJoinDates,
                                   [user._id]: defaultDate
                                 });
+                                // Set default end date to today on selection
+                                const today = new Date().toISOString().split('T')[0];
+                                setMemberEndDates({
+                                  ...memberEndDates,
+                                  [user._id]: today
+                                });
+                                // Default active state to true for newly added members
+                                setMemberActiveStates((prev) => ({ ...prev, [user._id]: true }));
                               } else {
                                 setFormData({
                                   ...formData,
@@ -722,24 +814,60 @@ const diffDays = (a: Date, b: Date) => {
                               delete next[user._id];
                               return next;
                             });
+                            // Remove end date when unchecking
+                            setMemberEndDates((prev) => {
+                              const next = { ...prev } as Record<string, string>;
+                              delete next[user._id];
+                              return next;
+                            });
+                            setMemberActiveStates((prev) => {
+                              const next = { ...prev } as Record<string, boolean>;
+                              delete next[user._id];
+                              return next;
+                            });
                               }
                             }}
                             className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                           />
                           <span className="text-sm font-medium text-gray-700">
-                            {user.name}{disabled ? ' — Founder' : ''}
+                            {user.name}{isFounderUser ? ' — Founder' : (editingProject && isExisting ? ' — Existing' : '')}
                           </span>
                         </label>
                         {checked && (
                           <div className="ml-6">
+                            {!isFounderUser && (
+                              <div className="mb-2 flex items-center gap-2">
+                                <label className="text-xs text-gray-600">Active</label>
+                                <input
+                                  type="checkbox"
+                                  checked={memberActiveStates[user._id] !== false}
+                                  onChange={(e) => {
+                                    const active = e.target.checked;
+                                    setMemberActiveStates((prev) => ({ ...prev, [user._id]: active }));
+                                    if (!active) {
+                                      if (!memberEndDates[user._id]) {
+                                        const today = new Date().toISOString().split('T')[0];
+                                        setMemberEndDates((prev) => ({ ...prev, [user._id]: today }));
+                                      }
+                                    } else {
+                                      setMemberEndDates((prev) => {
+                                        const next = { ...prev } as Record<string, string>;
+                                        delete next[user._id];
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                />
+                              </div>
+                            )}
                             <label className="block text-xs text-gray-600 mb-1">
-                              Joining Date {disabled ? '(auto-set to project start)' : ''}
+                              Joining Date {fieldsDisabled ? '(auto-set to project start)' : ''}
                             </label>
                             <input
                               type="date"
-                              disabled={disabled}
+                              disabled={fieldsDisabled}
                               value={
-                                disabled 
+                                fieldsDisabled 
                                   ? formData.startDate || '' 
                                   : memberJoinDates[user._id] || ''
                               }
@@ -752,7 +880,27 @@ const diffDays = (a: Date, b: Date) => {
                               className="w-full text-sm rounded border-gray-300 px-2 py-1 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                               placeholder="Select join date"
                             />
-                            {!disabled && (
+                            {!fieldsDisabled && (
+                              <div className="mt-2">
+                                <label className="block text-xs text-gray-600 mb-1">
+                                  Leave Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={memberEndDates[user._id] || ''}
+                                  onChange={(e) => {
+                                    setMemberEndDates((prev) => ({
+                                      ...prev,
+                                      [user._id]: e.target.value,
+                                    }));
+                                  }}
+                                  className="w-full text-sm rounded border-gray-300 px-2 py-1 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                                  placeholder="Select leave date"
+                                />
+                                <p className="text-[10px] text-gray-500 mt-1">Defaults to today when member is selected.</p>
+                              </div>
+                            )}
+                            {!fieldsDisabled && (
                               <div className="mt-2">
                                 <label className="block text-xs text-gray-600 mb-1">
                                   Share % (of 30% team pool)
@@ -791,59 +939,6 @@ const diffDays = (a: Date, b: Date) => {
                 Select team members and set their joining dates. Join dates are used for profit share calculations.
               </p>
             </div>
-
-            <FormSelect
-              label="Project Owner"
-              required
-              value={formData.ownerId}
-              onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
-              options={users.map((user: any) => ({
-                value: user._id,
-                label: user.name,
-              }))}
-            />
-
-            <FormInput
-              label="Budget (₹)"
-              type="number"
-              min="0"
-              value={formData.budget}
-              onChange={(e) => setFormData({ ...formData, budget: Number(e.target.value) })}
-              placeholder="0"
-            />
-
-            <FormInput
-              label="Total Deal Amount (₹)"
-              type="number"
-              min="0"
-              value={formData.totalDealAmount}
-              onChange={(e) => setFormData({ ...formData, totalDealAmount: Number(e.target.value) })}
-              placeholder="0"
-            />
-
-            <FormInput
-              label="Progress (%)"
-              type="number"
-              min="0"
-              max="100"
-              value={formData.progress}
-              onChange={(e) => setFormData({ ...formData, progress: Number(e.target.value) })}
-              placeholder="0"
-            />
-
-            <FormInput
-              label="Start Date"
-              type="date"
-              value={formData.startDate}
-              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-            />
-
-            <FormInput
-              label="End Date"
-              type="date"
-              value={formData.endDate}
-              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-            />
 
             <div className="col-span-2">
               <label className="mb-1 block text-sm font-medium text-gray-700">

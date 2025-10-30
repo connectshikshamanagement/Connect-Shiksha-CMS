@@ -1,6 +1,18 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:10000/api';
+// Normalize base URL to avoid issues like %22http:/... from misconfigured envs
+const normalizeBaseUrl = (url: string) => {
+  if (!url) return url;
+  let u = url.trim();
+  // strip surrounding quotes
+  u = u.replace(/^['"]|['"]$/g, '');
+  // fix single-slash protocol mistakes
+  u = u.replace(/^http:\/([^/])/, 'http://$1');
+  u = u.replace(/^https:\/([^/])/, 'https://$1');
+  return u;
+};
+
+const API_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:10000/api');
 
 const api = axios.create({
   baseURL: API_URL,

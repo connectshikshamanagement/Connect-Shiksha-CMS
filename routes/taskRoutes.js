@@ -18,10 +18,31 @@ router.get('/', protect, async (req, res) => {
       // Team members can only see tasks assigned to them
       query.assignedTo = req.user.id;
     } else if (userRole === 'TEAM_MANAGER') {
-      // Team managers can see tasks for their teams
-      const userTeams = await Team.find({ members: req.user.id }).select('_id');
+      // Team managers can see tasks for their teams AND projects they own
+      const userTeams = await Team.find({ 
+        $or: [
+          { members: req.user.id },
+          { leadUserId: req.user.id }
+        ]
+      }).select('_id');
       const teamIds = userTeams.map(team => team._id);
-      query.teamId = { $in: teamIds };
+      
+      // Get projects owned by this user
+      const userProjects = await Project.find({ ownerId: req.user.id }).select('_id');
+      const projectIds = userProjects.map(project => project._id);
+      
+      // Show tasks for teams they manage OR projects they own
+      query.$or = [];
+      if (teamIds.length > 0) {
+        query.$or.push({ teamId: { $in: teamIds } });
+      }
+      if (projectIds.length > 0) {
+        query.$or.push({ projectId: { $in: projectIds } });
+      }
+      if (query.$or.length === 0) {
+        // If no teams or projects, return empty result
+        query._id = null; // This will return no results
+      }
     }
     // Founders can see all tasks (no additional filtering)
 
@@ -51,12 +72,12 @@ router.get('/', protect, async (req, res) => {
 router.post('/', protect, authorize('tasks.create'), async (req, res) => {
   try {
     // Validate required fields
-    const { title, teamId, assignedTo, deadline } = req.body;
+    const { title, teamId, assignedTo, deadline, projectId } = req.body;
     
-    if (!title || !teamId || !assignedTo || !deadline) {
+    if (!title || !teamId || !assignedTo || !deadline || !projectId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: title, teamId, assignedTo, deadline'
+        message: 'Missing required fields: title, teamId, projectId, assignedTo, deadline'
       });
     }
 
@@ -81,16 +102,59 @@ router.post('/', protect, authorize('tasks.create'), async (req, res) => {
 
     // Check if user has permission to assign tasks to this team
     const userRole = req.user.roleIds[0]?.key;
-    if (userRole === 'TEAM_MANAGER' && !team.members.includes(req.user.id)) {
-      return res.status(403).json({
+    if (userRole === 'TEAM_MANAGER') {
+      const isTeamLead = String(team.leadUserId) === String(req.user.id);
+      const isTeamMember = team.members.includes(req.user.id);
+      
+      if (!isTeamLead && !isTeamMember) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only assign tasks to your own team'
+        });
+      }
+    }
+
+    // Validate project exists and belongs to the team
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({
         success: false,
-        message: 'You can only assign tasks to your own team'
+        message: 'Project not found'
       });
     }
 
+    if (String(project.teamId) !== String(teamId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project does not belong to the selected team'
+      });
+    }
+
+    // Validate assigned members are project members
+    const projectMemberIds = project.projectMembers.map(id => String(id));
+    const activeMemberIds = project.memberDetails
+      .filter(m => m.isActive)
+      .map(m => String(m.userId));
+    const allProjectMemberIds = [...new Set([...projectMemberIds, ...activeMemberIds])];
+    
+    const invalidAssignees = assignedToArray.filter(id => 
+      !allProjectMemberIds.includes(String(id))
+    );
+    
+    if (invalidAssignees.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Assigned members must be part of the selected project'
+      });
+    }
+
+    // Automatically add project owner to assigned members if not already included
+    const projectOwnerId = String(project.ownerId);
+    const finalAssignedTo = [...new Set([...assignedToArray, projectOwnerId])];
+
     const task = await Task.create({
       ...req.body,
-      assignedTo: assignedToArray,
+      assignedTo: finalAssignedTo,
       assignedBy: req.user.id,
       createdBy: req.user.id
     });
@@ -203,6 +267,14 @@ router.patch('/:id/progress', protect, async (req, res) => {
       });
     }
 
+    // Prevent team members from modifying tasks already marked as done
+    if (userRole === 'TEAM_MEMBER' && task.status === 'done') {
+      return res.status(403).json({
+        success: false,
+        message: 'Completed tasks cannot be modified by team members'
+      });
+    }
+
     // Update progress
     if (progress !== undefined) {
       task.progress = Math.max(0, Math.min(100, progress));
@@ -272,6 +344,14 @@ router.patch('/:id/status', protect, async (req, res) => {
       return res.status(403).json({
         success: false,
         message: 'You can only update tasks assigned to you'
+      });
+    }
+
+    // Prevent team members from changing status of completed tasks
+    if (userRole === 'TEAM_MEMBER' && task.status === 'done') {
+      return res.status(403).json({
+        success: false,
+        message: 'Completed tasks cannot be modified by team members'
       });
     }
 

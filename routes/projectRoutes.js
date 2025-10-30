@@ -7,6 +7,7 @@ const Team = require('../models/Team');
 const Payroll = require('../models/Payroll');
 const Task = require('../models/Task');
 const { protect, authorize } = require('../middleware/auth');
+const { computeProjectProfitSharing } = require('../utils/projectProfitSharing');
 
 const router = express.Router();
 const projectController = createController(Project);
@@ -309,10 +310,43 @@ router.delete('/:id', authorize('projects.delete'), async (req, res) => {
 });
 
 // Generic routes for individual project operations (must be last)
+// Override update to also recompute profit sharing for current month
 router
   .route('/:id')
   .get(projectController.getOne)
-  .put(authorize('projects.update'), projectController.update);
+  .put(authorize('projects.update'), async (req, res) => {
+    try {
+      const project = await Project.findById(req.params.id);
+      if (!project) {
+        return res.status(404).json({ success: false, message: 'Project not found' });
+      }
+
+      // Apply updates (mirror generic controller behavior)
+      project.set(req.body);
+      if (req.body && typeof req.body === 'object') {
+        Object.keys(req.body).forEach((key) => {
+          const path = project.schema?.path?.(key);
+          if (path && path.instance === 'Mixed') {
+            project.markModified(key);
+          }
+        });
+      }
+
+      await project.save();
+
+      // Recompute profit sharing for this project for the current period
+      try {
+        await computeProjectProfitSharing(project._id);
+      } catch (err) {
+        console.error('Error recomputing profit sharing after project update:', err?.message || err);
+        // Do not fail the update due to compute errors; return project update result
+      }
+
+      res.status(200).json({ success: true, data: project });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
 
 module.exports = router;
 

@@ -15,7 +15,7 @@ import TaskList from '@/components/tasks/TaskList';
 import { showToast } from '@/lib/toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTaskSocketEvents } from '@/hooks/useTaskSocketEvents';
-import { FiPlus, FiSearch, FiFilter, FiCalendar, FiUsers, FiFolder, FiCheckCircle } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiFilter, FiCalendar, FiUsers, FiFolder, FiCheckCircle, FiTrash2 } from 'react-icons/fi';
 
 interface Task {
   _id: string;
@@ -37,9 +37,9 @@ export default function TasksPage() {
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
-  const [projects, setProjects] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -67,9 +67,9 @@ export default function TasksPage() {
     onTaskDeleted: (taskId) => {
       setTasks(prev => prev.filter(task => task._id !== taskId));
     },
-    onTaskStatusChanged: (data) => {
+    onTaskStatusChanged: (data: { taskId: string; status: string }) => {
       setTasks(prev => prev.map(task => 
-        task._id === data.taskId ? { ...task, status: data.status } : task
+        task._id === data.taskId ? { ...task, status: data.status as Task['status'] } : task
       ));
     },
     userId: typeof window !== 'undefined' ? localStorage.getItem('userId') || undefined : undefined,
@@ -81,13 +81,19 @@ export default function TasksPage() {
     teamId: '',
     projectId: '',
     assignedTo: [] as string[],
-    priority: 'medium' as const,
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     deadline: '',
+    checklist: [] as Array<{ text: string; completed: boolean }>,
   };
 
   const [taskFormData, setTaskFormData] = useState(formData);
-  const [bulkTasks, setBulkTasks] = useState<Array<{id: string, title: string, description: string, assignedTo?: string[]}>>([]);
+  const [bulkTasks, setBulkTasks] = useState<Array<{id: string, title: string, description: string, assignedTo?: string[], checklist?: Array<{ text: string; completed: boolean }>}>>([]);
   const [showBulkMode, setShowBulkMode] = useState(false);
+  const [checklistInput, setChecklistInput] = useState('');
+  const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
+  const [filteredMembers, setFilteredMembers] = useState<any[]>([]);
+  const [allProjects, setAllProjects] = useState<any[]>([]);
+  const [allMembers, setAllMembers] = useState<any[]>([]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -112,9 +118,62 @@ export default function TasksPage() {
         setTasks(tasksRes.data.data);
         setFilteredTasks(tasksRes.data.data);
       }
-      if (projectsRes.data.success) setProjects(projectsRes.data.data);
-      if (teamsRes.data.success) setTeams(teamsRes.data.data);
-      if (usersRes.data.success) setUsers(usersRes.data.data);
+      
+      let allProjectsData: any[] = [];
+      if (projectsRes.data.success) {
+        allProjectsData = projectsRes.data.data;
+        setProjects(projectsRes.data.data);
+        setAllProjects(projectsRes.data.data);
+      }
+      
+      let allTeamsData: any[] = [];
+      if (teamsRes.data.success) {
+        allTeamsData = teamsRes.data.data;
+        setTeams(teamsRes.data.data);
+      }
+      
+      let allUsersData: any[] = [];
+      if (usersRes.data.success) {
+        allUsersData = usersRes.data.data;
+        setUsers(usersRes.data.data);
+        setAllMembers(usersRes.data.data);
+      }
+      
+      // Filter projects and teams for team managers
+      if (isManager && !isFounder) {
+        try {
+          const user = localStorage.getItem('user');
+          if (user) {
+            const userData = JSON.parse(user);
+            const userId = userData._id || userData.id;
+            
+            // Filter teams - team managers can only see teams they lead or are members of
+            const filteredTeams = allTeamsData.filter((team: any) => {
+              const teamLeadId = typeof team.leadUserId === 'string' ? team.leadUserId : team.leadUserId?._id;
+              const isLead = teamLeadId === userId;
+              const isMember = team.members?.some((member: any) => {
+                const memberId = typeof member === 'string' ? member : member._id;
+                return memberId === userId;
+              });
+              return isLead || isMember;
+            });
+            setTeams(filteredTeams);
+            
+            // Filter projects - only show projects from teams the manager is part of
+            const teamIds = filteredTeams.map((team: any) => team._id);
+            const filteredProjects = allProjectsData.filter((project: any) => {
+              const projectTeamId = typeof project.teamId === 'string' ? project.teamId : project.teamId?._id;
+              return teamIds.includes(projectTeamId);
+            });
+            setFilteredProjects(filteredProjects);
+          }
+        } catch (error) {
+          console.error('Error filtering data for team manager:', error);
+          setFilteredProjects(allProjectsData);
+        }
+      } else {
+        setFilteredProjects(allProjectsData);
+      }
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to fetch data');
     } finally {
@@ -126,9 +185,11 @@ export default function TasksPage() {
   useEffect(() => {
     let filtered = tasks;
 
-    // Filter by tab
+    // Filter by tab (exclude done from 'All')
     if (activeTab !== 'all') {
       filtered = filtered.filter(task => task.status === activeTab);
+    } else {
+      filtered = filtered.filter(task => task.status !== 'done');
     }
 
     // Filter by search term
@@ -164,54 +225,142 @@ export default function TasksPage() {
     setFilteredTasks(filtered);
   }, [tasks, activeTab, searchTerm, filters]);
 
+  // Filter projects based on selected team
+  useEffect(() => {
+    if (taskFormData.teamId) {
+      const teamProjects = allProjects.filter((project: any) => {
+        const projectTeamId = typeof project.teamId === 'string' ? project.teamId : project.teamId?._id;
+        return projectTeamId === taskFormData.teamId;
+      });
+      setFilteredProjects(teamProjects);
+      
+      // Clear project selection if current project doesn't belong to selected team
+      if (taskFormData.projectId) {
+        const isProjectInTeam = teamProjects.some((p: any) => p._id === taskFormData.projectId);
+        if (!isProjectInTeam) {
+          setTaskFormData({ ...taskFormData, projectId: '', assignedTo: [] });
+          setFilteredMembers([]);
+        }
+      }
+    } else {
+      // Reset to all filtered projects (based on role)
+      if (isManager && !isFounder) {
+        const user = localStorage.getItem('user');
+        if (user) {
+          try {
+            const userData = JSON.parse(user);
+            const userId = userData._id || userData.id;
+            const userTeams = teams.filter((team: any) => {
+              const teamLeadId = typeof team.leadUserId === 'string' ? team.leadUserId : team.leadUserId?._id;
+              const isLead = teamLeadId === userId;
+              const isMember = team.members?.some((member: any) => {
+                const memberId = typeof member === 'string' ? member : member._id;
+                return memberId === userId;
+              });
+              return isLead || isMember;
+            });
+            const teamIds = userTeams.map((team: any) => team._id);
+            const filtered = allProjects.filter((project: any) => {
+              const projectTeamId = typeof project.teamId === 'string' ? project.teamId : project.teamId?._id;
+              return teamIds.includes(projectTeamId);
+            });
+            setFilteredProjects(filtered);
+          } catch (error) {
+            setFilteredProjects(allProjects);
+          }
+        }
+      } else {
+        setFilteredProjects(allProjects);
+      }
+    }
+  }, [taskFormData.teamId, teams, allProjects, isManager, isFounder]);
+
+  // Filter members based on selected project
+  useEffect(() => {
+    if (taskFormData.projectId) {
+      const selectedProject = allProjects.find((p: any) => p._id === taskFormData.projectId);
+      if (selectedProject) {
+        // Get project members from projectMembers array and active memberDetails
+        const projectMemberIds = (selectedProject.projectMembers || []).map((id: any) => 
+          typeof id === 'string' ? id : id._id
+        );
+        const activeMemberIds = (selectedProject.memberDetails || [])
+          .filter((m: any) => m.isActive !== false)
+          .map((m: any) => typeof m.userId === 'string' ? m.userId : m.userId._id);
+        
+        const allProjectMemberIds = [...new Set([...projectMemberIds, ...activeMemberIds])];
+        const projectMembers = allMembers.filter((user: any) => 
+          allProjectMemberIds.includes(user._id)
+        );
+        setFilteredMembers(projectMembers);
+        
+        // Remove assigned members who are not in the project
+        const validAssignedMembers = taskFormData.assignedTo.filter(id => 
+          allProjectMemberIds.includes(id)
+        );
+        if (validAssignedMembers.length !== taskFormData.assignedTo.length) {
+          setTaskFormData({ ...taskFormData, assignedTo: validAssignedMembers });
+        }
+      } else {
+        setFilteredMembers([]);
+      }
+    } else {
+      setFilteredMembers([]);
+    }
+  }, [taskFormData.projectId, allProjects, allMembers]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!taskFormData.teamId || !taskFormData.assignedTo.length || !taskFormData.deadline) {
-      showToast.error('Please fill in all required fields');
+    if (!taskFormData.teamId || !taskFormData.projectId || !taskFormData.deadline) {
+      showToast.error('Please fill in all required fields (Team, Project, and Deadline)');
       return;
     }
 
-    const loadingToast = showToast.loading(editingTask ? 'Updating task...' : 'Creating task...');
+    if (bulkTasks.length === 0) {
+      showToast.error('Please add at least one task');
+      return;
+    }
+
+    const loadingToast = showToast.loading('Creating tasks...');
 
     try {
-      if (showBulkMode && bulkTasks.length > 0) {
-        // Create multiple tasks
-        const tasksToCreate = bulkTasks.map(task => ({
+      // Create multiple tasks
+      const tasksToCreate = bulkTasks.map(task => {
+        if (!task.title || task.title.trim() === '') {
+          throw new Error('All tasks must have a title');
+        }
+        return {
           ...taskFormData,
           title: task.title,
-          description: task.description,
+          description: task.description || '',
           assignedTo: (task.assignedTo && task.assignedTo.length > 0) ? task.assignedTo : taskFormData.assignedTo,
-        }));
+          checklist: task.checklist || [],
+        };
+      });
 
-        const promises = tasksToCreate.map(taskData => taskAPI.create(taskData));
-        await Promise.all(promises);
-        
-        showToast.success(`${bulkTasks.length} tasks created successfully!`);
-        setBulkTasks([]);
-      } else {
-        // Create single task
-        if (!taskFormData.title) {
-          showToast.error('Please provide a task title');
-          return;
+      const promises = tasksToCreate.map(taskData => {
+        if (!taskData.projectId) {
+          throw new Error('Project is required for all tasks');
         }
-
-        if (editingTask) {
-          await taskAPI.update(editingTask._id, taskFormData);
-          showToast.success('Task updated successfully!');
-        } else {
-          await taskAPI.create(taskFormData);
-          showToast.success('Task created successfully!');
+        if (!taskData.assignedTo || taskData.assignedTo.length === 0) {
+          throw new Error('At least one member must be assigned to each task');
         }
-      }
+        return taskAPI.create(taskData);
+      });
+      await Promise.all(promises);
+      
+      showToast.success(`${bulkTasks.length} task(s) created successfully!`);
+      setBulkTasks([]);
       
       showToast.dismiss(loadingToast);
       setShowModal(false);
+      setShowBulkMode(false);
       resetForm();
       fetchData();
     } catch (error: any) {
       showToast.dismiss(loadingToast);
-      showToast.error(error.response?.data?.message || 'Operation failed');
+      showToast.error(error.message || error.response?.data?.message || 'Operation failed');
     }
   };
 
@@ -225,6 +374,7 @@ export default function TasksPage() {
       assignedTo: task.assignedTo.map(user => user._id),
       priority: task.priority,
       deadline: new Date(task.deadline).toISOString().split('T')[0],
+      checklist: (task as any).checklist || [],
     });
     setShowModal(true);
   };
@@ -259,6 +409,7 @@ export default function TasksPage() {
     setEditingTask(null);
     setBulkTasks([]);
     setShowBulkMode(false);
+    setChecklistInput('');
   };
 
   // Bulk task management functions
@@ -267,7 +418,8 @@ export default function TasksPage() {
       id: Date.now().toString(),
       title: '',
       description: '',
-      assignedTo: [] as string[]
+      assignedTo: [] as string[],
+      checklist: [] as Array<{ text: string; completed: boolean }>,
     };
     setBulkTasks([...bulkTasks, newTask]);
   };
@@ -282,6 +434,17 @@ export default function TasksPage() {
     ));
   };
 
+  const updateBulkTaskAssignees = (id: string, userId: string, checked: boolean) => {
+    setBulkTasks(bulkTasks.map(task => {
+      if (task.id !== id) return task;
+      const currentAssignees = task.assignedTo || [];
+      const newAssignees = checked
+        ? [...currentAssignees, userId]
+        : currentAssignees.filter((uid: string) => uid !== userId);
+      return { ...task, assignedTo: newAssignees };
+    }));
+  };
+
   const isAssignedToUser = (task: Task) => {
     if (typeof window === 'undefined') return false;
     return task.assignedTo.some(user => user._id === localStorage.getItem('userId'));
@@ -289,7 +452,7 @@ export default function TasksPage() {
 
   const getTabCounts = () => {
     return {
-      all: tasks.length,
+      all: tasks.filter(t => t.status !== 'done').length,
       todo: tasks.filter(t => t.status === 'todo').length,
       in_progress: tasks.filter(t => t.status === 'in_progress').length,
       review: tasks.filter(t => t.status === 'review').length,
@@ -330,16 +493,9 @@ export default function TasksPage() {
               </div>
               {(isFounder || isManager) && (
                 <div className="flex gap-2">
-                  <Button onClick={() => { resetForm(); setShowModal(true); }}>
+                  <Button onClick={() => { resetForm(); setShowBulkMode(true); setShowModal(true); }}>
                     <FiPlus className="mr-2" />
                     Add Task
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => { resetForm(); setShowBulkMode(true); setShowModal(true); }}
-                  >
-                    <FiPlus className="mr-2" />
-                    Bulk Create
                   </Button>
                 </div>
               )}
@@ -454,128 +610,123 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {/* Create/Edit Task Modal */}
-      <Modal
-        isOpen={showModal}
-        onClose={() => {
-          setShowModal(false);
-          resetForm();
-        }}
-        title={editingTask ? 'Edit Task' : showBulkMode ? 'Bulk Create Tasks' : 'Create New Task'}
-        size="lg"
-      >
-        <form onSubmit={handleSubmit}>
-          {/* Common Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <FormSelect
-              label="Team"
-              required
-              value={taskFormData.teamId}
-              onChange={(e) => setTaskFormData({ ...taskFormData, teamId: e.target.value })}
-              options={teams.map((team: any) => ({
-                value: team._id,
-                label: team.name,
-              }))}
-            />
-
-            <FormSelect
-              label="Project (Optional)"
-              value={taskFormData.projectId}
-              onChange={(e) => setTaskFormData({ ...taskFormData, projectId: e.target.value })}
-              options={[
-                { value: '', label: 'No Project' },
-                ...projects.map((project: any) => ({
-                  value: project._id,
-                  label: project.title,
-                }))
-              ]}
-            />
-
-            <FormSelect
-              label="Priority"
-              required
-              value={taskFormData.priority}
-              onChange={(e) => setTaskFormData({ ...taskFormData, priority: e.target.value as any })}
-              options={[
-                { value: 'low', label: 'Low' },
-                { value: 'medium', label: 'Medium' },
-                { value: 'high', label: 'High' },
-                { value: 'urgent', label: 'Urgent' },
-              ]}
-            />
-
-            <FormInput
-              label="Deadline"
-              type="date"
-              required
-              value={taskFormData.deadline}
-              onChange={(e) => setTaskFormData({ ...taskFormData, deadline: e.target.value })}
-            />
-          </div>
-
-          {/* Member Assignment */}
-          <div className="mb-6">
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Assign To Members (Required)
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-3">
-              {users.map((user: any) => (
-                <label key={user._id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
-                  <input
-                    type="checkbox"
-                    checked={taskFormData.assignedTo.includes(user._id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setTaskFormData({
-                          ...taskFormData,
-                          assignedTo: [...taskFormData.assignedTo, user._id]
-                        });
-                      } else {
-                        setTaskFormData({
-                          ...taskFormData,
-                          assignedTo: taskFormData.assignedTo.filter(id => id !== user._id)
-                        });
-                      }
-                    }}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700">{user.name}</span>
-                </label>
-              ))}
-            </div>
-            <p className="mt-1 text-xs text-gray-500">
-              Selected: {taskFormData.assignedTo.length} member(s)
-            </p>
-          </div>
-
-          {/* Single Task Mode */}
-          {!showBulkMode && (
-            <div className="mb-6">
-              <FormInput
-                label="Task Title"
+      {/* Add Task Modal - Bulk Creation */}
+      {showBulkMode && showModal && (
+        <Modal
+          isOpen={showBulkMode && showModal}
+          onClose={() => {
+            setShowBulkMode(false);
+            setShowModal(false);
+            resetForm();
+          }}
+          title="Add Tasks"
+          size="lg"
+        >
+          <form onSubmit={handleSubmit}>
+            {/* Common Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <FormSelect
+                label="Team"
                 required
-                value={taskFormData.title}
-                onChange={(e) => setTaskFormData({ ...taskFormData, title: e.target.value })}
-                placeholder="e.g., Design workshop materials"
+                value={taskFormData.teamId}
+                onChange={(e) => setTaskFormData({ ...taskFormData, teamId: e.target.value })}
+                options={teams.map((team: any) => ({
+                  value: team._id,
+                  label: team.name,
+                }))}
               />
-              
-              <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Description
-                </label>
-                <textarea
-                  value={taskFormData.description}
-                  onChange={(e) => setTaskFormData({ ...taskFormData, description: e.target.value })}
-                  rows={3}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  placeholder="Detailed description of the task..."
-                />
-              </div>
-            </div>
-          )}
 
-          {/* Bulk Task Mode */}
-          {showBulkMode && (
+              <FormSelect
+                label="Project"
+                required
+                value={taskFormData.projectId}
+                onChange={(e) => {
+                  const newProjectId = e.target.value;
+                  setTaskFormData({ 
+                    ...taskFormData, 
+                    projectId: newProjectId,
+                    assignedTo: []
+                  });
+                }}
+                options={[
+                  { value: '', label: 'Select Project' },
+                  ...filteredProjects.map((project: any) => ({
+                    value: project._id,
+                    label: project.title,
+                  }))
+                ]}
+              />
+
+              <FormSelect
+                label="Priority"
+                required
+                value={taskFormData.priority}
+                onChange={(e) => setTaskFormData({ ...taskFormData, priority: e.target.value as any })}
+                options={[
+                  { value: 'low', label: 'Low' },
+                  { value: 'medium', label: 'Medium' },
+                  { value: 'high', label: 'High' },
+                  { value: 'urgent', label: 'Urgent' },
+                ]}
+              />
+
+              <FormInput
+                label="Deadline"
+                type="date"
+                required
+                value={taskFormData.deadline}
+                onChange={(e) => setTaskFormData({ ...taskFormData, deadline: e.target.value })}
+              />
+            </div>
+
+            {/* Default Member Assignment (Optional - can be overridden per task) */}
+            <div className="mb-6">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Default Assignees (Optional - can be overridden per task)
+              </label>
+              {!taskFormData.projectId ? (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">Please select a project first to see available members.</p>
+                </div>
+              ) : filteredMembers.length === 0 ? (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-sm text-gray-600">No members available for this project. Please add members to the project first.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {filteredMembers.map((user: any) => (
+                      <label key={user._id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full hover:bg-gray-100 cursor-pointer transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={taskFormData.assignedTo.includes(user._id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setTaskFormData({
+                                ...taskFormData,
+                                assignedTo: [...taskFormData.assignedTo, user._id]
+                              });
+                            } else {
+                              setTaskFormData({
+                                ...taskFormData,
+                                assignedTo: taskFormData.assignedTo.filter(id => id !== user._id)
+                              });
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">{user.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Selected: {taskFormData.assignedTo.length} member(s) | Available: {filteredMembers.length} member(s) in this project
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* Bulk Tasks */}
             <div className="mb-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-medium text-gray-800">Tasks to Create</h3>
@@ -590,7 +741,7 @@ export default function TasksPage() {
                 </Button>
               </div>
 
-              <div className="space-y-4 max-h-60 overflow-y-auto">
+              <div className="space-y-4 max-h-96 overflow-y-auto">
                 {bulkTasks.map((task, index) => (
                   <div key={task.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                     <div className="flex justify-between items-center mb-3">
@@ -622,32 +773,35 @@ export default function TasksPage() {
                       />
 
                       {/* Per-task assignees */}
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700">Assign To (override)</label>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
-                          {users.map((user: any) => (
-                            <label key={user._id} className="flex items-center space-x-2 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={(task.assignedTo || []).includes(user._id)}
-                                onChange={(e) => {
-                                  setBulkTasks(prev => prev.map(t => {
-                                    if (t.id !== task.id) return t;
-                                    const current = t.assignedTo || [];
-                                    const next = e.target.checked
-                                      ? Array.from(new Set([...current, user._id]))
-                                      : current.filter((id) => id !== user._id);
-                                    return { ...t, assignedTo: next };
-                                  }));
-                                }}
-                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span>{user.name}</span>
-                            </label>
-                          ))}
+                      {taskFormData.projectId && filteredMembers.length > 0 && (
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                            Assign To (Override default)
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {filteredMembers.map((user: any) => {
+                              const isAssigned = (task.assignedTo || []).includes(user._id);
+                              return (
+                                <label key={user._id} className="flex items-center gap-2 px-2 py-1 bg-white rounded-full hover:bg-gray-50 cursor-pointer transition-colors text-sm border border-gray-200">
+                                  <input
+                                    type="checkbox"
+                                    checked={isAssigned}
+                                    onChange={(e) => updateBulkTaskAssignees(task.id, user._id, e.target.checked)}
+                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  />
+                                  <span className="text-xs text-gray-700">{user.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {task.assignedTo && task.assignedTo.length > 0 
+                              ? `${task.assignedTo.length} member(s) assigned. If none selected, uses default assignees above.`
+                              : 'If none selected, uses default assignees above.'
+                            }
+                          </p>
                         </div>
-                        <p className="mt-1 text-xs text-gray-500">If none selected, uses the common selection above.</p>
-                      </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -660,26 +814,27 @@ export default function TasksPage() {
                 </div>
               )}
             </div>
-          )}
 
-          <div className="flex justify-end gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShowModal(false);
-                resetForm();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit">
-              {editingTask ? 'Update Task' : showBulkMode ? `Create ${bulkTasks.length} Tasks` : 'Create Task'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-      
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowBulkMode(false);
+                  setShowModal(false);
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">
+                Create {bulkTasks.length} Task{bulkTasks.length !== 1 ? 's' : ''}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       {/* Mobile Components */}
       <FABMenu />
       <MobileNavbar />

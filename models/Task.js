@@ -104,6 +104,7 @@ const taskSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
+  checklist: [checklistItemSchema],
   attachments: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Attachment'

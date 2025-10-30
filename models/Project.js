@@ -61,8 +61,18 @@ const projectSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     select: false
   },
+  // Temporary field to receive left dates from frontend (not persisted to DB)
+  memberLeftDates: {
+    type: mongoose.Schema.Types.Mixed,
+    select: false
+  },
   // Temporary field to receive custom share percentage mapping from frontend (not persisted to DB)
   memberSharePercents: {
+    type: mongoose.Schema.Types.Mixed,
+    select: false
+  },
+  // Temporary field to receive active/deactive state from frontend (not persisted to DB)
+  memberActiveStates: {
     type: mongoose.Schema.Types.Mixed,
     select: false
   },
@@ -169,15 +179,29 @@ projectSchema.pre('save', async function(next) {
             joinDate = new Date();
           }
           
-          this.memberDetails.push({
+          const newDetail = {
             userId: memberId,
             joinedDate: joinDate,
-            isActive: true,
+            isActive: this.memberActiveStates && typeof this.memberActiveStates[memberId] === 'boolean' 
+              ? !!this.memberActiveStates[memberId] 
+              : true,
             // Set initial sharePercentage if provided in this save
             sharePercentage: this.memberSharePercents && this.memberSharePercents[memberId]
               ? Number(this.memberSharePercents[memberId])
               : null
-          });
+          };
+
+          // If a left date is provided from frontend, set it and deactivate
+          if (this.memberLeftDates && this.memberLeftDates[memberId]) {
+            const leftDate = new Date(this.memberLeftDates[memberId]);
+            newDetail.leftDate = leftDate;
+            // Mark inactive if left date is not in the future
+            if (!Number.isNaN(leftDate.getTime()) && leftDate <= new Date()) {
+              newDetail.isActive = false;
+            }
+          }
+
+          this.memberDetails.push(newDetail);
           
           console.log(`✅ Added member ${memberId} to project with join date: ${joinDate.toLocaleDateString()}`);
         } else {
@@ -190,6 +214,36 @@ projectSchema.pre('save', async function(next) {
             console.log(`✅ Updated join date for member ${memberId}: ${newJoinDate.toLocaleDateString()}`);
           }
           }
+          // Update existing member's left date if provided
+          if (this.memberLeftDates && this.memberLeftDates[memberId]) {
+            const newLeftDate = new Date(this.memberLeftDates[memberId]);
+            const prevLeft = existingDetail.leftDate ? new Date(existingDetail.leftDate) : null;
+            if (!prevLeft || prevLeft.getTime() !== newLeftDate.getTime()) {
+              existingDetail.leftDate = newLeftDate;
+              // Mark inactive if left date is not in the future
+              if (!Number.isNaN(newLeftDate.getTime()) && newLeftDate <= new Date()) {
+                existingDetail.isActive = false;
+              }
+              console.log(`✅ Set left date for member ${memberId}: ${newLeftDate.toLocaleDateString()}`);
+            }
+          }
+          // Update existing member's active state if provided
+          if (this.memberActiveStates && this.memberActiveStates.hasOwnProperty(memberId)) {
+            const makeActive = !!this.memberActiveStates[memberId];
+            if (existingDetail.isActive !== makeActive) {
+              existingDetail.isActive = makeActive;
+              if (makeActive) {
+                // Reactivated: clear left date
+                existingDetail.leftDate = null;
+              } else {
+                // Deactivated: set left date to today if not provided
+                if (!existingDetail.leftDate) {
+                  existingDetail.leftDate = new Date();
+                }
+              }
+              console.log(`✅ Updated active state for member ${memberId}: ${makeActive ? 'active' : 'inactive'}`);
+            }
+          }
           // Update existing member's share percentage if provided
           if (this.memberSharePercents && this.memberSharePercents[memberId] !== undefined) {
             const newPct = Number(this.memberSharePercents[memberId]);
@@ -201,17 +255,7 @@ projectSchema.pre('save', async function(next) {
         }
       }
       
-      // Mark members not in projectMembers as inactive
-      for (const detail of this.memberDetails) {
-        const stillMember = this.projectMembers.some(
-          memberId => memberId.toString() === detail.userId.toString()
-        );
-        
-        if (!stillMember && detail.isActive) {
-          detail.isActive = false;
-          detail.leftDate = new Date();
-        }
-      }
+      // Do not auto-remove members anymore; membership persists. Status is managed via isActive.
     }
     
     next();

@@ -44,6 +44,17 @@ export default function PayrollPage() {
     return `${year}-${month}-${day}`;
   };
 
+  // Helper: format date as DD/MM/YY
+  const formatDDMMYY = (value?: string | Date | null) => {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'N/A';
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yy = String(date.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
+  };
+
   const [payouts, setPayouts] = useState([]);
   const [projects, setProjects] = useState([]);
   // Removed: const [teams, setTeams] = useState([]);
@@ -1303,7 +1314,7 @@ export default function PayrollPage() {
                           {payout.projectStartDate && (
                             <div>
                               <span className="font-medium">Project Started:</span>{" "}
-                              {new Date(payout.projectStartDate).toLocaleDateString()}
+                              {formatDDMMYY(payout.projectStartDate)}
                             </div>
                           )}
                           {payout.workDurationDays > 0 && (
@@ -1507,7 +1518,7 @@ export default function PayrollPage() {
                         return (
                         <div
                           key={payout._id}
-                          className="bg-white rounded-lg p-4 mb-3 shadow-sm border border-blue-200"
+                          className={`bg-white rounded-lg p-4 mb-3 shadow-sm border ${!payout.memberIsActive ? 'border-gray-300 opacity-60' : 'border-blue-2 00'}`}
                         >
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex-1">
@@ -1532,13 +1543,13 @@ export default function PayrollPage() {
                           </div>
 
                           {/* Member Timeline & Stats */}
-                          <div className="mb-3 p-2 bg-blue-50 rounded-lg">
+                          <div className={`mb-3 p-2 rounded-lg ${!payout.memberIsActive ? 'bg-gray-100' : 'bg-blue-50'}`}>
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               {payout.memberJoinedDate && (
                                 <div>
                                   <span className="text-gray-600">Joined:</span>{" "}
                                   <span className="font-semibold text-gray-900">
-                                    {new Date(payout.memberJoinedDate).toLocaleDateString()}
+                                    {formatDDMMYY(payout.memberJoinedDate)}
                                   </span>
                                 </div>
                               )}
@@ -1546,7 +1557,7 @@ export default function PayrollPage() {
                                 <div>
                                   <span className="text-gray-600">Project Start:</span>{" "}
                                   <span className="font-semibold text-gray-900">
-                                    {new Date(payout.projectStartDate).toLocaleDateString()}
+                                    {formatDDMMYY(payout.projectStartDate)}
                                   </span>
                                 </div>
                               )}
@@ -1568,6 +1579,11 @@ export default function PayrollPage() {
                             {payout.isProjectOwner && (
                               <div className="mt-2 text-xs text-purple-600 font-medium bg-purple-100 px-2 py-1 rounded">
                                 👑 Project Owner (+3% bonus = ₹{Math.round(payout.ownerBonus || 0).toLocaleString()})
+                              </div>
+                            )}
+                            {!payout.memberIsActive && (
+                              <div className="mt-2 text-xs text-gray-600 font-medium bg-gray-200 px-2 py-1 rounded">
+                                Inactive member
                               </div>
                             )}
                           </div>
@@ -1598,7 +1614,7 @@ export default function PayrollPage() {
                               </div>
                             </div>
                             <div className="mt-1 text-xs text-gray-500 italic">
-                              * Only from {payout.memberJoinedDate ? new Date(payout.memberJoinedDate).toLocaleDateString() : 'N/A'} onwards
+                              * Calculated from {formatDDMMYY(payout.memberJoinedDate)} to {formatDDMMYY(payout.memberLeftDate) !== 'N/A' ? formatDDMMYY(payout.memberLeftDate) : 'present'}
                             </div>
                           </div>
 
@@ -1651,8 +1667,9 @@ export default function PayrollPage() {
                                         
                                         <h2>Timeline & Contribution</h2>
                                         <table>
-                                          <tr><th>Project Started</th><td>${payout.projectStartDate ? new Date(payout.projectStartDate).toLocaleDateString() : 'N/A'}</td></tr>
-                                          <tr><th>Member Joined</th><td>${payout.memberJoinedDate ? new Date(payout.memberJoinedDate).toLocaleDateString() : 'N/A'}</td></tr>
+                                          <tr><th>Project Started</th><td>${formatDDMMYY(payout.projectStartDate)}</td></tr>
+                                          <tr><th>Member Joined</th><td>${formatDDMMYY(payout.memberJoinedDate)}</td></tr>
+                                          <tr><th>Member Left</th><td>${formatDDMMYY(payout.memberLeftDate)}</td></tr>
                                           <tr><th>Working Days</th><td class="highlight">${payout.workDurationDays || 0} days</td></tr>
                                           <tr><th>Profit Share %</th><td class="highlight">${memberPercentage}%</td></tr>
                                         </table>
@@ -1672,7 +1689,7 @@ export default function PayrollPage() {
                                         </table>
                                         
                                         <div class="footer">
-                                          <p><strong>Note:</strong> Income and expenses are calculated only from the member's join date (${payout.memberJoinedDate ? new Date(payout.memberJoinedDate).toLocaleDateString() : 'N/A'}) onwards.</p>
+                                          <p><strong>Note:</strong> Income and expenses are calculated for the member's contribution window (${formatDDMMYY(payout.memberJoinedDate)} → ${formatDDMMYY(payout.memberLeftDate) !== 'N/A' ? formatDDMMYY(payout.memberLeftDate) : 'present'}).</p>
                                           <p>Generated on: ${new Date().toLocaleString()}</p>
                                           <p>Status: ${payout.status || 'pending'}</p>
                                         </div>
@@ -2212,15 +2229,21 @@ export default function PayrollPage() {
                         <div className="flex justify-between">
                           <span className="text-gray-600">Project Started:</span>
                           <span className="font-medium">
-                            {payout.projectStartDate ? new Date(payout.projectStartDate).toLocaleDateString() : 'N/A'}
+                            {formatDDMMYY(payout.projectStartDate)}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Member Joined:</span>
+                            <span className="text-gray-600">Member Joined:</span>
                           <span className="font-medium text-blue-600">
-                            {payout.memberJoinedDate ? new Date(payout.memberJoinedDate).toLocaleDateString() : 'N/A'}
+                            {formatDDMMYY(payout.memberJoinedDate)}
                           </span>
                         </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-600">Member Left:</span>
+                            <span className="font-medium text-red-600">
+                              {formatDDMMYY(payout.memberLeftDate)}
+                            </span>
+                          </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Working Days:</span>
                           <span className="font-bold text-blue-600">
@@ -2262,7 +2285,7 @@ export default function PayrollPage() {
                         </div>
                       </div>
                       <p className="mt-2 text-xs text-gray-500 italic">
-                        * Calculated only from {payout.memberJoinedDate ? new Date(payout.memberJoinedDate).toLocaleDateString() : 'N/A'} onwards
+                        * Calculated from {formatDDMMYY(payout.memberJoinedDate)} to {formatDDMMYY(payout.memberLeftDate) !== 'N/A' ? formatDDMMYY(payout.memberLeftDate) : 'present'}
                       </p>
                     </div>
 

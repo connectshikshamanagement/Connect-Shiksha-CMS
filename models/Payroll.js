@@ -106,6 +106,9 @@ const payrollSchema = new mongoose.Schema({
   memberJoinedDate: {
     type: Date
   },
+  memberLeftDate: {
+    type: Date
+  },
   workDurationDays: {
     type: Number,
     default: 0
@@ -117,6 +120,10 @@ const payrollSchema = new mongoose.Schema({
   isProjectOwner: {
     type: Boolean,
     default: false
+  },
+  memberIsActive: {
+    type: Boolean,
+    default: true
   },
   ownerBonus: {
     type: Number,

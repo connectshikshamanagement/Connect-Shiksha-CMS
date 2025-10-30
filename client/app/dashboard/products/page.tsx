@@ -21,10 +21,10 @@ export default function ProductsPage() {
     sku: '',
     description: '',
     category: '',
-    costPrice: 0,
-    sellPrice: 0,
-    stock: 0,
-    lowStockThreshold: 10,
+    costPrice: '',
+    sellPrice: '',
+    stock: '',
+    lowStockThreshold: '',
   });
 
   useEffect(() => {
@@ -47,12 +47,17 @@ export default function ProductsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.sku || !formData.category || formData.sellPrice <= 0) {
+    const costNum = formData.costPrice === '' ? 0 : Number(formData.costPrice);
+    const sellNum = formData.sellPrice === '' ? 0 : Number(formData.sellPrice);
+    const stockNum = formData.stock === '' ? 0 : Number(formData.stock);
+    const lowStockNum = formData.lowStockThreshold === '' ? 0 : Number(formData.lowStockThreshold);
+
+    if (!formData.name || !formData.sku || !formData.category || sellNum <= 0) {
       showToast.error('Please fill in all required fields');
       return;
     }
 
-    if (formData.sellPrice < formData.costPrice) {
+    if (sellNum < costNum) {
       showToast.error('Sell price must be greater than or equal to cost price');
       return;
     }
@@ -60,11 +65,22 @@ export default function ProductsPage() {
     const loadingToast = showToast.loading(editingProduct ? 'Updating product...' : 'Creating product...');
 
     try {
+      const payload = {
+        name: formData.name,
+        sku: formData.sku,
+        description: formData.description,
+        category: formData.category,
+        costPrice: costNum,
+        sellPrice: sellNum,
+        stock: stockNum,
+        lowStockThreshold: lowStockNum || 0,
+      };
+
       if (editingProduct) {
-        await productAPI.update(editingProduct._id, formData);
+        await productAPI.update(editingProduct._id, payload);
         showToast.success('Product updated successfully!');
       } else {
-        await productAPI.create(formData);
+        await productAPI.create(payload);
         showToast.success('Product created successfully!');
       }
       
@@ -85,10 +101,10 @@ export default function ProductsPage() {
       sku: product.sku,
       description: product.description || '',
       category: product.category,
-      costPrice: product.costPrice,
-      sellPrice: product.sellPrice,
-      stock: product.stock,
-      lowStockThreshold: product.lowStockThreshold || 10,
+      costPrice: product.costPrice ? String(product.costPrice) : '',
+      sellPrice: product.sellPrice ? String(product.sellPrice) : '',
+      stock: product.stock ? String(product.stock) : '',
+      lowStockThreshold: product.lowStockThreshold ? String(product.lowStockThreshold) : '',
     });
     setShowModal(true);
   };
@@ -115,10 +131,10 @@ export default function ProductsPage() {
       sku: '',
       description: '',
       category: '',
-      costPrice: 0,
-      sellPrice: 0,
-      stock: 0,
-      lowStockThreshold: 10,
+      costPrice: '',
+      sellPrice: '',
+      stock: '',
+      lowStockThreshold: '',
     });
     setEditingProduct(null);
   };
@@ -312,7 +328,7 @@ export default function ProductsPage() {
               min="0"
               step="0.01"
               value={formData.costPrice}
-              onChange={(e) => setFormData({ ...formData, costPrice: Number(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
               placeholder="0"
             />
 
@@ -323,7 +339,7 @@ export default function ProductsPage() {
               min="0"
               step="0.01"
               value={formData.sellPrice}
-              onChange={(e) => setFormData({ ...formData, sellPrice: Number(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, sellPrice: e.target.value })}
               placeholder="0"
             />
 
@@ -333,7 +349,7 @@ export default function ProductsPage() {
               required
               min="0"
               value={formData.stock}
-              onChange={(e) => setFormData({ ...formData, stock: Number(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
               placeholder="0"
             />
 
@@ -342,7 +358,7 @@ export default function ProductsPage() {
               type="number"
               min="0"
               value={formData.lowStockThreshold}
-              onChange={(e) => setFormData({ ...formData, lowStockThreshold: Number(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, lowStockThreshold: e.target.value })}
               placeholder="10"
             />
 
@@ -359,13 +375,13 @@ export default function ProductsPage() {
               />
             </div>
 
-            {formData.costPrice > 0 && formData.sellPrice > 0 && (
+            {Number(formData.costPrice) > 0 && Number(formData.sellPrice) > 0 && (
               <div className="col-span-2 rounded bg-green-50 p-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-green-800">Profit Margin:</span>
                   <span className="font-bold text-green-900">
-                    ₹{(formData.sellPrice - formData.costPrice).toFixed(2)} 
-                    ({(((formData.sellPrice - formData.costPrice) / formData.costPrice) * 100).toFixed(1)}%)
+                    ₹{(Number(formData.sellPrice) - Number(formData.costPrice)).toFixed(2)} 
+                    ({(((Number(formData.sellPrice) - Number(formData.costPrice)) / Number(formData.costPrice)) * 100).toFixed(1)}%)
                   </span>
                 </div>
               </div>

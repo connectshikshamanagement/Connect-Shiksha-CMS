@@ -294,6 +294,13 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
         existingPayroll.netProfit = profit;
         // Update member work tracking
         existingPayroll.memberJoinedDate = memberJoinedDate;
+        // Persist member left date for reporting if available
+        if (memberDetail && memberDetail.leftDate) {
+          existingPayroll.memberLeftDate = memberDetail.leftDate;
+        } else {
+          existingPayroll.memberLeftDate = undefined;
+        }
+        existingPayroll.memberIsActive = !!(memberDetail ? memberDetail.isActive : true);
         existingPayroll.workDurationDays = workDurationDays;
         existingPayroll.projectStartDate = projectStartDate;
         // Update project owner info
@@ -335,6 +342,8 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
           netProfit: profit,
           // Store member work tracking
           memberJoinedDate: memberJoinedDate,
+          memberLeftDate: memberDetail && memberDetail.leftDate ? memberDetail.leftDate : undefined,
+          memberIsActive: !!(memberDetail ? memberDetail.isActive : true),
           workDurationDays: workDurationDays,
           projectStartDate: projectStartDate,
           // Store project owner info
