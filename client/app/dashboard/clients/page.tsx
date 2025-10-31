@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { clientAPI, userAPI } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
@@ -9,9 +10,12 @@ import Button from '@/components/Button';
 import FormInput from '@/components/FormInput';
 import FormSelect from '@/components/FormSelect';
 import { showToast } from '@/lib/toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import { FiEdit, FiTrash2, FiPlus, FiBriefcase, FiPhone, FiMail, FiMapPin, FiUsers } from 'react-icons/fi';
 
 export default function ClientsPage() {
+  const router = useRouter();
+  const { isFounder, isManager, isMember, loading: permissionsLoading } = usePermissions();
   const [clients, setClients] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,8 +53,26 @@ export default function ClientsPage() {
   });
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    // Check if user has access to clients page (only founder allowed)
+    if (!permissionsLoading) {
+      if (isManager || isMember) {
+        showToast.error('Access denied. This page is only accessible to founders.');
+        router.push('/dashboard');
+        return;
+      }
+      if (!isFounder) {
+        router.push('/dashboard');
+        return;
+      }
+    }
+  }, [permissionsLoading, isFounder, isManager, isMember, router]);
+
+  useEffect(() => {
+    // Only fetch data if user is founder
+    if (!permissionsLoading && isFounder) {
+      fetchData();
+    }
+  }, [permissionsLoading, isFounder]);
 
   const fetchData = async () => {
     try {
@@ -202,7 +224,8 @@ export default function ClientsPage() {
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
-  if (loading) {
+  // Show loading or access denied message while checking permissions
+  if (permissionsLoading || loading) {
     return (
       <div className="flex h-screen bg-gray-50">
         <Sidebar />
@@ -214,6 +237,11 @@ export default function ClientsPage() {
         </div>
       </div>
     );
+  }
+
+  // If user is not founder, don't render the page (redirect handled in useEffect)
+  if (!isFounder) {
+    return null;
   }
 
   return (

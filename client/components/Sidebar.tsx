@@ -25,7 +25,7 @@ const navigation = [
   { name: 'Teams', href: '/dashboard/teams', icon: FiUsers, permission: 'teams.read' },
   { name: 'Projects', href: '/dashboard/projects', icon: FiFolder, permission: 'projects.read' },
   { name: 'Tasks', href: '/dashboard/tasks', icon: FiCheckSquare, permission: 'tasks.read' },
-  { name: 'Clients', href: '/dashboard/clients', icon: FiUsers, permission: 'clients.read' },
+  { name: 'Clients', href: '/dashboard/clients', icon: FiUsers, permission: 'clients.read', role: 'FOUNDER' },
   { name: 'Finance', href: '/dashboard/finance', icon: FiDollarSign, permission: 'finance.read' },
   { name: 'Products', href: '/dashboard/products', icon: FiShoppingBag, permission: 'finance.read' },
   { name: 'Sales', href: '/dashboard/sales', icon: FiShoppingBag, permission: 'finance.read' },
@@ -90,8 +90,8 @@ export default function Sidebar() {
       hasRoleAccess = isMember;
     }
     
-    // Hide clients tab for team members
-    if (item.name === 'Clients' && isMember) {
+    // Hide clients tab for team members and team managers (only founder can access)
+    if (item.name === 'Clients' && (isMember || isManager)) {
       return false;
     }
     
