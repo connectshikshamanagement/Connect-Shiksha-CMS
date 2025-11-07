@@ -20,10 +20,11 @@ export default function SettingsPage() {
     phone: '',
   });
   const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -73,8 +74,7 @@ export default function SettingsPage() {
     const loadingToast = showToast.loading('Updating password...');
 
     try {
-      const response = await api.put('/auth/updatepassword', {
-        currentPassword: passwordData.currentPassword,
+      const response = await api.put('/auth/setpassword', {
         newPassword: passwordData.newPassword,
       });
       
@@ -83,7 +83,6 @@ export default function SettingsPage() {
         showToast.dismiss(loadingToast);
         showToast.success('Password updated successfully!');
         setPasswordData({
-          currentPassword: '',
           newPassword: '',
           confirmPassword: '',
         });
@@ -214,16 +213,8 @@ export default function SettingsPage() {
               <form onSubmit={handlePasswordUpdate}>
                 <div className="max-w-2xl space-y-4">
                   <FormInput
-                    label="Current Password"
-                    type="password"
-                    required
-                    value={passwordData.currentPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                  />
-
-                  <FormInput
                     label="New Password"
-                    type="password"
+                    type={showNew ? 'text' : 'password'}
                     required
                     value={passwordData.newPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
@@ -231,11 +222,22 @@ export default function SettingsPage() {
 
                   <FormInput
                     label="Confirm New Password"
-                    type="password"
+                    type={showConfirm ? 'text' : 'password'}
                     required
                     value={passwordData.confirmPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                   />
+
+                  <div className="flex gap-4 text-sm text-gray-600">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={showNew} onChange={(e) => setShowNew(e.target.checked)} />
+                      Show new password
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={showConfirm} onChange={(e) => setShowConfirm(e.target.checked)} />
+                      Show confirm password
+                    </label>
+                  </div>
 
                   <div className="rounded bg-blue-50 p-3 text-sm text-blue-800">
                     <strong>Password requirements:</strong>

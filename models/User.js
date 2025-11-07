@@ -25,6 +25,13 @@ const userSchema = new mongoose.Schema({
     minlength: 6,
     select: false
   },
+  // Unique team code for login like CSTeam01, CSTeam02
+  teamCode: {
+    type: String,
+    unique: true,
+    sparse: true,
+    index: true
+  },
   roleIds: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Role'
@@ -123,6 +130,28 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Helper to generate next team code in format CSTeam01, CSTeam02, ...
+// Finds the next available number (handles deletions - never reuses numbers)
+async function generateNextTeamCode() {
+  const User = mongoose.model('User');
+  const docs = await User.find({ teamCode: { $exists: true, $ne: null } }).select('teamCode');
+  const usedNumbers = new Set();
+  for (const d of docs) {
+    const m = /CSTeam(\d+)/.exec(d.teamCode || '');
+    if (m) {
+      const n = parseInt(m[1], 10) || 0;
+      usedNumbers.add(n);
+    }
+  }
+  // Find next available number starting from 1
+  let next = 1;
+  while (usedNumbers.has(next)) {
+    next++;
+  }
+  const padded = String(next).padStart(2, '0');
+  return `CSTeam${padded}`;
+}
+
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('passwordHash')) {
@@ -131,6 +160,18 @@ userSchema.pre('save', async function(next) {
   const salt = await bcrypt.genSalt(10);
   this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
   next();
+});
+
+// Assign teamCode if missing
+userSchema.pre('save', async function(next) {
+  try {
+    if (this.isNew && !this.teamCode) {
+      this.teamCode = await generateNextTeamCode();
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Method to compare passwords

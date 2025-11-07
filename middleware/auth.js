@@ -2,6 +2,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Role = require('../models/Role');
 
+const ACCESS_TOKEN_TTL = process.env.JWT_EXPIRE || '15m';
+
 // Protect routes
 exports.protect = async (req, res, next) => {
   let token;
@@ -89,10 +91,26 @@ exports.authorize = (...requiredPermissions) => {
   };
 };
 
-// Generate JWT Token
+// Generate Access Token (short-lived)
 exports.getSignedJwtToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '7d'
+    expiresIn: ACCESS_TOKEN_TTL
   });
+};
+
+// Generate Refresh Token (long-lived, string for hashing)
+exports.generateRawRefreshToken = () => {
+  return require('crypto').randomBytes(64).toString('hex');
+};
+
+exports.hashToken = async (raw) => {
+  const bcrypt = require('bcryptjs');
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(raw, salt);
+};
+
+exports.compareTokenHash = async (raw, hash) => {
+  const bcrypt = require('bcryptjs');
+  return bcrypt.compare(raw, hash);
 };
 

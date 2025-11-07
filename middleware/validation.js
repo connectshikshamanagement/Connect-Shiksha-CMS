@@ -27,6 +27,17 @@ const validate = (schema) => {
 
 // Common validation schemas
 const schemas = {
+  // Auth schemas
+  authLogin: Joi.object({
+    email: Joi.string().email().lowercase(),
+    teamCode: Joi.string().trim(),
+    password: Joi.string().required().min(6)
+  }).custom((value, helpers) => {
+    if (!value.email && !value.teamCode) {
+      return helpers.error('any.custom', { message: 'email or teamCode is required' });
+    }
+    return value;
+  }, 'email or teamCode required'),
   // User schemas
   userCreate: Joi.object({
     name: Joi.string().required().trim().min(2).max(100),
@@ -43,6 +54,14 @@ const schemas = {
     roleIds: Joi.array().items(Joi.string().hex().length(24)),
     salary: Joi.number().min(0),
     active: Joi.boolean()
+  }),
+
+  passwordUpdate: Joi.object({
+    currentPassword: Joi.string().required().min(6),
+    newPassword: Joi.string().required().min(6)
+  }),
+  passwordSet: Joi.object({
+    newPassword: Joi.string().required().min(6)
   }),
 
   // Income schemas

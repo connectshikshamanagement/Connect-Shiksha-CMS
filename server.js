@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
+const cookieParser = require('cookie-parser');
 const http = require('http');
 const socketIO = require('socket.io');
 
@@ -49,18 +50,47 @@ const io = socketIO(server, {
   }
 });
 
-// Middleware
-app.use(helmet());
-app.use(cors());
+// Security & Middleware
+app.set('trust proxy', 1); // ensure secure cookies work behind proxies
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "default-src": ["'self'"],
+        "img-src": ["'self'", 'data:', 'blob:'],
+        "script-src": ["'self'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "connect-src": ["'self'", process.env.CLIENT_URL || 'http://localhost:3000']
+      }
+    },
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  })
+);
+
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+app.use(cookieParser());
+
+// Global API rate limiter (exclude health and auth refresh path-specific limits handled in route)
+const { apiLimiter } = require('./middleware/rateLimiter');
+app.use('/api', apiLimiter);
 
 // Make io accessible to routes
 app.set('io', io);
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://connectshikshamanagement_db_user:9WBkyhQmDvMPkozp@cluster0.2w5toa1.mongodb.net/connect-shiksha-crm')
+mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
 

@@ -18,6 +18,7 @@ interface User {
   name: string;
   email: string;
   phone: string;
+  teamCode?: string;
   salary: number;
   active: boolean;
   roleIds: Array<{
@@ -65,6 +66,7 @@ export default function MembersPage() {
     active: true
   });
   const { isFounder } = usePermissions();
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     if (isFounder) {
@@ -89,6 +91,29 @@ export default function MembersPage() {
       showToast.error('Failed to fetch users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAssignTeamIds = async () => {
+    try {
+      setAssigning(true);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/backfill-teamcodes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        showToast.success(`Assigned ${data.data?.assigned || 0} Team IDs`);
+        fetchUsers();
+      } else {
+        throw new Error(data.message || 'Failed to assign');
+      }
+    } catch (e: any) {
+      showToast.error(e.message || 'Failed to assign Team IDs');
+    } finally {
+      setAssigning(false);
     }
   };
 
@@ -313,6 +338,50 @@ export default function MembersPage() {
             </div>
           </div>
 
+          {/* Team IDs Section */}
+          <div className="mb-6 rounded-lg bg-white p-6 shadow">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900">All Team Member IDs</h3>
+            {users.filter(u => u.teamCode).length === 0 && (
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-sm text-gray-600">No team IDs assigned yet</p>
+                <Button onClick={handleAssignTeamIds} disabled={assigning}>
+                  {assigning ? 'Assigning…' : 'Assign Team IDs'}
+                </Button>
+              </div>
+            )}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {users
+                .filter(u => u.teamCode)
+                .sort((a, b) => (a.teamCode || '').localeCompare(b.teamCode || ''))
+                .map((user) => (
+                  <div
+                    key={user._id}
+                    className="rounded-lg border border-gray-200 bg-gray-50 p-4 hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="font-semibold text-primary-700 text-lg">{user.teamCode}</div>
+                        <div className="mt-1 text-sm font-medium text-gray-900">{user.name}</div>
+                        <div className="mt-1 text-xs text-gray-500">{user.email}</div>
+                        <div className="mt-1">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                            user.roleIds[0]?.key === 'FOUNDER' ? 'bg-purple-100 text-purple-800' :
+                            user.roleIds[0]?.key === 'TEAM_MANAGER' ? 'bg-blue-100 text-blue-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {user.roleIds[0]?.name || 'No Role'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+            {users.filter(u => u.teamCode).length === 0 && (
+              <p className="text-center text-gray-500 py-4">Click "Assign Team IDs" to generate IDs</p>
+            )}
+          </div>
+
           {/* Members Table */}
           <div className="rounded-lg bg-white shadow">
             <div className="overflow-x-auto">
@@ -321,6 +390,9 @@ export default function MembersPage() {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                       Member
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Team ID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                       Role
@@ -346,6 +418,15 @@ export default function MembersPage() {
                         <div className="font-medium text-gray-900">{user.name}</div>
                         <div className="text-sm text-gray-500">{user.email}</div>
                         <div className="text-sm text-gray-500">{user.phone}</div>
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4">
+                        {user.teamCode ? (
+                          <span className="inline-flex items-center rounded-full bg-primary-100 px-3 py-1 text-sm font-semibold text-primary-800">
+                            {user.teamCode}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-6 py-4">
                         <span className={`rounded-full px-2 py-1 text-xs font-medium ${

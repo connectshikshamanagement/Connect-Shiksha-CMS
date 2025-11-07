@@ -149,22 +149,23 @@ router.get('/my-project-financials', authorize('projects.read'), async (req, res
     const userTeams = await Team.find({ 
       members: userId,
       active: true 
-    }).select('_id name');
-    
-    if (userTeams.length === 0) {
-      return res.json({
-        success: true,
-        data: [],
-        message: 'No teams found for this user'
-      });
-    }
-    
+    }).select('_id name category');
+
     const teamIds = userTeams.map(team => team._id);
-    
-    // Get projects for these teams
+
+    const membershipFilters = [
+      { ownerId: userId },
+      { projectMembers: userId }
+    ];
+
+    if (teamIds.length > 0) {
+      membershipFilters.push({ teamId: { $in: teamIds } });
+    }
+
+    // Get projects where the user is a team member, project member, or owner
     const projects = await Project.find({ 
-      teamId: { $in: teamIds },
-      status: { $ne: 'cancelled' }
+      status: { $ne: 'cancelled' },
+      $or: membershipFilters
     })
     .populate('teamId', 'name category')
     .populate('ownerId', 'name email')
@@ -208,13 +209,24 @@ router.get('/my-project-financials', authorize('projects.read'), async (req, res
         const teamShare = netProfit * 0.3; // 30% to team
         
         // Count eligible team members (excluding founder)
-        const eligibleMembers = await Team.findById(project.teamId._id)
-          .populate('members', 'roleIds')
-          .then(team => {
-            return team.members.filter(member => 
-              !member.roleIds.some(role => role.key === 'FOUNDER')
-            ).length;
-          });
+        let eligibleMembers = 0;
+        if (project.teamId?._id) {
+          eligibleMembers = await Team.findById(project.teamId._id)
+            .populate({
+              path: 'members',
+              populate: {
+                path: 'roleIds',
+                select: 'key'
+              },
+              select: 'roleIds'
+            })
+            .then(team => {
+              if (!team) return 0;
+              return team.members.filter(member =>
+                !(member.roleIds || []).some(role => role?.key === 'FOUNDER')
+              ).length;
+            });
+        }
 
         const myShare = eligibleMembers > 0 ? teamShare / eligibleMembers : 0;
 
@@ -224,8 +236,8 @@ router.get('/my-project-financials', authorize('projects.read'), async (req, res
           totalIncome: totalIncome,
           netProfit: netProfit,
           budgetUtilization: project.allocatedBudget > 0 ? Math.round((totalExpenses / project.allocatedBudget) * 100) : 0,
-          teamName: project.teamId.name,
-          teamCategory: project.teamId.category,
+          teamName: project.teamId?.name || 'N/A',
+          teamCategory: project.teamId?.category || 'N/A',
           expenseBreakdown,
           incomeBreakdown,
           profitSharing: {

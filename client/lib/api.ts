@@ -16,6 +16,7 @@ const API_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_URL || 'http://loca
 
 const api = axios.create({
   baseURL: API_URL,
+  withCredentials: true,
 });
 
 // Add token to requests

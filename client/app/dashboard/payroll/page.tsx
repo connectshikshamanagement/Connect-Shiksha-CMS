@@ -24,6 +24,7 @@ import {
   FiDollarSign,
   FiUsers,
   FiTrendingUp,
+  FiTrendingDown,
   FiFilter,
   FiRefreshCw,
   FiPlus,
@@ -69,6 +70,9 @@ export default function PayrollPage() {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [userProjects, setUserProjects] = useState([]);
   const [projectMembers, setProjectMembers] = useState<any[]>([]);
+  const [incomeHistory, setIncomeHistory] = useState<any[]>([]);
+  const [expenseHistory, setExpenseHistory] = useState<any[]>([]);
+  const [showHistorySection, setShowHistorySection] = useState(false);
   const {
     userRole,
     isFounder,
@@ -125,8 +129,10 @@ export default function PayrollPage() {
       fetchAnalytics();
       fetchFinancialSummary();
     }
-    if (isMember) {
+    if (isMember || isManager) {
       fetchUserProjects();
+      fetchIncomeHistory();
+      fetchExpenseHistory();
     }
 
     // Fetch project members when a project is selected
@@ -142,6 +148,19 @@ export default function PayrollPage() {
     userRole,
     permissionsLoading,
   ]);
+
+  // Refetch history when project filter changes (debounced to avoid excessive calls)
+  useEffect(() => {
+    if ((isMember || isManager) && !permissionsLoading) {
+      // Add a small delay to debounce rapid filter changes
+      const timeoutId = setTimeout(() => {
+        fetchIncomeHistory();
+        fetchExpenseHistory();
+      }, 300);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [selectedProject, isMember, isManager, permissionsLoading]);
 
   // Removed fetchTeams - team filter removed
 
@@ -473,8 +492,8 @@ export default function PayrollPage() {
 
   const fetchUserProjects = async () => {
     try {
-      // Use team member finance API for team members, regular API for founders/managers
-      if (isMember) {
+      // Use team member finance API for team members and managers, regular API for founders
+      if (isMember || isManager) {
         const response = await teamMemberFinanceAPI.getMyProjects();
         if (response.data.success) {
           setUserProjects(response.data.data);
@@ -487,6 +506,36 @@ export default function PayrollPage() {
       }
     } catch (error) {
       console.error("Error fetching user projects:", error);
+    }
+  };
+
+  const fetchIncomeHistory = async () => {
+    try {
+      const params: any = {};
+      if (selectedProject) {
+        params.projectId = selectedProject;
+      }
+      const response = await teamMemberFinanceAPI.getMyIncomeHistory(params);
+      if (response.data.success) {
+        setIncomeHistory(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching income history:", error);
+    }
+  };
+
+  const fetchExpenseHistory = async () => {
+    try {
+      const params: any = {};
+      if (selectedProject) {
+        params.projectId = selectedProject;
+      }
+      const response = await teamMemberFinanceAPI.getMyExpenseHistory(params);
+      if (response.data.success) {
+        setExpenseHistory(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching expense history:", error);
     }
   };
 
@@ -555,8 +604,8 @@ export default function PayrollPage() {
     const loadingToast = showToast.loading("Adding income entry...");
 
     try {
-      // Use team member finance API for team members, regular API for founders/managers
-      if (isMember) {
+      // Use team member finance API for team members and managers, regular API for founders
+      if (isMember || isManager) {
         await teamMemberFinanceAPI.addProjectIncome(incomeFormData);
       } else {
         await incomeAPI.create(incomeFormData);
@@ -576,6 +625,14 @@ export default function PayrollPage() {
       // Add small delay to ensure backend processing is complete
       setTimeout(() => {
         fetchPayouts(); // Refresh data
+        if (isMember || isManager) {
+          fetchIncomeHistory();
+          fetchExpenseHistory();
+        }
+        if (isFounder || isManager) {
+          fetchAnalytics();
+          fetchFinancialSummary();
+        }
       }, 1000);
     } catch (error: any) {
       showToast.error(
@@ -601,8 +658,8 @@ export default function PayrollPage() {
     const loadingToast = showToast.loading("Adding expense entry...");
 
     try {
-      // Use team member finance API for team members, regular API for founders/managers
-      if (isMember) {
+      // Use team member finance API for team members and managers, regular API for founders
+      if (isMember || isManager) {
         await teamMemberFinanceAPI.addProjectExpense(expenseFormData);
       } else {
         await expenseAPI.create(expenseFormData);
@@ -621,6 +678,14 @@ export default function PayrollPage() {
       // Add small delay to ensure backend processing is complete
       setTimeout(() => {
         fetchPayouts(); // Refresh data
+        if (isMember || isManager) {
+          fetchIncomeHistory();
+          fetchExpenseHistory();
+        }
+        if (isFounder || isManager) {
+          fetchAnalytics();
+          fetchFinancialSummary();
+        }
       }, 1000);
     } catch (error: any) {
       showToast.error(
@@ -700,7 +765,7 @@ export default function PayrollPage() {
                   Compute Profit Sharing
                 </Button>
               )}
-              {isMember && (
+              {(isMember || isManager) && (
                 <>
                   <Button
                     variant="success"
@@ -717,6 +782,14 @@ export default function PayrollPage() {
                   >
                     <FiMinus className="mr-2" />
                     Add Expense
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowHistorySection(!showHistorySection)}
+                    className="flex-1 sm:flex-none"
+                  >
+                    <FiFileText className="mr-2" />
+                    {showHistorySection ? "Hide" : "My"} Income History
                   </Button>
                 </>
               )}
@@ -766,7 +839,13 @@ export default function PayrollPage() {
                 </label>
                 <select
                   value={selectedProject}
-                  onChange={(e) => setSelectedProject(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedProject(e.target.value);
+                    if (isMember || isManager) {
+                      fetchIncomeHistory();
+                      fetchExpenseHistory();
+                    }
+                  }}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
                 >
                   <option value="">All Projects</option>
@@ -778,7 +857,152 @@ export default function PayrollPage() {
                 </select>
               </div>
             )}
+            {(isMember || isManager) && (
+              <div className="flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Filter by Project
+                </label>
+                <select
+                  value={selectedProject}
+                  onChange={(e) => {
+                    setSelectedProject(e.target.value);
+                    fetchIncomeHistory();
+                    fetchExpenseHistory();
+                  }}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                >
+                  <option value="">All Projects</option>
+                  {userProjects.map((project: any) => (
+                    <option key={project._id} value={project._id}>
+                      {project.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
+
+          {/* My Income History Section */}
+          {showHistorySection && (isMember || isManager) && (
+            <div className="mb-6 rounded-lg bg-white p-6 shadow">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                  <FiFileText className="mr-2" />
+                  My Income & Expense History
+                </h3>
+                <div className="flex gap-2">
+                  <span className="text-sm text-gray-600">
+                    Total Income: <span className="font-bold text-green-600">₹{incomeHistory.reduce((sum: number, item: any) => sum + (item.amount || 0), 0).toLocaleString()}</span>
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    Total Expenses: <span className="font-bold text-red-600">₹{expenseHistory.reduce((sum: number, item: any) => sum + (item.amount || 0), 0).toLocaleString()}</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Income History */}
+                <div>
+                  <h4 className="mb-3 text-md font-semibold text-green-700 flex items-center">
+                    <FiTrendingUp className="mr-2" />
+                    Income History ({incomeHistory.length})
+                  </h4>
+                  <div className="max-h-96 space-y-2 overflow-y-auto">
+                    {incomeHistory.length > 0 ? (
+                      incomeHistory.map((income: any) => (
+                        <div
+                          key={income._id}
+                          className="rounded-lg border border-green-200 bg-green-50 p-3"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900">
+                                {income.source || income.sourceType || "Income"}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                {income.sourceRefId?.title || "No Project"}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {formatDDMMYY(income.date)}
+                              </p>
+                              {income.description && (
+                                <p className="mt-1 text-xs text-gray-600">
+                                  {income.description}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-lg font-bold text-green-600">
+                                ₹{income.amount.toLocaleString()}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {income.sourceType}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <FiDollarSign className="mx-auto mb-2 h-8 w-8" />
+                        <p>No income records found</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Expense History */}
+                <div>
+                  <h4 className="mb-3 text-md font-semibold text-red-700 flex items-center">
+                    <FiTrendingDown className="mr-2" />
+                    Expense History ({expenseHistory.length})
+                  </h4>
+                  <div className="max-h-96 space-y-2 overflow-y-auto">
+                    {expenseHistory.length > 0 ? (
+                      expenseHistory.map((expense: any) => (
+                        <div
+                          key={expense._id}
+                          className="rounded-lg border border-red-200 bg-red-50 p-3"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900">
+                                {expense.category}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                {expense.projectId?.title || "No Project"}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {formatDDMMYY(expense.date)}
+                              </p>
+                              {expense.description && (
+                                <p className="mt-1 text-xs text-gray-600">
+                                  {expense.description}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-lg font-bold text-red-600">
+                                ₹{expense.amount.toLocaleString()}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {expense.status || "approved"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <FiCreditCard className="mx-auto mb-2 h-8 w-8" />
+                        <p>No expense records found</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Financial Summary Brief */}
           {financialSummary && (isFounder || isManager) && (

@@ -4,7 +4,8 @@ const {
   getUser,
   createUser,
   updateUser,
-  deleteUser
+  deleteUser,
+  backfillTeamCodes
 } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -41,6 +42,9 @@ router
   .route('/')
   .get(getUsers)
   .post(authorize('users.create'), createUser);
+
+// Backfill team codes for existing users (admin only)
+router.post('/backfill-teamcodes', authorize('users.update'), backfillTeamCodes);
 
 router
   .route('/:id')

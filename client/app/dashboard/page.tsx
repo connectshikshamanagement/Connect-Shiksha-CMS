@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { dashboardAPI, enhancedTaskAPI, enhancedExpenseAPI, financeAPI, projectAPI, teamPerformanceAPI } from '@/lib/api';
+import { dashboardAPI, enhancedTaskAPI, enhancedExpenseAPI, financeAPI, projectAPI, teamPerformanceAPI, userAPI } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
@@ -37,6 +37,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const { isFounder, isManager, isMember } = usePermissions();
 
   useEffect(() => {
@@ -47,7 +48,10 @@ export default function DashboardPage() {
     }
 
     fetchAnalytics();
-  }, [router]);
+    if (isFounder) {
+      fetchTeamMembers();
+    }
+  }, [router, isFounder]);
 
   const getCurrentUserAndTeam = () => {
     try {
@@ -61,6 +65,17 @@ export default function DashboardPage() {
       return { userId, teamId };
     } catch {
       return { userId: null, teamId: null };
+    }
+  };
+
+  const fetchTeamMembers = async () => {
+    try {
+      const response = await userAPI.getAll();
+      if (response.data.success) {
+        setTeamMembers(response.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching team members:', error);
     }
   };
 
@@ -292,6 +307,37 @@ export default function DashboardPage() {
                 color="bg-pink-500"
                 subtitle="Clients & leads"
               />
+            </div>
+          )}
+
+          {/* Team Member IDs Section - Admin Only */}
+          {isFounder && teamMembers.length > 0 && (
+            <div className="mb-8 rounded-lg bg-white p-6 shadow-sm">
+              <h3 className="mb-4 text-lg font-semibold text-gray-800">Team Member IDs</h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {teamMembers
+                  .filter((u: any) => u.teamCode)
+                  .sort((a: any, b: any) => (a.teamCode || '').localeCompare(b.teamCode || ''))
+                  .map((user: any) => (
+                    <div
+                      key={user._id}
+                      className="rounded-lg border border-gray-200 bg-gray-50 p-4 hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="font-semibold text-primary-700 text-lg mb-1">{user.teamCode}</div>
+                      <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                      <div className="text-xs text-gray-500 mt-1">{user.email}</div>
+                      <div className="mt-2">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                          user.roleIds?.[0]?.key === 'FOUNDER' ? 'bg-purple-100 text-purple-800' :
+                          user.roleIds?.[0]?.key === 'TEAM_MANAGER' ? 'bg-blue-100 text-blue-800' :
+                          'bg-green-100 text-green-800'
+                        }`}>
+                          {user.roleIds?.[0]?.name || 'No Role'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
             </div>
           )}
 

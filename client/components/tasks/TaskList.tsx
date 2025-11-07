@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FiEdit, FiTrash2, FiClock, FiUser, FiMessageSquare, FiCheck, FiPlay, FiEye, FiCalendar, FiTag, FiUsers } from 'react-icons/fi';
+import { FiEdit, FiTrash2, FiClock, FiUser, FiMessageSquare, FiCheck, FiPlay, FiEye, FiCalendar, FiTag, FiUsers, FiFolder } from 'react-icons/fi';
 import Button from '@/components/Button';
 import Modal from '@/components/Modal';
 import { showToast } from '@/lib/toast';
@@ -40,10 +40,26 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
 
   const getPriorityColor = (priority: string) => {
     const colors = {
-      low: { border: 'border-l-gray-400', bg: 'bg-gray-50', badge: 'bg-gray-100 text-gray-700', dot: 'bg-gray-500' },
-      medium: { border: 'border-l-yellow-400', bg: 'bg-yellow-50', badge: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500' },
-      high: { border: 'border-l-orange-400', bg: 'bg-orange-50', badge: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
-      urgent: { border: 'border-l-red-400', bg: 'bg-red-50', badge: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
+      low: {
+        badge: 'bg-slate-100 text-slate-700',
+        dot: 'bg-slate-500',
+        bar: 'from-slate-200 via-slate-300 to-slate-200',
+      },
+      medium: {
+        badge: 'bg-amber-100 text-amber-700',
+        dot: 'bg-amber-500',
+        bar: 'from-amber-200 via-amber-300 to-amber-200',
+      },
+      high: {
+        badge: 'bg-orange-100 text-orange-700',
+        dot: 'bg-orange-500',
+        bar: 'from-orange-200 via-orange-300 to-orange-200',
+      },
+      urgent: {
+        badge: 'bg-red-100 text-red-700',
+        dot: 'bg-red-500',
+        bar: 'from-red-200 via-red-300 to-red-200',
+      },
     };
     return colors[priority as keyof typeof colors] || colors.low;
   };
@@ -103,8 +119,18 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
     }
   };
 
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const getInitials = (name?: string) => {
+    if (!name || typeof name !== 'string') {
+      return '?';
+    }
+    return name
+      .trim()
+      .split(' ')
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   const formatDate = (dateString: string) => {
@@ -185,168 +211,176 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
     const doneLockedForMember = isDone && userRole === 'TEAM_MEMBER';
 
     return (
-      <div className={`p-5 mb-4 rounded-xl shadow-md w-full transition-all duration-300 border-l-4 ${
-        isDone ? 'bg-gray-50 border-l-gray-300 opacity-90' : `bg-white ${priorityColors.border}`
+      <div className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border transition-all duration-300 ${
+        isDone
+          ? 'border-gray-200 bg-gray-50/90 text-gray-600'
+          : 'border-gray-100 bg-white/90 shadow-sm hover:-translate-y-1 hover:border-blue-200 hover:shadow-lg'
       }`}>
-        {/* Header */}
-        <div className="flex justify-between items-start mb-4">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-xl text-gray-900 mb-1 truncate">{task.title}</h3>
-            {task.description && (
-              <p className="text-sm text-gray-600 line-clamp-2 bg-gray-50 p-2 rounded-md border border-gray-100">
-                {task.description}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-            <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${deadlineColor}`}>
-              {deadlineInfo.text}
-            </span>
-            <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${getStatusColor(task.status)}`}>
-              {getStatusLabel(task.status)}
-            </span>
-          </div>
-        </div>
+        <span
+          className={`pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${
+            isDone ? 'from-gray-200 via-gray-300 to-gray-200' : priorityColors.bar
+          }`}
+        ></span>
 
-        {/* Progress Bar */}
-        <div className="mb-4">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-semibold text-gray-700">Progress</span>
-            <span className="text-sm font-bold text-blue-600">{task.progress}%</span>
+        <div className="flex flex-1 flex-col gap-4 p-5">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg font-semibold text-gray-900 transition-colors group-hover:text-blue-600 line-clamp-1">
+                {task.title}
+              </h3>
+              {task.description && (
+                <p className="mt-1 text-sm text-gray-500 line-clamp-2">
+                  {task.description}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              {(userRole === 'FOUNDER' || userRole === 'TEAM_MANAGER') && (
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => onEdit(task)}
+                    className="rounded-full border border-gray-200 p-2 text-gray-500 transition-colors hover:border-blue-200 hover:text-blue-600"
+                    title="Edit Task"
+                  >
+                    <FiEdit className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => onDelete(task._id)}
+                    className="rounded-full border border-gray-200 p-2 text-gray-500 transition-colors hover:border-red-200 hover:text-red-600"
+                    title="Delete Task"
+                  >
+                    <FiTrash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusColor(task.status)}`}>
+                <span>{getStatusLabel(task.status)}</span>
+              </span>
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${deadlineColor}`}>
+                <FiCalendar className="h-3 w-3" />
+                {deadlineInfo.text}
+              </span>
+            </div>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-            <div 
-              className={`h-full rounded-full transition-all duration-500 ${
-                isDone
-                  ? 'bg-gradient-to-r from-gray-400 to-gray-500'
-                  : task.progress === 100 ? 'bg-gradient-to-r from-green-500 to-green-600' :
-                    task.progress >= 70 ? 'bg-gradient-to-r from-blue-500 to-blue-600' :
-                    task.progress >= 40 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
-                    'bg-gradient-to-r from-gray-400 to-gray-500'
-              }`}
-              style={{ width: `${task.progress}%` }}
-            ></div>
-          </div>
-        </div>
 
-        {/* Assigned Members */}
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <FiUsers className="text-gray-500 text-sm" />
-            <span className="text-xs font-semibold text-gray-600">Assigned to:</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {task.assignedTo.slice(0, 3).map((user) => (
+          {/* Progress Bar */}
+          <div>
+            <div className="flex items-center justify-between text-xs font-medium text-gray-500">
+              <span>Progress</span>
+              <span className="text-sm font-semibold text-blue-600">{task.progress}%</span>
+            </div>
+            <div className="mt-2 h-2 w-full rounded-full bg-gray-200/80">
               <div
-                key={user._id}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 rounded-full border border-blue-200"
-              >
-                <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-semibold">
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isDone
+                    ? 'bg-gradient-to-r from-gray-400 to-gray-500'
+                    : task.progress === 100
+                    ? 'bg-gradient-to-r from-emerald-500 to-emerald-600'
+                    : task.progress >= 70
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
+                    : task.progress >= 40
+                    ? 'bg-gradient-to-r from-amber-400 to-amber-500'
+                    : 'bg-gradient-to-r from-slate-400 to-slate-500'
+                }`}
+                style={{ width: `${task.progress}%` }}
+              ></div>
+            </div>
+          </div>
+
+          {/* Assigned Members */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center">
+              {task.assignedTo.length === 0 && (
+                <div className="text-xs text-gray-500">No members assigned</div>
+              )}
+              {task.assignedTo.slice(0, 3).map((user, index) => (
+                <div
+                  key={user._id || index}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 text-xs font-semibold text-white ring-2 ring-white ${index > 0 ? '-ml-2' : ''}`}
+                  title={user.name}
+                >
                   {getInitials(user.name)}
                 </div>
-                <span className="text-xs font-medium text-gray-700">{user.name}</span>
+              ))}
+              {task.assignedTo.length > 3 && (
+                <div className="-ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600 ring-2 ring-white">
+                  +{task.assignedTo.length - 3}
+                </div>
+              )}
+            </div>
+            <div className="text-right text-xs text-gray-500">
+              <span className="font-medium text-gray-700">{task.assignedTo.length} member{task.assignedTo.length !== 1 ? 's' : ''}</span>
+              <div className="flex items-center justify-end gap-1 text-[11px] text-gray-400">
+                <FiClock className="h-3 w-3" />
+                <span>{new Date(task.createdAt).toLocaleDateString()}</span>
               </div>
-            ))}
-            {task.assignedTo.length > 3 && (
-              <div className="flex items-center px-2.5 py-1 bg-gray-100 rounded-full border border-gray-200">
-                <span className="text-xs font-medium text-gray-600">+{task.assignedTo.length - 3} more</span>
-              </div>
+            </div>
+          </div>
+
+          {/* Quick Info */}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 ${priorityColors.badge}`}>
+              <span className={`h-2 w-2 rounded-full ${priorityColors.dot}`}></span>
+              <span className="font-medium capitalize">{task.priority}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1">
+              <FiTag className="h-3 w-3 text-gray-500" />
+              {task.teamId.name}
+            </span>
+            {task.projectId && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-blue-600">
+                <FiFolder className="h-3 w-3" />
+                {task.projectId.title}
+              </span>
+            )}
+            {task.notes.length > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-1 text-purple-600">
+                <FiMessageSquare className="h-3 w-3" />
+                {task.notes.length} note{task.notes.length !== 1 ? 's' : ''}
+              </span>
             )}
           </div>
-        </div>
 
-        {/* Quick Info */}
-        <div className="flex flex-wrap items-center gap-3 text-xs mb-4 pb-4 border-b border-gray-100">
-          <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${priorityColors.badge}`}>
-            <span className={`w-2 h-2 rounded-full ${priorityColors.dot}`}></span>
-            <span className="font-medium">{task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}</span>
-          </span>
-          
-          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
-            <FiCalendar className="text-gray-500" />
-            <span>{new Date(task.deadline).toLocaleDateString()}</span>
-          </span>
-          
-          {task.notes.length > 0 && (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">
-              <FiMessageSquare />
-              <span>{task.notes.length} note{task.notes.length !== 1 ? 's' : ''}</span>
-            </span>
-          )}
-        </div>
-
-        {/* Team and Project */}
-        <div className="mb-4 text-xs text-gray-600">
-          <div className="flex items-center gap-2 mb-1">
-            <FiTag className="text-gray-400" />
-            <span className="font-semibold">Team:</span>
-            <span>{task.teamId.name}</span>
-            <span className="text-gray-400">•</span>
-            <span className="text-gray-500">{task.teamId.category}</span>
-          </div>
-          {task.projectId && (
-            <div className="flex items-center gap-2">
-              <FiTag className="text-gray-400" />
-              <span className="font-semibold">Project:</span>
-              <span className="text-blue-600 font-medium">{task.projectId.title}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => openDetailsModal(task)}
-              className="text-blue-600 border-blue-200 hover:bg-blue-50"
-            >
-              <FiEye className="mr-1.5" />
-              See Details
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => openProgressModal(task)}
-              disabled={doneLockedForMember}
-              className={`border-purple-200 ${doneLockedForMember ? 'text-gray-400 cursor-not-allowed bg-gray-50' : 'text-purple-600 hover:bg-purple-50'}`}
-            >
-              <FiPlay className="mr-1.5" />
-              Update
-            </Button>
-            {canMarkDone && task.status !== 'done' && (
+          {/* Action Buttons */}
+          <div className="mt-auto flex items-center justify-between gap-2 border-t border-gray-100 pt-4">
+            <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                variant="success"
-                onClick={() => markTaskDone(task)}
-                className="text-green-600 border-green-200 hover:bg-green-50"
+                variant="outline"
+                onClick={() => openDetailsModal(task)}
+                className="border-blue-200 text-sm font-medium text-blue-600 hover:bg-blue-50"
               >
-                <FiCheck className="mr-1.5" />
-                Done
+                <FiEye className="mr-1.5" />
+                Details
               </Button>
-            )}
-          </div>
-
-          {/* Admin Actions */}
-          {(userRole === 'FOUNDER' || userRole === 'TEAM_MANAGER') && (
-            <div className="flex gap-1">
-              <button
-                onClick={() => onEdit(task)}
-                className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors"
-                title="Edit Task"
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openProgressModal(task)}
+                disabled={doneLockedForMember}
+                className={`text-sm font-medium ${
+                  doneLockedForMember
+                    ? 'cursor-not-allowed border-gray-200 text-gray-400'
+                    : 'border-purple-200 text-purple-600 hover:bg-purple-50'
+                }`}
               >
-                <FiEdit className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => onDelete(task._id)}
-                className="p-2 rounded-lg hover:bg-red-100 text-gray-600 hover:text-red-600 transition-colors"
-                title="Delete Task"
-              >
-                <FiTrash2 className="h-4 w-4" />
-              </button>
+                <FiPlay className="mr-1.5" />
+                Update
+              </Button>
+              {canMarkDone && task.status !== 'done' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => markTaskDone(task)}
+                  className="border-emerald-200 text-sm font-medium text-emerald-600 hover:bg-emerald-50"
+                >
+                  <FiCheck className="mr-1.5" />
+                  Complete
+                </Button>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     );
@@ -354,19 +388,19 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
 
   return (
     <>
-      <div className="space-y-4">
-        {tasks.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-gray-400 text-6xl mb-4">📋</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks found</h3>
-            <p className="text-gray-500">Create your first task to get started!</p>
-          </div>
-        ) : (
-          tasks.map((task) => (
+      {tasks.length === 0 ? (
+        <div className="py-12 text-center">
+          <div className="mb-4 text-6xl text-gray-400">📋</div>
+          <h3 className="mb-2 text-lg font-medium text-gray-900">No tasks found</h3>
+          <p className="text-gray-500">Create your first task to get started!</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {tasks.map((task) => (
             <TaskCard key={task._id} task={task} />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Task Details Modal */}
       <Modal

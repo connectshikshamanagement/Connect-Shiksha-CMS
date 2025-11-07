@@ -36,9 +36,23 @@ router.post('/project-income', async (req, res) => {
       });
     }
 
-    // Check if user is a member of the project's team
-    const team = await Team.findById(project.teamId._id);
-    if (!team || !team.members.includes(req.user.id)) {
+    // Check if user is a member of the project's team, team lead, or project owner
+    const team = await Team.findById(project.teamId?._id || project.teamId);
+    const Role = require('../models/Role');
+    const user = await User.findById(req.user.id).populate('roleIds');
+    const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
+    const isManager = user.roleIds.some(role => role.key === 'TEAM_MANAGER');
+    const userIdString = req.user.id.toString();
+    const isTeamMember = team?.members?.some(member => member.toString() === userIdString);
+    const isTeamLead = team?.leadUserId && team.leadUserId.toString() === userIdString;
+    const isProjectOwner = project.ownerId && project.ownerId.toString() === userIdString;
+    const isProjectMember = (project.projectMembers || []).some(member => member.toString() === userIdString);
+    const isActiveProjectMember = (project.memberDetails || []).some(detail => {
+      if (!detail?.userId) return false;
+      return detail.userId.toString() === userIdString && detail.isActive !== false;
+    });
+    
+    if (!team || (!isFounder && !isManager && !isTeamMember && !isTeamLead && !isProjectOwner && !isProjectMember && !isActiveProjectMember)) {
       return res.status(403).json({
         success: false,
         message: 'You are not assigned to this project'
@@ -54,7 +68,6 @@ router.post('/project-income', async (req, res) => {
       date: date || new Date(),
       receivedByUserId: req.user.id,
       teamId: project.teamId._id,
-      projectId: projectId,
       sourceRefId: projectId,
       sourceRefModel: 'Project',
       profitShared: false
@@ -123,9 +136,23 @@ router.post('/project-expense', async (req, res) => {
       });
     }
 
-    // Check if user is a member of the project's team
-    const team = await Team.findById(project.teamId._id);
-    if (!team || !team.members.includes(req.user.id)) {
+    // Check if user is a member of the project's team, team lead, or project owner
+    const team = await Team.findById(project.teamId?._id || project.teamId);
+    const Role = require('../models/Role');
+    const user = await User.findById(req.user.id).populate('roleIds');
+    const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
+    const isManager = user.roleIds.some(role => role.key === 'TEAM_MANAGER');
+    const userIdString = req.user.id.toString();
+    const isTeamMember = team?.members?.some(member => member.toString() === userIdString);
+    const isTeamLead = team?.leadUserId && team.leadUserId.toString() === userIdString;
+    const isProjectOwner = project.ownerId && project.ownerId.toString() === userIdString;
+    const isProjectMember = (project.projectMembers || []).some(member => member.toString() === userIdString);
+    const isActiveProjectMember = (project.memberDetails || []).some(detail => {
+      if (!detail?.userId) return false;
+      return detail.userId.toString() === userIdString && detail.isActive !== false;
+    });
+    
+    if (!team || (!isFounder && !isManager && !isTeamMember && !isTeamLead && !isProjectOwner && !isProjectMember && !isActiveProjectMember)) {
       return res.status(403).json({
         success: false,
         message: 'You are not assigned to this project'
@@ -175,17 +202,59 @@ router.post('/project-expense', async (req, res) => {
   }
 });
 
-// Get team member's assigned projects
+// Get team member's assigned projects (also includes manager's projects)
 router.get('/my-projects', async (req, res) => {
   try {
-    // Find teams where user is a member
-    const userTeams = await Team.find({ members: req.user.id }).select('_id');
-    const teamIds = userTeams.map(team => team._id);
+    const Role = require('../models/Role');
+    const user = await User.findById(req.user.id).populate('roleIds');
+    const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
+    
+    let teamIds = [];
+    let projectQuery = {};
+    
+    if (isFounder) {
+      // Founders can see all projects
+      projectQuery = {};
+    } else {
+      // Find teams where user is a member or team lead
+      const userTeams = await Team.find({ 
+        $or: [
+          { members: req.user.id },
+          { leadUserId: req.user.id }
+        ]
+      }).select('_id');
+      teamIds = userTeams.map(team => team._id);
+
+      // Find projects for these teams OR projects owned by the user OR projects where user is a member
+      // Also include projects where the user is a team lead of the project's team
+      projectQuery = {
+        $or: [
+          { teamId: { $in: teamIds } },
+          { ownerId: req.user.id },
+          { projectMembers: req.user.id }
+        ]
+      };
+      
+      // If user is a team lead, also include projects from teams they lead
+      if (teamIds.length > 0) {
+        // This is already covered by teamId: { $in: teamIds }, but we ensure it's working
+        console.log(`🔍 User ${req.user.id} is in teams: ${teamIds.map(t => t.toString()).join(', ')}`);
+      }
+    }
 
     // Find projects for these teams
-    const projects = await Project.find({ teamId: { $in: teamIds } })
+    const projects = await Project.find(projectQuery)
       .populate('teamId', 'name category')
-      .select('title teamId allocatedBudget');
+      .populate('ownerId', 'name email')
+      .select('title teamId allocatedBudget ownerId projectMembers');
+
+    // Log for debugging
+    console.log(`📋 Found ${projects.length} projects for user ${req.user.id}`);
+    projects.forEach(p => {
+      const ownerName = p.ownerId?.name || (typeof p.ownerId === 'string' ? p.ownerId : 'N/A');
+      const teamName = p.teamId?.name || 'N/A';
+      console.log(`  - ${p.title} (Team: ${teamName}, Owner: ${ownerName}, Members: ${p.projectMembers?.length || 0})`);
+    });
 
     res.status(200).json({
       success: true,
@@ -199,31 +268,74 @@ router.get('/my-projects', async (req, res) => {
   }
 });
 
-// Get team member's income history
+// Get team member's income history (also includes manager's income history)
 router.get('/my-income-history', async (req, res) => {
   try {
     const { projectId, startDate, endDate } = req.query;
     
-    // Find teams where user is a member
-    const userTeams = await Team.find({ members: req.user.id }).select('_id');
-    const teamIds = userTeams.map(team => team._id);
+    const Role = require('../models/Role');
+    const user = await User.findById(req.user.id).populate('roleIds');
+    const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
+    
+    let teamIds = [];
+    let query = {};
+    
+    if (isFounder) {
+      // Founders can see all income records they created
+      query = {
+        receivedByUserId: new mongoose.Types.ObjectId(req.user.id)
+      };
+    } else {
+      // Find teams where user is a member, team lead, or project owner
+      const userTeams = await Team.find({ 
+        $or: [
+          { members: req.user.id },
+          { leadUserId: req.user.id }
+        ]
+      }).select('_id');
+      teamIds = userTeams.map(team => team._id);
+      
+      // Also get projects owned by the user
+      const ownedProjects = await Project.find({ ownerId: req.user.id }).select('_id');
+      const ownedProjectIds = ownedProjects.map(p => p._id);
 
-    let query = {
-      teamId: { $in: teamIds },
-      receivedByUserId: new mongoose.Types.ObjectId(req.user.id)  // Only show records created by this user
-    };
+      query = {
+        $or: [
+          { teamId: { $in: teamIds }, receivedByUserId: new mongoose.Types.ObjectId(req.user.id) },
+          { sourceRefId: { $in: ownedProjectIds }, sourceRefModel: 'Project', receivedByUserId: new mongoose.Types.ObjectId(req.user.id) }
+        ]
+      };
+    }
 
     // Filter by project if specified
     if (projectId) {
-      query.sourceRefId = projectId;
-      query.sourceRefModel = 'Project';
+      if (query.$or) {
+        // Add project filter to each condition in $or
+        query.$or = query.$or.map(condition => ({
+          ...condition,
+          sourceRefId: new mongoose.Types.ObjectId(projectId),
+          sourceRefModel: 'Project'
+        }));
+      } else {
+        query.sourceRefId = new mongoose.Types.ObjectId(projectId);
+        query.sourceRefModel = 'Project';
+      }
     }
 
     // Filter by date range if specified
     if (startDate || endDate) {
-      query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
+      const dateFilter = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (endDate) dateFilter.$lte = new Date(endDate);
+      
+      if (query.$or) {
+        query.$or = query.$or.map(condition => ({
+          ...condition,
+          date: dateFilter
+        }));
+      } else {
+        query.date = dateFilter;
+      }
     }
 
     const incomeHistory = await Income.find(query)
@@ -245,30 +357,72 @@ router.get('/my-income-history', async (req, res) => {
   }
 });
 
-// Get team member's expense history
+// Get team member's expense history (also includes manager's expense history)
 router.get('/my-expense-history', async (req, res) => {
   try {
     const { projectId, startDate, endDate } = req.query;
     
-    // Find teams where user is a member
-    const userTeams = await Team.find({ members: req.user.id }).select('_id');
-    const teamIds = userTeams.map(team => team._id);
+    const Role = require('../models/Role');
+    const user = await User.findById(req.user.id).populate('roleIds');
+    const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
+    
+    let teamIds = [];
+    let query = {};
+    
+    if (isFounder) {
+      // Founders can see all expense records they created
+      query = {
+        submittedBy: new mongoose.Types.ObjectId(req.user.id)
+      };
+    } else {
+      // Find teams where user is a member, team lead, or project owner
+      const userTeams = await Team.find({ 
+        $or: [
+          { members: req.user.id },
+          { leadUserId: req.user.id }
+        ]
+      }).select('_id');
+      teamIds = userTeams.map(team => team._id);
+      
+      // Also get projects owned by the user
+      const ownedProjects = await Project.find({ ownerId: req.user.id }).select('_id');
+      const ownedProjectIds = ownedProjects.map(p => p._id);
 
-    let query = {
-      teamId: { $in: teamIds },
-      submittedBy: new mongoose.Types.ObjectId(req.user.id)  // Only show records created by this user
-    };
+      query = {
+        $or: [
+          { teamId: { $in: teamIds }, submittedBy: new mongoose.Types.ObjectId(req.user.id) },
+          { projectId: { $in: ownedProjectIds }, submittedBy: new mongoose.Types.ObjectId(req.user.id) }
+        ]
+      };
+    }
 
     // Filter by project if specified
     if (projectId) {
-      query.projectId = projectId;
+      if (query.$or) {
+        // Add project filter to each condition in $or
+        query.$or = query.$or.map(condition => ({
+          ...condition,
+          projectId: new mongoose.Types.ObjectId(projectId)
+        }));
+      } else {
+        query.projectId = new mongoose.Types.ObjectId(projectId);
+      }
     }
 
     // Filter by date range if specified
     if (startDate || endDate) {
-      query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
+      const dateFilter = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (endDate) dateFilter.$lte = new Date(endDate);
+      
+      if (query.$or) {
+        query.$or = query.$or.map(condition => ({
+          ...condition,
+          date: dateFilter
+        }));
+      } else {
+        query.date = dateFilter;
+      }
     }
 
     const expenseHistory = await Expense.find(query)

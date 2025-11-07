@@ -157,6 +157,12 @@ projectSchema.pre('save', async function(next) {
       }
     }
     
+    // Auto-add project owner to projectMembers if not already included
+    if (this.ownerId && !this.projectMembers.includes(this.ownerId)) {
+      this.projectMembers.push(this.ownerId);
+      console.log(`✅ Auto-added project owner to projectMembers: ${this.title}`);
+    }
+    
     // Sync projectMembers with memberDetails for backward compatibility
     if (this.projectMembers && this.projectMembers.length > 0) {
       // Ensure all projectMembers are in memberDetails

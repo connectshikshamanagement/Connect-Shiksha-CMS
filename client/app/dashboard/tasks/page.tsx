@@ -364,6 +364,80 @@ export default function TasksPage() {
     }
   };
 
+  const handleUpdateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingTask) {
+      showToast.error('No task selected for editing');
+      return;
+    }
+
+    if (!taskFormData.title.trim()) {
+      showToast.error('Title is required');
+      return;
+    }
+
+    if (!taskFormData.teamId || !taskFormData.projectId || !taskFormData.deadline) {
+      showToast.error('Please fill in the required fields');
+      return;
+    }
+
+    if (!taskFormData.assignedTo || taskFormData.assignedTo.length === 0) {
+      showToast.error('Assign the task to at least one member');
+      return;
+    }
+
+    const loadingToast = showToast.loading('Updating task...');
+
+    try {
+      await taskAPI.update(editingTask._id, {
+        title: taskFormData.title,
+        description: taskFormData.description,
+        teamId: taskFormData.teamId,
+        projectId: taskFormData.projectId,
+        assignedTo: taskFormData.assignedTo,
+        priority: taskFormData.priority,
+        deadline: taskFormData.deadline,
+        checklist: taskFormData.checklist,
+      });
+
+      showToast.success('Task updated successfully!');
+      showToast.dismiss(loadingToast);
+      setShowModal(false);
+      resetForm();
+      fetchData();
+    } catch (error: any) {
+      showToast.dismiss(loadingToast);
+      showToast.error(error.response?.data?.message || 'Failed to update task');
+    }
+  };
+
+  const addChecklistItem = () => {
+    if (!checklistInput.trim()) return;
+
+    setTaskFormData(prev => ({
+      ...prev,
+      checklist: [...prev.checklist, { text: checklistInput.trim(), completed: false }],
+    }));
+    setChecklistInput('');
+  };
+
+  const toggleChecklistItem = (index: number) => {
+    setTaskFormData(prev => ({
+      ...prev,
+      checklist: prev.checklist.map((item, idx) =>
+        idx === index ? { ...item, completed: !item.completed } : item
+      ),
+    }));
+  };
+
+  const removeChecklistItem = (index: number) => {
+    setTaskFormData(prev => ({
+      ...prev,
+      checklist: prev.checklist.filter((_, idx) => idx !== index),
+    }));
+  };
+
   const handleEdit = (task: Task) => {
     setEditingTask(task);
     setTaskFormData({
@@ -376,6 +450,7 @@ export default function TasksPage() {
       deadline: new Date(task.deadline).toISOString().split('T')[0],
       checklist: (task as any).checklist || [],
     });
+    setShowBulkMode(false);
     setShowModal(true);
   };
 
@@ -610,7 +685,199 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {/* Add Task Modal - Bulk Creation */}
+    {/* Edit Task Modal */}
+    {!showBulkMode && showModal && editingTask && (
+      <Modal
+        isOpen={!showBulkMode && showModal}
+        onClose={() => {
+          setShowModal(false);
+          resetForm();
+        }}
+        title="Edit Task"
+        size="lg"
+      >
+        <form onSubmit={handleUpdateTask}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <FormInput
+              label="Title"
+              required
+              value={taskFormData.title}
+              onChange={(e) => setTaskFormData({ ...taskFormData, title: e.target.value })}
+            />
+
+            <FormSelect
+              label="Priority"
+              required
+              value={taskFormData.priority}
+              onChange={(e) => setTaskFormData({ ...taskFormData, priority: e.target.value as any })}
+              options={[
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' },
+                { value: 'urgent', label: 'Urgent' },
+              ]}
+            />
+
+            <FormSelect
+              label="Team"
+              required
+              value={taskFormData.teamId}
+              onChange={(e) => setTaskFormData({ ...taskFormData, teamId: e.target.value })}
+              options={teams.map((team: any) => ({
+                value: team._id,
+                label: team.name,
+              }))}
+            />
+
+            <FormSelect
+              label="Project"
+              required
+              value={taskFormData.projectId}
+              onChange={(e) => {
+                const newProjectId = e.target.value;
+                setTaskFormData({
+                  ...taskFormData,
+                  projectId: newProjectId,
+                  assignedTo: [],
+                });
+              }}
+              options={[
+                { value: '', label: 'Select Project' },
+                ...filteredProjects.map((project: any) => ({
+                  value: project._id,
+                  label: project.title,
+                })),
+              ]}
+            />
+
+            <FormInput
+              label="Deadline"
+              type="date"
+              required
+              value={taskFormData.deadline}
+              onChange={(e) => setTaskFormData({ ...taskFormData, deadline: e.target.value })}
+            />
+
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
+              <textarea
+                value={taskFormData.description}
+                onChange={(e) => setTaskFormData({ ...taskFormData, description: e.target.value })}
+                rows={3}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <label className="mb-2 block text-sm font-medium text-gray-700">Assigned Members</label>
+            {!taskFormData.projectId ? (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">Select a project to view available members.</p>
+              </div>
+            ) : filteredMembers.length === 0 ? (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <p className="text-sm text-gray-600">No members available for this project.</p>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {filteredMembers.map((user: any) => (
+                  <label
+                    key={user._id}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full hover:bg-gray-100 cursor-pointer transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={taskFormData.assignedTo.includes(user._id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setTaskFormData({
+                            ...taskFormData,
+                            assignedTo: [...taskFormData.assignedTo, user._id],
+                          });
+                        } else {
+                          setTaskFormData({
+                            ...taskFormData,
+                            assignedTo: taskFormData.assignedTo.filter((id) => id !== user._id),
+                          });
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">{user.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-700">Checklist</h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={checklistInput}
+                  onChange={(e) => setChecklistInput(e.target.value)}
+                  placeholder="Add a checklist item"
+                  className="w-48 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+                <Button type="button" size="sm" variant="outline" onClick={addChecklistItem}>
+                  Add
+                </Button>
+              </div>
+            </div>
+            {taskFormData.checklist.length === 0 ? (
+              <p className="text-sm text-gray-500">No checklist items added.</p>
+            ) : (
+              <div className="space-y-2">
+                {taskFormData.checklist.map((item, index) => (
+                  <div
+                    key={`${item.text}-${index}`}
+                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                  >
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={item.completed}
+                        onChange={() => toggleChecklistItem(index)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className={`text-sm ${item.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                        {item.text}
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => removeChecklistItem(index)}
+                      className="text-xs text-red-500 hover:text-red-600"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowModal(false);
+                resetForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">Save Changes</Button>
+          </div>
+        </form>
+      </Modal>
+    )}
+
+    {/* Add Task Modal - Bulk Creation */}
       {showBulkMode && showModal && (
         <Modal
           isOpen={showBulkMode && showModal}

@@ -1,15 +1,25 @@
 const rateLimit = require('express-rate-limit');
 
 // General API rate limiter
+// In development, allow more requests; in production, use stricter limits
+const isDevelopment = process.env.NODE_ENV !== 'production';
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: isDevelopment ? 1000 : 100, // Higher limit in development for testing
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again later.'
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting for localhost in development
+  skip: (req) => {
+    if (isDevelopment) {
+      const ip = req.ip || req.connection.remoteAddress;
+      return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    }
+    return false;
+  }
 });
 
 // Strict rate limiter for auth endpoints
