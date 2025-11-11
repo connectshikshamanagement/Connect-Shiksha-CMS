@@ -103,6 +103,109 @@ export default function PayrollPage() {
   const [selectedPayoutForDetails, setSelectedPayoutForDetails] = useState<any>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
+  const getProjectProfit = (record: any) => {
+    if (!record) return 0;
+    if (typeof record.netProfit === "number" && !Number.isNaN(record.netProfit)) {
+      return record.netProfit;
+    }
+    const income = record.projectIncome || 0;
+    const expenses = record.projectExpenses || 0;
+    return income - expenses;
+  };
+
+  const getProjectIncome = (record: any) => {
+    if (!record) return 0;
+    const income = record.projectIncome || 0;
+    if (income > 0) {
+      return income;
+    }
+    const profit = getProjectProfit(record);
+    if (profit > 0) {
+      return profit + (record.projectExpenses || 0);
+    }
+    return 0;
+  };
+
+  const getProjectExpenses = (record: any) => {
+    if (!record) return 0;
+    const expenses = record.projectExpenses || 0;
+    if (expenses > 0) {
+      return expenses;
+    }
+    const income = getProjectIncome(record);
+    const profit = getProjectProfit(record);
+    if (income > 0 && profit >= 0) {
+      return Math.max(0, income - profit);
+    }
+    return 0;
+  };
+
+  const getProjectBudget = (record: any) => {
+    if (!record) return 0;
+    if (record.projectBudget && record.projectBudget > 0) {
+      return record.projectBudget;
+    }
+    return record.projectId?.allocatedBudget || 0;
+  };
+
+  const normalizeDate = (date: Date | null | undefined) => {
+    if (!date) return null;
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    if (Number.isNaN(normalized.getTime())) {
+      return null;
+    }
+    return normalized;
+  };
+
+  const getEffectiveMemberEndDate = (payout: any) => {
+    if (!payout) return null;
+    const joined = normalizeDate(payout.memberJoinedDate ? new Date(payout.memberJoinedDate) : null);
+    let end = normalizeDate(payout.memberLeftDate ? new Date(payout.memberLeftDate) : null);
+    const projectEnd = normalizeDate(
+      payout.projectId?.endDate ? new Date(payout.projectId.endDate) : null
+    );
+    const today = normalizeDate(new Date());
+    const isActive = payout.memberIsActive !== false && payout.status !== "cancelled";
+
+    if (isActive) {
+      end = today;
+      if (projectEnd && end && projectEnd.getTime() < end.getTime()) {
+        end = projectEnd;
+      }
+      if (end && joined && end.getTime() < joined.getTime()) {
+        end = new Date(joined);
+      }
+    }
+
+    if (!end && joined) {
+      end = new Date(joined);
+    }
+
+    return end;
+  };
+
+  const getDisplayWorkingDays = (payout: any) => {
+    if (!payout) return 0;
+    if (payout.memberIsActive === false && typeof payout.workDurationDays === "number") {
+      return payout.workDurationDays;
+    }
+
+    const joined = normalizeDate(payout.memberJoinedDate ? new Date(payout.memberJoinedDate) : null);
+    const effectiveEnd = getEffectiveMemberEndDate(payout);
+
+    if (!joined || !effectiveEnd) {
+      return payout.workDurationDays || 0;
+    }
+
+    const diff = effectiveEnd.getTime() - joined.getTime();
+    if (diff < 0) {
+      return 0;
+    }
+
+    return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+  };
+
   useEffect(() => {
     // Wait for permissions to load before making API calls
     if (permissionsLoading) {
@@ -181,8 +284,6 @@ export default function PayrollPage() {
       // Role-based data fetching
       if (isMember) {
         endpoint = "/project-profit/my-shares";
-        params.append("month", selectedMonth.toString());
-        params.append("year", selectedYear.toString());
       } else if (selectedProject) {
         // When a project is selected, still use the payroll endpoint with projectId filter
         endpoint = "/payroll";
@@ -1160,7 +1261,7 @@ export default function PayrollPage() {
                           p.userId?.email !== "founder@connectshiksha.com"
                       )
                       .reduce(
-                        (sum: number, p: any) => sum + (p.projectIncome || 0),
+                        (sum: number, p: any) => sum + getProjectIncome(p),
                         0
                       )
                       .toLocaleString()
@@ -1178,7 +1279,7 @@ export default function PayrollPage() {
                           p.userId?.email !== "founder@connectshiksha.com"
                       )
                       .reduce(
-                        (sum: number, p: any) => sum + (p.projectBudget || 0),
+                        (sum: number, p: any) => sum + getProjectBudget(p),
                         0
                       )
                       .toLocaleString()
@@ -1196,7 +1297,7 @@ export default function PayrollPage() {
                           p.userId?.email !== "founder@connectshiksha.com"
                       )
                       .reduce(
-                        (sum: number, p: any) => sum + (p.projectExpenses || 0),
+                        (sum: number, p: any) => sum + getProjectExpenses(p),
                         0
                       )
                       .toLocaleString()
@@ -1214,9 +1315,7 @@ export default function PayrollPage() {
                           p.userId?.email !== "founder@connectshiksha.com"
                       )
                       .reduce(
-                        (sum: number, p: any) =>
-                          sum +
-                          ((p.projectIncome || 0) - (p.projectExpenses || 0)),
+                        (sum: number, p: any) => sum + getProjectProfit(p),
                         0
                       )
                       .toLocaleString()
@@ -1406,9 +1505,7 @@ export default function PayrollPage() {
                                   if (p.projectId?._id || p.projectId) {
                                     const projectId =
                                       p.projectId._id || p.projectId;
-                                    const profit =
-                                      (p.projectIncome || 0) -
-                                      (p.projectExpenses || 0);
+                                    const profit = getProjectProfit(p);
                                     if (!projectsMap.has(projectId)) {
                                       projectsMap.set(projectId, profit);
                                     }
@@ -1451,9 +1548,7 @@ export default function PayrollPage() {
                                   if (p.projectId?._id || p.projectId) {
                                     const projectId =
                                       p.projectId._id || p.projectId;
-                                    const profit =
-                                      (p.projectIncome || 0) -
-                                      (p.projectExpenses || 0);
+                                    const profit = getProjectProfit(p);
                                     if (!projectsMap.has(projectId)) {
                                       projectsMap.set(projectId, profit);
                                     }
@@ -1501,10 +1596,7 @@ export default function PayrollPage() {
                     .filter((payout: any) => {
                       const isFounder =
                         payout.userId?.email === "founder@connectshiksha.com";
-                      const hasProfit =
-                        (payout.projectIncome || 0) -
-                          (payout.projectExpenses || 0) >
-                        0;
+                      const hasProfit = getProjectProfit(payout) > 0;
                       return isFounder && hasProfit;
                     })
                     .map((payout: any) => (
@@ -1555,15 +1647,15 @@ export default function PayrollPage() {
                           <div className="flex flex-wrap gap-2">
                             <span className="text-green-600 text-xs">
                               Income: ₹
-                              {(payout.projectIncome || 0).toLocaleString()}
+                              {getProjectIncome(payout).toLocaleString()}
                             </span>
                             <span className="text-blue-600 text-xs">
                               Budget: ₹
-                              {(payout.projectBudget || 0).toLocaleString()}
+                              {getProjectBudget(payout).toLocaleString()}
                             </span>
                             <span className="text-red-600 text-xs">
                               Expenses: ₹
-                              {(payout.projectExpenses || 0).toLocaleString()}
+                              {getProjectExpenses(payout).toLocaleString()}
                             </span>
                           </div>
                           <div className="text-right">
@@ -1615,10 +1707,8 @@ export default function PayrollPage() {
                     const founderPayouts = payouts.filter((payout: any) => {
                       const isFounder =
                         payout.userId?.email === "founder@connectshiksha.com";
-                      const hasProfit =
-                        (payout.projectIncome || 0) -
-                          (payout.projectExpenses || 0) >
-                        0;
+                    const projectProfit = getProjectProfit(payout);
+                    const hasProfit = projectProfit > 0;
                       return isFounder && hasProfit;
                     });
 
@@ -1691,10 +1781,10 @@ export default function PayrollPage() {
                   const teamPayouts = payouts.filter((payout: any) => {
                     const isNotFounder =
                       payout.userId?.email !== "founder@connectshiksha.com";
+                    const projectProfit = getProjectProfit(payout);
                     const hasProfit =
-                      (payout.projectIncome || 0) -
-                        (payout.projectExpenses || 0) >
-                      0;
+                      projectProfit > 0 ||
+                      (payout.profitShare || payout.netAmount || 0) > 0;
                     return isNotFounder && hasProfit;
                   });
 
@@ -1733,11 +1823,16 @@ export default function PayrollPage() {
                       </div>
 
                       {group.payouts.map((payout: any) => {
-                        // Calculate member's percentage
-                        const totalProfit = (payout.projectIncome || 0) - (payout.projectExpenses || 0);
-                        const memberPercentage = totalProfit > 0 
-                          ? ((payout.profitShare || 0) / totalProfit * 100).toFixed(2)
-                          : 0;
+                        const projectProfit = getProjectProfit(payout);
+                        const memberPercentage =
+                          projectProfit > 0
+                            ? (((payout.profitShare || 0) / projectProfit) * 100).toFixed(2)
+                            : 0;
+                        const displayProfit = Math.round(projectProfit);
+                        const incomeValue = getProjectIncome(payout);
+                        const expenseValue = getProjectExpenses(payout);
+                        const effectiveEndDate = getEffectiveMemberEndDate(payout);
+                        const displayWorkingDays = getDisplayWorkingDays(payout);
 
                         return (
                         <div
@@ -1785,11 +1880,11 @@ export default function PayrollPage() {
                                   </span>
                                 </div>
                               )}
-                              {payout.workDurationDays > 0 && (
+                              {displayWorkingDays > 0 && (
                                 <div>
                                   <span className="text-gray-600">Working Days:</span>{" "}
                                   <span className="font-semibold text-blue-600">
-                                    {payout.workDurationDays} days
+                                    {displayWorkingDays} days
                                   </span>
                                 </div>
                               )}
@@ -1821,24 +1916,24 @@ export default function PayrollPage() {
                               <div>
                                 <div className="text-gray-600">Income</div>
                                 <div className="font-semibold text-green-600">
-                                  ₹{(payout.projectIncome || 0).toLocaleString()}
+                                  ₹{incomeValue.toLocaleString()}
                                 </div>
                               </div>
                               <div>
                                 <div className="text-gray-600">Expenses</div>
                                 <div className="font-semibold text-red-600">
-                                  ₹{(payout.projectExpenses || 0).toLocaleString()}
+                                  ₹{expenseValue.toLocaleString()}
                                 </div>
                               </div>
                               <div>
                                 <div className="text-gray-600">Profit</div>
                                 <div className="font-semibold text-blue-600">
-                                  ₹{totalProfit.toLocaleString()}
+                                  ₹{displayProfit.toLocaleString()}
                                 </div>
                               </div>
                             </div>
                             <div className="mt-1 text-xs text-gray-500 italic">
-                              * Calculated from {formatDDMMYY(payout.memberJoinedDate)} to {formatDDMMYY(payout.memberLeftDate) !== 'N/A' ? formatDDMMYY(payout.memberLeftDate) : 'present'}
+                              * Calculated from {formatDDMMYY(payout.memberJoinedDate)} to {effectiveEndDate ? formatDDMMYY(effectiveEndDate) : "present"}
                             </div>
                           </div>
 
@@ -1856,8 +1951,17 @@ export default function PayrollPage() {
                             </button>
                             <button
                               onClick={() => {
-                                const totalProfit = (payout.projectIncome || 0) - (payout.projectExpenses || 0);
-                                const memberPercentage = totalProfit > 0 ? ((payout.profitShare || 0) / totalProfit * 100).toFixed(2) : 0;
+                                const projectProfit = getProjectProfit(payout);
+                                const incomeValue = getProjectIncome(payout);
+                                const expenseValue = getProjectExpenses(payout);
+                                const effectiveEnd = getEffectiveMemberEndDate(payout);
+                                const displayEndDate = effectiveEnd ? formatDDMMYY(effectiveEnd) : 'present';
+                                const displayWorkingDays = getDisplayWorkingDays(payout);
+                                const memberPercentage =
+                                  projectProfit > 0
+                                    ? ((payout.profitShare || 0) / projectProfit * 100).toFixed(2)
+                                    : 0;
+                                const roundedProfit = Math.round(projectProfit);
                                 
                                 // Generate PDF
                                 const printWindow = window.open('', '', 'height=600,width=800');
@@ -1893,27 +1997,27 @@ export default function PayrollPage() {
                                         <table>
                                           <tr><th>Project Started</th><td>${formatDDMMYY(payout.projectStartDate)}</td></tr>
                                           <tr><th>Member Joined</th><td>${formatDDMMYY(payout.memberJoinedDate)}</td></tr>
-                                          <tr><th>Member Left</th><td>${formatDDMMYY(payout.memberLeftDate)}</td></tr>
-                                          <tr><th>Working Days</th><td class="highlight">${payout.workDurationDays || 0} days</td></tr>
+                                          <tr><th>Member Left</th><td>${displayEndDate}</td></tr>
+                                          <tr><th>Working Days</th><td class="highlight">${displayWorkingDays} days</td></tr>
                                           <tr><th>Profit Share %</th><td class="highlight">${memberPercentage}%</td></tr>
                                         </table>
                                         
                                         <h2>Financial Summary (Member's Period)</h2>
                                         <table>
-                                          <tr><th>Income (from join date)</th><td>₹${(payout.projectIncome || 0).toLocaleString()}</td></tr>
-                                          <tr><th>Expenses (from join date)</th><td>₹${(payout.projectExpenses || 0).toLocaleString()}</td></tr>
-                                          <tr class="highlight"><th>Net Profit</th><td>₹${totalProfit.toLocaleString()}</td></tr>
+                                          <tr><th>Income (from join date)</th><td>₹${incomeValue.toLocaleString()}</td></tr>
+                                          <tr><th>Expenses (from join date)</th><td>₹${expenseValue.toLocaleString()}</td></tr>
+                                          <tr class="highlight"><th>Net Profit</th><td>₹${roundedProfit.toLocaleString()}</td></tr>
                                         </table>
                                         
                                         <h2>Profit Share Calculation</h2>
                                         <table>
-                                          <tr><th>Base Share (${memberPercentage}% of ₹${totalProfit.toLocaleString()})</th><td>₹${Math.round(payout.profitShare - (payout.ownerBonus || 0)).toLocaleString()}</td></tr>
+                                          <tr><th>Base Share (${memberPercentage}% of ₹${roundedProfit.toLocaleString()})</th><td>₹${Math.round(payout.profitShare - (payout.ownerBonus || 0)).toLocaleString()}</td></tr>
                                           ${payout.isProjectOwner ? `<tr><th>Owner Bonus (3%)</th><td>₹${Math.round(payout.ownerBonus || 0).toLocaleString()}</td></tr>` : ''}
                                           <tr class="highlight total"><th>Total Profit Share</th><td>₹${Math.round(payout.profitShare || 0).toLocaleString()}</td></tr>
                                         </table>
                                         
                                         <div class="footer">
-                                          <p><strong>Note:</strong> Income and expenses are calculated for the member's contribution window (${formatDDMMYY(payout.memberJoinedDate)} → ${formatDDMMYY(payout.memberLeftDate) !== 'N/A' ? formatDDMMYY(payout.memberLeftDate) : 'present'}).</p>
+                                          <p><strong>Note:</strong> Income and expenses are calculated for the member's contribution window (${formatDDMMYY(payout.memberJoinedDate)} → ${displayEndDate}).</p>
                                           <p>Generated on: ${new Date().toLocaleString()}</p>
                                           <p>Status: ${payout.status || 'pending'}</p>
                                         </div>
@@ -1985,10 +2089,10 @@ export default function PayrollPage() {
                   const teamPayoutsFiltered = payouts.filter((payout: any) => {
                     const isNotFounder =
                       payout.userId?.email !== "founder@connectshiksha.com";
+                    const projectProfit = getProjectProfit(payout);
                     const hasProfit =
-                      (payout.projectIncome || 0) -
-                        (payout.projectExpenses || 0) >
-                      0;
+                      projectProfit > 0 ||
+                      (payout.profitShare || payout.netAmount || 0) > 0;
                     return isNotFounder && hasProfit;
                   });
 
@@ -2418,10 +2522,16 @@ export default function PayrollPage() {
             <div className="space-y-4 max-h-[70vh] overflow-y-auto">
               {(() => {
                 const payout = selectedPayoutForDetails;
-                const totalProfit = (payout.projectIncome || 0) - (payout.projectExpenses || 0);
-                const memberPercentage = totalProfit > 0 
-                  ? ((payout.profitShare || 0) / totalProfit * 100).toFixed(2)
-                  : 0;
+                const projectProfit = getProjectProfit(payout);
+                const memberPercentage =
+                  projectProfit > 0
+                    ? ((payout.profitShare || 0) / projectProfit * 100).toFixed(2)
+                    : 0;
+                const incomeValue = getProjectIncome(payout);
+                const expenseValue = getProjectExpenses(payout);
+                const roundedProfit = Math.round(projectProfit);
+                const effectiveEnd = getEffectiveMemberEndDate(payout);
+                const displayWorkingDays = getDisplayWorkingDays(payout);
 
                 return (
                   <>
@@ -2465,13 +2575,13 @@ export default function PayrollPage() {
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-gray-600">Member Left:</span>
                             <span className="font-medium text-red-600">
-                              {formatDDMMYY(payout.memberLeftDate)}
+                              {effectiveEnd ? formatDDMMYY(effectiveEnd) : "present"}
                             </span>
                           </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Working Days:</span>
                           <span className="font-bold text-blue-600">
-                            {payout.workDurationDays || 0} days
+                            {displayWorkingDays} days
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -2492,24 +2602,24 @@ export default function PayrollPage() {
                         <div className="flex justify-between items-center py-2 border-b">
                           <span className="text-gray-600">Income (from join date):</span>
                           <span className="font-semibold text-green-600">
-                            ₹{(payout.projectIncome || 0).toLocaleString()}
+                            ₹{incomeValue.toLocaleString()}
                           </span>
                         </div>
                         <div className="flex justify-between items-center py-2 border-b">
                           <span className="text-gray-600">Expenses (from join date):</span>
                           <span className="font-semibold text-red-600">
-                            ₹{(payout.projectExpenses || 0).toLocaleString()}
+                            ₹{expenseValue.toLocaleString()}
                           </span>
                         </div>
                         <div className="flex justify-between items-center py-2 bg-blue-50 rounded px-2">
                           <span className="font-medium text-gray-800">Net Profit:</span>
                           <span className="font-bold text-blue-600 text-lg">
-                            ₹{totalProfit.toLocaleString()}
+                            ₹{roundedProfit.toLocaleString()}
                           </span>
                         </div>
                       </div>
                       <p className="mt-2 text-xs text-gray-500 italic">
-                        * Calculated from {formatDDMMYY(payout.memberJoinedDate)} to {formatDDMMYY(payout.memberLeftDate) !== 'N/A' ? formatDDMMYY(payout.memberLeftDate) : 'present'}
+                        * Calculated from {formatDDMMYY(payout.memberJoinedDate)} to {effectiveEnd ? formatDDMMYY(effectiveEnd) : "present"}
                       </p>
                     </div>
 
@@ -2533,11 +2643,11 @@ export default function PayrollPage() {
                         <div className="bg-white rounded p-3 space-y-2">
                           <div className="font-medium text-gray-700">Step 2: Member&apos;s Share Calculation</div>
                           <div className="pl-4 space-y-1 text-xs">
-                            <div>Member&apos;s profit: <span className="font-semibold">₹{totalProfit.toLocaleString()}</span></div>
-                            <div>Remaining pool (30%): <span className="font-semibold">₹{Math.round(totalProfit * 0.30).toLocaleString()}</span></div>
+                            <div>Member&apos;s profit: <span className="font-semibold">₹{roundedProfit.toLocaleString()}</span></div>
+                            <div>Remaining pool (30%): <span className="font-semibold">₹{Math.round(projectProfit * 0.30).toLocaleString()}</span></div>
                             {payout.isProjectOwner ? (
                               <>
-                                <div>Pool after owner bonus (27%): <span className="font-semibold">₹{Math.round(totalProfit * 0.27).toLocaleString()}</span></div>
+                                <div>Pool after owner bonus (27%): <span className="font-semibold">₹{Math.round(projectProfit * 0.27).toLocaleString()}</span></div>
                                 <div>Base share ({memberPercentage}%): <span className="font-semibold">₹{Math.round(payout.profitShare - (payout.ownerBonus || 0)).toLocaleString()}</span></div>
                                 <div>Owner bonus (3%): <span className="font-semibold text-purple-600">₹{Math.round(payout.ownerBonus || 0).toLocaleString()}</span></div>
                               </>
@@ -2555,7 +2665,7 @@ export default function PayrollPage() {
                             </span>
                           </div>
                           <div className="text-xs mt-1 opacity-90">
-                            {memberPercentage}% of ₹{totalProfit.toLocaleString()} profit from member&apos;s period
+                            {memberPercentage}% of ₹{roundedProfit.toLocaleString()} profit from member&apos;s period
                           </div>
                         </div>
                       </div>

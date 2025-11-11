@@ -17,6 +17,7 @@ import {
   FiDatabase,
   FiMenu,
   FiX,
+  FiMapPin
 } from 'react-icons/fi';
 import usePermissions from '@/hooks/usePermissions';
 
@@ -30,6 +31,7 @@ const navigation = [
   { name: 'Products', href: '/dashboard/products', icon: FiShoppingBag, permission: 'finance.read' },
   { name: 'Sales', href: '/dashboard/sales', icon: FiShoppingBag, permission: 'finance.read' },
   { name: 'Payroll', href: '/dashboard/payroll', icon: FiDollarSign, permission: 'payroll.read' },
+  { name: 'Attendance', href: '/dashboard/attendance', icon: FiMapPin, permission: null },
   { name: 'Advance Payments', href: '/dashboard/advance-payments', icon: FiCreditCard, permission: 'payroll.read', role: 'FOUNDER' },
   { name: 'My Advance Payments', href: '/dashboard/my-advance-payments', icon: FiCreditCard, permission: null, role: 'TEAM_MEMBER' },
   { name: 'My Finance History', href: '/dashboard/finance-history', icon: FiClock, permission: null, role: 'TEAM_MEMBER' },

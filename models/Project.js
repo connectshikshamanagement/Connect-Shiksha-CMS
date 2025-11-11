@@ -96,6 +96,32 @@ const projectSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  teamProfitSharePercent: {
+    type: Number,
+    min: 0,
+    max: 1,
+    default: 0.3
+  },
+  expectedWorkingDays: {
+    type: Number,
+    min: 1,
+    default: 22
+  },
+  location: {
+    coordinates: {
+      lat: {
+        type: Number
+      },
+      lng: {
+        type: Number
+      }
+    },
+    radiusMeters: {
+      type: Number,
+      default: 100,
+      min: 10
+    }
+  },
   totalIncome: {
     type: Number,
     default: 0,

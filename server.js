@@ -1,3 +1,8 @@
+require('ts-node').register({
+  transpileOnly: true,
+  project: './tsconfig.server.json'
+});
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -18,7 +23,7 @@ const roleRoutes = require('./routes/roleRoutes');
 const teamRoutes = require('./routes/teamRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const taskRoutes = require('./routes/taskRoutes');
-const attendanceRoutes = require('./routes/attendanceRoutes');
+const attendanceRoutes = require('./routes/attendanceRoutes.ts').default;
 const incomeRoutes = require('./routes/incomeRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
 const productRoutes = require('./routes/productRoutes');
@@ -39,6 +44,7 @@ const teamPerformanceRoutes = require('./routes/teamPerformanceRoutes');
 const advancePaymentRoutes = require('./routes/advancePaymentRoutes');
 const teamMemberFinanceRoutes = require('./routes/teamMemberFinanceRoutes');
 const dataManagementRoutes = require('./routes/dataManagementRoutes');
+const { computeAllProjectsProfitSharing } = require('./utils/projectProfitSharing');
 
 // Initialize app
 const app = express();
@@ -154,6 +160,57 @@ server.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on http://${HOST}:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
   console.log(`📱 Access from other devices: 3:${PORT}`);
 });
+
+const scheduleDailyProfitSharing = () => {
+  if (process.env.NODE_ENV === 'test') {
+    console.log('🛑 Skipping auto profit sharing scheduler in test environment');
+    return;
+  }
+
+  const runJob = async () => {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    try {
+      console.log(`⏰ Auto profit sharing job started for ${month}/${year}`);
+      await computeAllProjectsProfitSharing(month, year);
+      console.log('✅ Auto profit sharing job completed');
+    } catch (error) {
+      console.error('❌ Auto profit sharing job failed:', error);
+    }
+  };
+
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  const targetHour = parseInt(process.env.AUTO_PROFIT_SHARING_HOUR || '2', 10);
+
+  const now = new Date();
+  const firstRun = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    targetHour,
+    0,
+    0,
+    0
+  );
+
+  if (firstRun <= now) {
+    firstRun.setDate(firstRun.getDate() + 1);
+  }
+
+  const initialDelay = firstRun.getTime() - now.getTime();
+  console.log(`🗓️ Auto profit sharing scheduled in ${(initialDelay / (60 * 1000)).toFixed(1)} minutes (daily at ${targetHour}:00)`);
+
+  // Run immediately on startup so the latest figures are available without waiting for the first schedule window
+  runJob();
+
+  setTimeout(() => {
+    runJob();
+    setInterval(runJob, ONE_DAY_MS);
+  }, initialDelay);
+};
+
+scheduleDailyProfitSharing();
 
 module.exports = { app, io };
 

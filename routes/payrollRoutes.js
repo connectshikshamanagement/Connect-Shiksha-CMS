@@ -15,8 +15,21 @@ const router = express.Router();
 router.use(protect);
 
 // Get all payroll records
-router.get('/', authorize('finance.read'), async (req, res) => {
+router.get('/', authorize('payroll.read'), async (req, res) => {
   try {
+    const roleKeys = (req.user?.roleIds || [])
+      .map(role => (role && role.key ? role.key : null))
+      .filter(Boolean);
+    const isFounder = roleKeys.includes('FOUNDER');
+    const isManager = roleKeys.includes('TEAM_MANAGER');
+
+    if (!isFounder && !isManager) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: Payroll data is restricted to founders and team managers'
+      });
+    }
+
     const { month, year, teamId, status } = req.query;
     
     let query = {};

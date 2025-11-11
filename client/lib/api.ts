@@ -239,3 +239,17 @@ export const dataManagementAPI = {
   }),
 };
 
+export const attendanceAPI = {
+  mark: (data: any) => api.post('/attendance', data),
+  getMy: (params?: any) => api.get('/attendance/my', { params }),
+  getTeam: (params?: any) => api.get('/attendance/team', { params }),
+  managerDecision: (id: string, data: { approve: boolean; remarks?: string }) =>
+    api.patch(`/attendance/${id}/manager`, data),
+  adminDecision: (id: string, data: { approve: boolean; remarks?: string }) =>
+    api.patch(`/attendance/${id}/admin`, data),
+  getLogs: (id: string) => api.get(`/attendance/${id}/logs`),
+  getPayrollSummary: (params?: any) => api.get('/attendance/payroll/summary', { params }),
+  downloadPayrollCsv: (params?: any) =>
+    api.get('/attendance/payroll/summary.csv', { params, responseType: 'blob' })
+};
+

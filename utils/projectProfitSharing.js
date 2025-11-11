@@ -29,18 +29,76 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
       throw new Error('Project not found');
     }
 
-    // Build date filter if month and year are provided
-    let dateFilter = {};
-    if (month && year) {
-      const yearNum = parseInt(year);
-      const monthNum = parseInt(month);
-      const startDate = new Date(yearNum, monthNum - 1, 1); // First day of month
-      const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59, 999); // Last day of month
-      
-      dateFilter = {
-        $gte: startDate,
-        $lte: endDate
+    // Determine computation period boundaries
+    const currentDate = new Date();
+    const monthToUse = month ? parseInt(month, 10) : currentDate.getMonth() + 1;
+    const yearToUse = year ? parseInt(year, 10) : currentDate.getFullYear();
+    const periodStart = new Date(yearToUse, monthToUse - 1, 1);
+
+    let effectivePeriodEnd = new Date(currentDate);
+
+    if (project.endDate) {
+      const projectEndDate = new Date(project.endDate);
+      if (!Number.isNaN(projectEndDate.getTime()) && projectEndDate < effectivePeriodEnd) {
+        effectivePeriodEnd = projectEndDate;
+      }
+    }
+
+    // For historical months before today, ensure the window still advances day-by-day until project end
+    if (effectivePeriodEnd < periodStart) {
+      effectivePeriodEnd = new Date(periodStart);
+    }
+
+    const DAY_IN_MS = 1000 * 60 * 60 * 24;
+
+    const calculateInclusiveDays = (startDate, endDate) => {
+      if (!startDate || !endDate) return 0;
+      const diff = endDate.getTime() - startDate.getTime();
+      if (diff < 0) {
+        return 0;
+      }
+      return Math.floor(diff / DAY_IN_MS) + 1;
+    };
+
+    const resolveMemberWindow = (
+      detail,
+      fallbackJoinedDate = project.startDate,
+      defaultActive = true
+    ) => {
+      const joinedSource = detail?.joinedDate ?? fallbackJoinedDate;
+      const joinedDate = joinedSource ? new Date(joinedSource) : new Date(periodStart);
+      const isActiveMember = detail ? detail.isActive !== false : defaultActive;
+      const leftSource = detail?.leftDate ?? null;
+      const leftDate = leftSource ? new Date(leftSource) : null;
+
+      const start = joinedDate > periodStart ? joinedDate : periodStart;
+
+      let end = effectivePeriodEnd;
+      if (!isActiveMember) {
+        if (leftDate) {
+          end = leftDate < end ? leftDate : end;
+        } else {
+          end = new Date(start.getTime() - 1);
+        }
+      }
+
+      const workingDays = calculateInclusiveDays(start, end);
+      const safeEnd = end < start ? new Date(start) : end;
+
+      return {
+        start,
+        end: safeEnd,
+        isActiveMember,
+        workingDays
       };
+    };
+
+    // Build date filter for income/expense queries
+    let dateFilter = {
+      $lte: effectivePeriodEnd
+    };
+    if (month && year) {
+      dateFilter.$gte = periodStart;
     }
 
     // Get income and expense records for this project - with optional date filter
@@ -48,14 +106,14 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
       sourceRefId: projectId,
       sourceRefModel: 'Project'
     };
-    if (Object.keys(dateFilter).length > 0) {
+    if (dateFilter) {
       incomeQuery.date = dateFilter;
     }
     
     const expenseQuery = { 
       projectId: projectId 
     };
-    if (Object.keys(dateFilter).length > 0) {
+    if (dateFilter) {
       expenseQuery.date = dateFilter;
     }
 
@@ -92,34 +150,33 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
 
     const eligibleUsers = [];
     if (founder) {
+      const founderWindow = resolveMemberWindow(null, project.startDate, true);
       eligibleUsers.push({
         user: founder,
         shareAmount: Math.max(0, founderShare),
         description: `70% CS Profit from ${project.title}`,
-        isFounder: true
+        isFounder: true,
+        meta: {
+          workingDays: founderWindow.workingDays,
+          configuredPct: null,
+          effectiveWeight: 0,
+          contributionStart: founderWindow.start,
+          contributionEnd: founderWindow.end,
+          isActiveMember: true
+        }
       });
     }
 
     // Get the project owner
     const projectOwner = await User.findById(project.ownerId);
 
-    // Determine computation period
-    const currentDate = new Date();
-    const monthToUse = month || (currentDate.getMonth() + 1);
-    const yearToUse = year || currentDate.getFullYear();
-    const periodStart = new Date(yearToUse, monthToUse - 1, 1);
-    const periodEnd = new Date(yearToUse, monthToUse, 0, 23, 59, 59, 999);
-    // For the current month, cap the effective end at "today" to reflect actual working days so far
-    const effectivePeriodEnd = currentDate < periodEnd ? currentDate : periodEnd;
-
     // Build eligible non-founder set from memberDetails with overlap in period
     // Include both managers and members who overlap the period
-    const memberUserIds = project.memberDetails
+    const memberDetails = Array.isArray(project.memberDetails) ? project.memberDetails : [];
+    const memberUserIds = memberDetails
       .filter((detail) => {
-        const joined = new Date(detail.joinedDate);
-        const left = detail.leftDate ? new Date(detail.leftDate) : null;
-        const overlaps = joined <= effectivePeriodEnd && (!left || left >= periodStart);
-        return overlaps;
+        const window = resolveMemberWindow(detail);
+        return window.start <= effectivePeriodEnd && window.end >= periodStart && window.workingDays > 0;
       })
       .map((detail) => detail.userId);
 
@@ -131,7 +188,7 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
 
     // Map details by userId for share % and dates
     const detailByUserId = new Map();
-    project.memberDetails.forEach((d) => detailByUserId.set(d.userId.toString(), d));
+    memberDetails.forEach((d) => detailByUserId.set(d.userId.toString(), d));
 
     // Prepare weighting inputs
     let hasProjectOwner = false;
@@ -145,27 +202,23 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
       if (isOwner) hasProjectOwner = true;
 
       const detail = detailByUserId.get(user._id.toString());
-      const joined = new Date(detail?.joinedDate || project.startDate);
-      const left = detail?.leftDate ? new Date(detail.leftDate) : null;
-      const start = joined > periodStart ? joined : periodStart;
-      const end = left && left < effectivePeriodEnd ? left : effectivePeriodEnd;
-      const ms = Math.max(0, end - start);
-      const workingDays = ms > 0 ? Math.ceil(ms / (1000 * 60 * 60 * 24)) : 0;
+      const window = resolveMemberWindow(detail);
 
-      if (workingDays <= 0) {
+      if (window.workingDays <= 0) {
         continue; // no contribution in this period
       }
 
       const configuredPct = typeof detail?.sharePercentage === 'number' ? detail.sharePercentage : null;
       const baseWeight = configuredPct !== null ? Math.max(0, configuredPct) : 1; // default equal weight
-      const weight = baseWeight * workingDays;
+      const weight = baseWeight * window.workingDays;
 
       weightedMembers.push({
         user,
         isProjectOwner: isOwner,
-        workingDays,
+        workingDays: window.workingDays,
         configuredPct: configuredPct,
-        weight
+        weight,
+        contributionWindow: window
       });
     }
 
@@ -190,6 +243,9 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
           workingDays: m.workingDays,
           configuredPct: m.configuredPct,
           effectiveWeight: m.weight,
+          contributionStart: m.contributionWindow.start,
+          contributionEnd: m.contributionWindow.end,
+          isActiveMember: m.contributionWindow.isActiveMember
         }
       });
     });
@@ -228,23 +284,33 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
 
     for (const eligibleUser of eligibleUsers) {
       // Get member details if any (for working days & configured % meta)
-      const memberDetail = project.memberDetails.find(
+      const memberDetail = memberDetails.find(
         detail => detail.userId.toString() === eligibleUser.user._id.toString()
       );
 
       // For founder, use project start date; for others, use joinedDate
-      const memberJoinedDate = eligibleUser.isFounder 
+      const rawJoinedDate = eligibleUser.isFounder 
         ? project.startDate 
         : (memberDetail ? memberDetail.joinedDate : project.startDate);
+      const memberJoinedDateValue = rawJoinedDate ? new Date(rawJoinedDate) : null;
+      const memberJoinedDate = memberJoinedDateValue || project.startDate;
       const projectStartDate = project.startDate;
 
+      const memberWindow = eligibleUser.meta?.contributionStart
+        ? {
+            start: new Date(eligibleUser.meta.contributionStart),
+            end: new Date(eligibleUser.meta.contributionEnd),
+            isActiveMember: eligibleUser.meta.isActiveMember ?? true,
+            workingDays: eligibleUser.meta.workingDays ?? 0
+          }
+        : resolveMemberWindow(
+            memberDetail,
+            memberJoinedDate,
+            memberDetail ? memberDetail.isActive !== false : true
+          );
+
       // Working days for storage (prefer computed meta if present)
-      const workDurationDays = eligibleUser.meta?.workingDays ?? (() => {
-        const start = memberJoinedDate > periodStart ? memberJoinedDate : periodStart;
-        const end = effectivePeriodEnd;
-        const ms = Math.max(0, end - start);
-        return ms > 0 ? Math.ceil(ms / (1000 * 60 * 60 * 24)) : 0;
-      })();
+      const workDurationDays = eligibleUser.meta?.workingDays ?? memberWindow.workingDays;
 
       // Member-specific period financials (for display only)
       let memberIncome = 0, memberExpense = 0;
@@ -252,26 +318,30 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
         memberIncome = totalIncome;
         memberExpense = totalExpense;
       } else {
-        const memberStartDate = new Date(Math.max((new Date(memberJoinedDate)).getTime(), periodStart.getTime()));
-        const memberIncomeQuery = {
-          sourceRefId: projectId,
-          sourceRefModel: 'Project',
-          date: {
-            $gte: memberStartDate,
-            $lte: effectivePeriodEnd
-          }
-        };
-        const memberExpenseQuery = {
-          projectId: projectId,
-          date: {
-            $gte: memberStartDate,
-            $lte: effectivePeriodEnd
-          }
-        };
-        const memberIncomes = await Income.find(memberIncomeQuery);
-        const memberExpenses = await Expense.find(memberExpenseQuery);
-        memberIncome = memberIncomes.reduce((sum, inc) => sum + inc.amount, 0);
-        memberExpense = memberExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+        const memberStartDate = memberWindow.start;
+        const memberEndDate = memberWindow.end;
+
+        if (workDurationDays > 0 && memberEndDate >= memberStartDate) {
+          const memberIncomeQuery = {
+            sourceRefId: projectId,
+            sourceRefModel: 'Project',
+            date: {
+              $gte: memberStartDate,
+              $lte: memberEndDate
+            }
+          };
+          const memberExpenseQuery = {
+            projectId: projectId,
+            date: {
+              $gte: memberStartDate,
+              $lte: memberEndDate
+            }
+          };
+          const memberIncomes = await Income.find(memberIncomeQuery);
+          const memberExpenses = await Expense.find(memberExpenseQuery);
+          memberIncome = memberIncomes.reduce((sum, inc) => sum + inc.amount, 0);
+          memberExpense = memberExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+        }
       }
 
       // Check if payroll record already exists for this user/month/project
@@ -294,13 +364,8 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
         existingPayroll.netProfit = profit;
         // Update member work tracking
         existingPayroll.memberJoinedDate = memberJoinedDate;
-        // Persist member left date for reporting if available
-        if (memberDetail && memberDetail.leftDate) {
-          existingPayroll.memberLeftDate = memberDetail.leftDate;
-        } else {
-          existingPayroll.memberLeftDate = undefined;
-        }
-        existingPayroll.memberIsActive = !!(memberDetail ? memberDetail.isActive : true);
+        existingPayroll.memberLeftDate = memberWindow.end;
+        existingPayroll.memberIsActive = memberWindow.isActiveMember;
         existingPayroll.workDurationDays = workDurationDays;
         existingPayroll.projectStartDate = projectStartDate;
         // Update project owner info
@@ -342,8 +407,8 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
           netProfit: profit,
           // Store member work tracking
           memberJoinedDate: memberJoinedDate,
-          memberLeftDate: memberDetail && memberDetail.leftDate ? memberDetail.leftDate : undefined,
-          memberIsActive: !!(memberDetail ? memberDetail.isActive : true),
+          memberLeftDate: memberWindow.end,
+          memberIsActive: memberWindow.isActiveMember,
           workDurationDays: workDurationDays,
           projectStartDate: projectStartDate,
           // Store project owner info

@@ -67,10 +67,14 @@ export const usePermissions = () => {
                 
                 // Set primary role
                 if (roles.length > 0) {
-                  const primaryRole = roles.find((role: UserRole) => role.key === 'FOUNDER') || 
-                                    roles.find((role: UserRole) => role.key === 'TEAM_MANAGER') || 
-                                    roles[0];
-                  setUserRole(primaryRole?.key || '');
+                  const primaryRole =
+                    roles.find((role: UserRole) => role.key === 'FOUNDER') ||
+                    roles.find((role: UserRole) => role.key === 'TEAM_MANAGER') ||
+                    roles.find((role: UserRole) => role.key === 'TEAM_MEMBER') ||
+                    roles[0];
+                  setUserRole(primaryRole?.key || 'TEAM_MEMBER');
+                } else {
+                  setUserRole('TEAM_MEMBER');
                 }
               }
             }
@@ -87,10 +91,14 @@ export const usePermissions = () => {
           
           // Set primary role
           if (roles.length > 0) {
-            const primaryRole = roles.find((role: UserRole) => role.key === 'FOUNDER') || 
-                              roles.find((role: UserRole) => role.key === 'TEAM_MANAGER') || 
-                              roles[0];
-            setUserRole(primaryRole?.key || '');
+            const primaryRole =
+              roles.find((role: UserRole) => role.key === 'FOUNDER') ||
+              roles.find((role: UserRole) => role.key === 'TEAM_MANAGER') ||
+              roles.find((role: UserRole) => role.key === 'TEAM_MEMBER') ||
+              roles[0];
+            setUserRole(primaryRole?.key || 'TEAM_MEMBER');
+          } else {
+            setUserRole('TEAM_MEMBER');
           }
         } catch (error) {
           console.error('Error parsing user data:', error);
