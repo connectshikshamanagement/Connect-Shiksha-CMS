@@ -36,7 +36,7 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressData, setProgressData] = useState({ progress: 0, note: '', status: '' });
-  const canMarkDone = userRole === 'FOUNDER' || userRole === 'TEAM_MANAGER';
+  const canMarkDone = userRole === 'FOUNDER' || userRole === 'PROJECT_MANAGER';
 
   const getPriorityColor = (priority: string) => {
     const colors = {
@@ -236,7 +236,7 @@ export default function TaskList({ tasks, onEdit, onDelete, onUpdateProgress, us
               )}
             </div>
             <div className="flex flex-col items-end gap-2">
-              {(userRole === 'FOUNDER' || userRole === 'TEAM_MANAGER') && (
+              {(userRole === 'FOUNDER' || userRole === 'PROJECT_MANAGER') && (
                 <div className="flex gap-1">
                   <button
                     onClick={() => onEdit(task)}

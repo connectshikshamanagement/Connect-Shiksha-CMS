@@ -21,28 +21,28 @@ router.get('/my', getMyAttendance);
 
 router.get(
   '/team',
-  restrictToRoles(['TEAM_MANAGER', 'FOUNDER']),
+  restrictToRoles(['PROJECT_MANAGER', 'FOUNDER']),
   getTeamAttendance
 );
 
 router.patch(
   '/:id/manager',
-  restrictToRoles(['TEAM_MANAGER', 'FOUNDER']),
+  restrictToRoles(['PROJECT_MANAGER', 'FOUNDER']),
   managerDecision
 );
 
 router.patch('/:id/admin', restrictToRoles(['FOUNDER']), adminDecision);
-router.get('/:id/logs', restrictToRoles(['TEAM_MANAGER', 'FOUNDER']), getAttendanceLogs);
+router.get('/:id/logs', restrictToRoles(['PROJECT_MANAGER', 'FOUNDER']), getAttendanceLogs);
 
 router.get(
   '/payroll/summary',
-  restrictToRoles(['TEAM_MANAGER', 'FOUNDER']),
+  restrictToRoles(['PROJECT_MANAGER', 'FOUNDER']),
   getPayrollSummary
 );
 
 router.get(
   '/payroll/summary.csv',
-  restrictToRoles(['TEAM_MANAGER', 'FOUNDER']),
+  restrictToRoles(['PROJECT_MANAGER', 'FOUNDER']),
   downloadPayrollCsv
 );
 

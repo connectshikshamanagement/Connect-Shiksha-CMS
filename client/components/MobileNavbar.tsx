@@ -7,7 +7,7 @@ import usePermissions from '@/hooks/usePermissions';
 
 export default function MobileNavbar() {
   const pathname = usePathname();
-  const { isFounder, isManager, isMember } = usePermissions();
+  const { isFounder, isProjectManager, isMember } = usePermissions();
 
   // Define navigation items based on user role
   const getNavItems = () => {
@@ -24,8 +24,8 @@ export default function MobileNavbar() {
       return baseItems;
     }
 
-    // Team Manager and Team Member: replace Profile with Payroll
-    if (isManager || isMember) {
+    // Project Manager and Team Member: replace Profile with Payroll
+    if (isProjectManager || isMember) {
       baseItems.push({ name: 'Payroll', href: '/dashboard/payroll', icon: FiDollarSign });
       return baseItems;
     }

@@ -7,7 +7,8 @@ import usePermissions from '@/hooks/usePermissions';
 
 export default function FABMenu() {
   const [open, setOpen] = useState(false);
-  const { isFounder, isManager, isMember } = usePermissions();
+  const { isFounder, isProjectManager, isMember } = usePermissions();
+  const isManager = isProjectManager;
 
   // Define quick actions based on user role
   const getQuickActions = () => {

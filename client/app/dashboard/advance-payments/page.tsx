@@ -43,7 +43,8 @@ export default function AdvancePaymentRequestsPage() {
     userId: ''
   });
 
-  const { isFounder, isManager, loading: permissionsLoading } = usePermissions();
+  const { isFounder, isProjectManager, loading: permissionsLoading } = usePermissions();
+  const isManager = isProjectManager;
 
   useEffect(() => {
     if (permissionsLoading) return;

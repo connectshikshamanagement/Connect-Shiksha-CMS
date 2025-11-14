@@ -36,9 +36,9 @@ const updateRoleSystem = async () => {
         }
       },
       {
-        key: 'TEAM_MANAGER',
-        name: 'Team Manager',
-        description: 'Manages team projects, receives equal share of 30% profit if part of project',
+        key: 'PROJECT_MANAGER',
+        name: 'Project Manager',
+        description: 'Manages assigned projects and receives equal share of 30% profit if part of project',
         permissions: {
           users: { create: false, read: true, update: false, delete: false },
           teams: { create: true, read: true, update: true, delete: true },
@@ -76,7 +76,7 @@ const updateRoleSystem = async () => {
 
     // Update existing users to have appropriate roles
     const founderRole = await Role.findOne({ key: 'FOUNDER' });
-    const managerRole = await Role.findOne({ key: 'TEAM_MANAGER' });
+    const managerRole = await Role.findOne({ key: 'PROJECT_MANAGER' });
     const memberRole = await Role.findOne({ key: 'TEAM_MEMBER' });
 
     // Find the founder user (assuming it exists)
@@ -97,7 +97,7 @@ const updateRoleSystem = async () => {
     console.log('\n🎉 Role system updated successfully!');
     console.log('📋 New roles:');
     console.log('  - FOUNDER: Full system access + 70% profit');
-    console.log('  - TEAM_MANAGER: Team management + equal share of 30% profit');
+    console.log('  - PROJECT_MANAGER: Project management + equal share of 30% profit');
     console.log('  - TEAM_MEMBER: Project assignment + eligible for profit if part of project');
 
     process.exit(0);

@@ -35,8 +35,8 @@ const navigation = [
   { name: 'Advance Payments', href: '/dashboard/advance-payments', icon: FiCreditCard, permission: 'payroll.read', role: 'FOUNDER' },
   { name: 'My Advance Payments', href: '/dashboard/my-advance-payments', icon: FiCreditCard, permission: null, role: 'TEAM_MEMBER' },
   { name: 'My Finance History', href: '/dashboard/finance-history', icon: FiClock, permission: null, role: 'TEAM_MEMBER' },
-  { name: 'My Advance Payments', href: '/dashboard/my-advance-payments', icon: FiCreditCard, permission: null, role: 'TEAM_MANAGER' },
-  { name: 'My Finance History', href: '/dashboard/finance-history', icon: FiClock, permission: null, role: 'TEAM_MANAGER' },
+  { name: 'My Advance Payments', href: '/dashboard/my-advance-payments', icon: FiCreditCard, permission: null, role: 'PROJECT_MANAGER' },
+  { name: 'My Finance History', href: '/dashboard/finance-history', icon: FiClock, permission: null, role: 'PROJECT_MANAGER' },
   { name: 'Data Management', href: '/dashboard/data-management', icon: FiDatabase, permission: null, role: 'FOUNDER' },
   { name: 'Settings', href: '/dashboard/settings', icon: FiSettings, permission: 'users.read' },
   { name: 'Members', href: '/dashboard/members', icon: FiUsers, permission: 'users.create', role: 'FOUNDER' },
@@ -45,7 +45,7 @@ const navigation = [
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const { hasPermission, userRole, loading, isFounder, isManager, isMember } = usePermissions();
+  const { hasPermission, userRole, loading, isFounder, isProjectManager, isMember } = usePermissions();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -86,14 +86,14 @@ export default function Sidebar() {
     let hasRoleAccess = true;
     if (item.role === 'FOUNDER') {
       hasRoleAccess = isFounder;
-    } else if (item.role === 'TEAM_MANAGER') {
-      hasRoleAccess = isManager;
+    } else if (item.role === 'PROJECT_MANAGER') {
+      hasRoleAccess = isProjectManager;
     } else if (item.role === 'TEAM_MEMBER') {
       hasRoleAccess = isMember;
     }
     
     // Hide clients tab for team members and team managers (only founder can access)
-    if (item.name === 'Clients' && (isMember || isManager)) {
+    if (item.name === 'Clients' && (isMember || isProjectManager)) {
       return false;
     }
     

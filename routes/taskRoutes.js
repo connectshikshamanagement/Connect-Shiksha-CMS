@@ -17,7 +17,7 @@ router.get('/', protect, async (req, res) => {
     if (userRole === 'TEAM_MEMBER') {
       // Team members can only see tasks assigned to them
       query.assignedTo = req.user.id;
-    } else if (userRole === 'TEAM_MANAGER') {
+    } else if (userRole === 'PROJECT_MANAGER') {
       // Team managers can see tasks for their teams AND projects they own
       const userTeams = await Team.find({ 
         $or: [
@@ -102,7 +102,7 @@ router.post('/', protect, authorize('tasks.create'), async (req, res) => {
 
     // Check if user has permission to assign tasks to this team
     const userRole = req.user.roleIds[0]?.key;
-    if (userRole === 'TEAM_MANAGER') {
+    if (userRole === 'PROJECT_MANAGER') {
       const isTeamLead = String(team.leadUserId) === String(req.user.id);
       const isTeamMember = team.members.includes(req.user.id);
       
@@ -148,7 +148,7 @@ router.post('/', protect, authorize('tasks.create'), async (req, res) => {
       });
     }
 
-    // Automatically add project owner to assigned members if not already included
+    // Automatically add project manager to assigned members if not already included
     const projectOwnerId = String(project.ownerId);
     const finalAssignedTo = [...new Set([...assignedToArray, projectOwnerId])];
 

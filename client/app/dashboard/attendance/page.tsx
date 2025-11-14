@@ -121,9 +121,10 @@ export default function AttendancePage() {
   const {
     loading: permissionsLoading,
     isMember,
-    isManager,
+    isProjectManager,
     isFounder
   } = usePermissions();
+  const isManager = isProjectManager;
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);

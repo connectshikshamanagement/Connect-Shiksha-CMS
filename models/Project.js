@@ -79,7 +79,7 @@ const projectSchema = new mongoose.Schema({
   ownerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Please assign a project owner']
+    required: [true, 'Please assign a project manager']
   },
   budget: {
     type: Number,
@@ -183,10 +183,10 @@ projectSchema.pre('save', async function(next) {
       }
     }
     
-    // Auto-add project owner to projectMembers if not already included
+    // Auto-add project manager to projectMembers if not already included
     if (this.ownerId && !this.projectMembers.includes(this.ownerId)) {
       this.projectMembers.push(this.ownerId);
-      console.log(`✅ Auto-added project owner to projectMembers: ${this.title}`);
+      console.log(`✅ Auto-added project manager to projectMembers: ${this.title}`);
     }
     
     // Sync projectMembers with memberDetails for backward compatibility

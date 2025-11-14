@@ -76,10 +76,11 @@ export default function PayrollPage() {
   const {
     userRole,
     isFounder,
-    isManager,
+    isProjectManager,
     isMember,
     loading: permissionsLoading,
   } = usePermissions();
+  const isManager = isProjectManager;
 
   // Form data states
   const [incomeFormData, setIncomeFormData] = useState({
@@ -1897,7 +1898,7 @@ export default function PayrollPage() {
                             </div>
                             {payout.isProjectOwner && (
                               <div className="mt-2 text-xs text-purple-600 font-medium bg-purple-100 px-2 py-1 rounded">
-                                👑 Project Owner (+3% bonus = ₹{Math.round(payout.ownerBonus || 0).toLocaleString()})
+                                👑 Project Manager (+3% bonus = ₹{Math.round(payout.ownerBonus || 0).toLocaleString()})
                               </div>
                             )}
                             {!payout.memberIsActive && (
@@ -1990,7 +1991,7 @@ export default function PayrollPage() {
                                           <tr><th>Email</th><td>${payout.userId?.email || 'N/A'}</td></tr>
                                           <tr><th>Project</th><td>${payout.projectId?.title || 'N/A'}</td></tr>
                                           <tr><th>Month</th><td>${payout.month || 'N/A'}</td></tr>
-                                          ${payout.isProjectOwner ? '<tr><th>Role</th><td>👑 Project Owner</td></tr>' : ''}
+                                          ${payout.isProjectOwner ? '<tr><th>Role</th><td>👑 Project Manager</td></tr>' : ''}
                                         </table>
                                         
                                         <h2>Timeline & Contribution</h2>
@@ -2012,7 +2013,7 @@ export default function PayrollPage() {
                                         <h2>Profit Share Calculation</h2>
                                         <table>
                                           <tr><th>Base Share (${memberPercentage}% of ₹${roundedProfit.toLocaleString()})</th><td>₹${Math.round(payout.profitShare - (payout.ownerBonus || 0)).toLocaleString()}</td></tr>
-                                          ${payout.isProjectOwner ? `<tr><th>Owner Bonus (3%)</th><td>₹${Math.round(payout.ownerBonus || 0).toLocaleString()}</td></tr>` : ''}
+                                          ${payout.isProjectOwner ? `<tr><th>Project Manager Bonus (3%)</th><td>₹${Math.round(payout.ownerBonus || 0).toLocaleString()}</td></tr>` : ''}
                                           <tr class="highlight total"><th>Total Profit Share</th><td>₹${Math.round(payout.profitShare || 0).toLocaleString()}</td></tr>
                                         </table>
                                         
@@ -2249,7 +2250,7 @@ export default function PayrollPage() {
                 <>
                   <li>CS receives 70% of project profits</li>
                   <li>
-                    Team Managers and Members share the remaining 30% equally
+                    Project Managers and Members share the remaining 30% equally
                   </li>
                 </>
               ) : isManager ? (
@@ -2549,7 +2550,7 @@ export default function PayrollPage() {
                       </p>
                       {payout.isProjectOwner && (
                         <div className="mt-2 inline-block bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-medium">
-                          👑 Project Owner
+                          👑 Project Manager
                         </div>
                       )}
                     </div>
@@ -2635,7 +2636,7 @@ export default function PayrollPage() {
                             <div>• Founder receives: <span className="font-semibold">70%</span> of profit</div>
                             <div>• Remaining pool: <span className="font-semibold">30%</span> of profit</div>
                             {payout.isProjectOwner && (
-                              <div>• Project owner bonus: <span className="font-semibold">3%</span> of profit</div>
+                              <div>• Project manager bonus: <span className="font-semibold">3%</span> of profit</div>
                             )}
                           </div>
                         </div>
@@ -2647,9 +2648,9 @@ export default function PayrollPage() {
                             <div>Remaining pool (30%): <span className="font-semibold">₹{Math.round(projectProfit * 0.30).toLocaleString()}</span></div>
                             {payout.isProjectOwner ? (
                               <>
-                                <div>Pool after owner bonus (27%): <span className="font-semibold">₹{Math.round(projectProfit * 0.27).toLocaleString()}</span></div>
+                                <div>Pool after manager bonus (27%): <span className="font-semibold">₹{Math.round(projectProfit * 0.27).toLocaleString()}</span></div>
                                 <div>Base share ({memberPercentage}%): <span className="font-semibold">₹{Math.round(payout.profitShare - (payout.ownerBonus || 0)).toLocaleString()}</span></div>
-                                <div>Owner bonus (3%): <span className="font-semibold text-purple-600">₹{Math.round(payout.ownerBonus || 0).toLocaleString()}</span></div>
+                                <div>Project manager bonus (3%): <span className="font-semibold text-purple-600">₹{Math.round(payout.ownerBonus || 0).toLocaleString()}</span></div>
                               </>
                             ) : (
                               <div>Member&apos;s share ({memberPercentage}%): <span className="font-semibold">₹{Math.round(payout.profitShare || 0).toLocaleString()}</span></div>
@@ -2692,7 +2693,7 @@ export default function PayrollPage() {
                         <li>Income and expenses are calculated only from the member&apos;s join date onwards</li>
                         <li>This ensures fair profit distribution based on actual contribution period</li>
                         <li>Founder always receives 70% from total project profit</li>
-                        {payout.isProjectOwner && <li>Project owner receives an additional 3% bonus for managing the project</li>}
+                        {payout.isProjectOwner && <li>Project manager receives an additional 3% bonus for managing the project</li>}
                       </ul>
                     </div>
                   </>

@@ -37,7 +37,7 @@ export const usePermissions = () => {
           const userData = JSON.parse(user);
           const roles = userData.roleIds || [];
           const hasNewRoles = roles.some((role: UserRole) => 
-            ['FOUNDER', 'TEAM_MANAGER', 'TEAM_MEMBER'].includes(role.key)
+            ['FOUNDER', 'PROJECT_MANAGER', 'TEAM_MEMBER'].includes(role.key)
           );
           needsRefresh = !hasNewRoles;
         } catch (error) {
@@ -69,7 +69,7 @@ export const usePermissions = () => {
                 if (roles.length > 0) {
                   const primaryRole =
                     roles.find((role: UserRole) => role.key === 'FOUNDER') ||
-                    roles.find((role: UserRole) => role.key === 'TEAM_MANAGER') ||
+                    roles.find((role: UserRole) => role.key === 'PROJECT_MANAGER') ||
                     roles.find((role: UserRole) => role.key === 'TEAM_MEMBER') ||
                     roles[0];
                   setUserRole(primaryRole?.key || 'TEAM_MEMBER');
@@ -93,7 +93,7 @@ export const usePermissions = () => {
           if (roles.length > 0) {
             const primaryRole =
               roles.find((role: UserRole) => role.key === 'FOUNDER') ||
-              roles.find((role: UserRole) => role.key === 'TEAM_MANAGER') ||
+                    roles.find((role: UserRole) => role.key === 'PROJECT_MANAGER') ||
               roles.find((role: UserRole) => role.key === 'TEAM_MEMBER') ||
               roles[0];
             setUserRole(primaryRole?.key || 'TEAM_MEMBER');
@@ -140,7 +140,7 @@ export const usePermissions = () => {
 
   // Role-based helper functions
   const isFounder = userRole === 'FOUNDER';
-  const isManager = userRole === 'TEAM_MANAGER';
+  const isProjectManager = userRole === 'PROJECT_MANAGER';
   const isMember = userRole === 'TEAM_MEMBER';
 
   return {
@@ -153,7 +153,7 @@ export const usePermissions = () => {
     userRole,
     userRoles,
     isFounder,
-    isManager,
+    isProjectManager,
     isMember
   };
 };

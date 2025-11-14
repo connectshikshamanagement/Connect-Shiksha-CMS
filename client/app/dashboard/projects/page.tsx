@@ -74,7 +74,9 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
-  const { isFounder, isManager, isMember } = usePermissions();
+  const { isFounder, isProjectManager, isMember, userRoles } = usePermissions();
+  const isManager = isProjectManager;
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [formData, setFormData] = useState<ProjectFormData>({
     title: '',
     description: '',
@@ -123,9 +125,10 @@ export default function ProjectsPage() {
         let list: Project[] = projectsRes.data.data;
         const raw = localStorage.getItem('user');
         const me = raw ? JSON.parse(raw) as User : null;
-        const myId = me?._id || me?.id;
+        const myId = me?._id || me?.id || null;
+        setCurrentUserId(myId);
         if (myId) {
-          // For Team Managers and Team Members, restrict to projects they own or are explicitly a member of
+          // For Project Managers and Team Members, restrict to projects they own or are explicitly a member of
           if (isManager || (isMember && !isManager)) {
             list = list.filter((p) => {
               const ownerId = typeof p.ownerId === 'string' ? p.ownerId : p.ownerId?._id;
@@ -476,7 +479,7 @@ const diffDays = (a: Date, b: Date) => {
                           const total = start && end ? diffDays(end, start) : 0;
                           const elapsed = start ? diffDays(today, start) : 0;
                           const remaining = Math.max(0, total - elapsed);
-                          const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
+          const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
                           return (
                             <div>
                       <div className="flex flex-wrap gap-4 text-sm font-medium text-gray-900">
@@ -583,7 +586,16 @@ const diffDays = (a: Date, b: Date) => {
                   
 
                   {/* Action Buttons */}
-                  {(isFounder || isManager) && (
+                  {(() => {
+                    const ownerId =
+                      typeof project.ownerId === 'string'
+                        ? project.ownerId
+                        : project.ownerId?._id;
+                    const isAdmin = (userRoles || []).some((role) => role.key === 'ADMIN');
+                    const canManageProject =
+                      isFounder || isAdmin || (currentUserId && ownerId === currentUserId);
+                    return (
+                      canManageProject && (
                     <div className="flex  flex-row gap-3 pt-4 border-t border-gray-100">
                       <Button
                         variant="outline"
@@ -604,7 +616,9 @@ const diffDays = (a: Date, b: Date) => {
                         Delete Project
                       </Button>
                     </div>
-                  )}
+                      )
+                    );
+                  })()}
                 </div>
               </div>
             ))}
@@ -706,7 +720,7 @@ const diffDays = (a: Date, b: Date) => {
 
 
             <FormSelect
-              label="Project Owner"
+              label="Project Manager"
               required
               value={formData.ownerId}
               onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
@@ -926,7 +940,7 @@ const diffDays = (a: Date, b: Date) => {
                                   className="w-full text-sm rounded border-gray-300 px-2 py-1 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                                   placeholder="Auto"
                                 />
-                                <p className="text-[10px] text-gray-500 mt-1">Leave blank to auto-distribute equally. Project owner gets +3% bonus.</p>
+                                <p className="text-[10px] text-gray-500 mt-1">Leave blank to auto-distribute equally. Project manager gets +3% bonus.</p>
                               </div>
                             )}
                           </div>

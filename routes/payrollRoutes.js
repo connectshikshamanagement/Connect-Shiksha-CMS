@@ -21,12 +21,12 @@ router.get('/', authorize('payroll.read'), async (req, res) => {
       .map(role => (role && role.key ? role.key : null))
       .filter(Boolean);
     const isFounder = roleKeys.includes('FOUNDER');
-    const isManager = roleKeys.includes('TEAM_MANAGER');
+    const isProjectManager = roleKeys.includes('PROJECT_MANAGER');
 
-    if (!isFounder && !isManager) {
+    if (!isFounder && !isProjectManager) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied: Payroll data is restricted to founders and team managers'
+        message: 'Access denied: Payroll data is restricted to founders and project managers'
       });
     }
 

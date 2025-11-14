@@ -30,7 +30,7 @@ const checkPayroll = async () => {
       console.log(`  Profit Share: ₹${p.profitShare}`);
       console.log(`  Project Income: ₹${p.projectIncome}`);
       console.log(`  Project Expenses: ₹${p.projectExpenses}`);
-      console.log(`  Owner Bonus: ₹${p.ownerBonus || 0}`);
+      console.log(`  Project Manager Bonus: ₹${p.ownerBonus || 0}`);
       console.log(`  Is Project Owner: ${p.isProjectOwner || false}`);
       
       const totalProfit = (p.projectIncome || 0) - (p.projectExpenses || 0);

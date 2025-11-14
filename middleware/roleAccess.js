@@ -2,6 +2,12 @@ const Role = require('../models/Role');
 const User = require('../models/User');
 
 // Check if user has specific role
+const ROLE_KEYS = {
+  FOUNDER: 'FOUNDER',
+  PROJECT_MANAGER: 'PROJECT_MANAGER',
+  TEAM_MEMBER: 'TEAM_MEMBER'
+};
+
 const hasRole = async (userId, roleKey) => {
   try {
     const user = await User.findById(userId).populate('roleIds');
@@ -109,24 +115,37 @@ const canAccessTeam = async (req, res, next) => {
     }
 
     // Founder has access to all teams
-    const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
+    const isFounder = user.roleIds.some(role => role.key === ROLE_KEYS.FOUNDER);
     if (isFounder) {
-      req.userRole = 'FOUNDER';
+      req.userRole = ROLE_KEYS.FOUNDER;
       return next();
     }
 
-    // Team Manager has access to their team only
-    const isManager = user.roleIds.some(role => role.key === 'TEAM_MANAGER');
-    if (isManager) {
-      req.userRole = 'TEAM_MANAGER';
-      req.userTeamId = user.teamHistory?.[user.teamHistory.length - 1]?.teamId;
+    // Project Manager has access to teams tied to their managed projects
+    const isProjectManager = user.roleIds.some(role => role.key === ROLE_KEYS.PROJECT_MANAGER);
+    if (isProjectManager) {
+      const Project = require('../models/Project');
+      const managedProjects = await Project.find({ ownerId: user._id }).select('_id teamId');
+
+      if (!managedProjects.length) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. No managed projects found.'
+        });
+      }
+
+      req.userRole = ROLE_KEYS.PROJECT_MANAGER;
+      req.userManagedProjectIds = managedProjects.map(project => project._id.toString());
+      req.userManagedTeamIds = managedProjects
+        .map(project => project.teamId && project.teamId.toString())
+        .filter(Boolean);
       return next();
     }
 
     // Team Member has limited access
-    const isMember = user.roleIds.some(role => role.key === 'TEAM_MEMBER');
+    const isMember = user.roleIds.some(role => role.key === ROLE_KEYS.TEAM_MEMBER);
     if (isMember) {
-      req.userRole = 'TEAM_MEMBER';
+      req.userRole = ROLE_KEYS.TEAM_MEMBER;
       req.userTeamId = user.teamHistory?.[user.teamHistory.length - 1]?.teamId;
       return next();
     }
@@ -166,9 +185,9 @@ const canAccessProject = async (req, res, next) => {
     const projectId = req.params.projectId || req.body.projectId || req.query.projectId;
     
     // Founder has access to all projects
-    const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
+    const isFounder = user.roleIds.some(role => role.key === ROLE_KEYS.FOUNDER);
     if (isFounder) {
-      req.userRole = 'FOUNDER';
+      req.userRole = ROLE_KEYS.FOUNDER;
       return next();
     }
 
@@ -183,17 +202,28 @@ const canAccessProject = async (req, res, next) => {
         });
       }
 
-      // Team Manager can access projects in their team
-      const isManager = user.roleIds.some(role => role.key === 'TEAM_MANAGER');
-      if (isManager && project.teamId.toString() === req.userTeamId?.toString()) {
-        req.userRole = 'TEAM_MANAGER';
-        return next();
+      const isProjectMember = Array.isArray(project.projectMembers) &&
+        project.projectMembers.some(memberId => memberId.toString() === user._id.toString());
+
+      // Project Manager can access projects they own
+      const isProjectManager = user.roleIds.some(role => role.key === ROLE_KEYS.PROJECT_MANAGER);
+      if (isProjectManager) {
+        if (project.ownerId && project.ownerId.toString() === user._id.toString()) {
+          req.userRole = ROLE_KEYS.PROJECT_MANAGER;
+          return next();
+        }
+
+        // Allow project managers who are active project members
+        if (isProjectMember) {
+          req.userRole = ROLE_KEYS.PROJECT_MANAGER;
+          return next();
+        }
       }
 
       // Team Member can access projects they're assigned to
-      const isMember = user.roleIds.some(role => role.key === 'TEAM_MEMBER');
-      if (isMember && project.projectMembers.includes(user._id)) {
-        req.userRole = 'TEAM_MEMBER';
+      const isMember = user.roleIds.some(role => role.key === ROLE_KEYS.TEAM_MEMBER);
+      if (isMember && isProjectMember) {
+        req.userRole = ROLE_KEYS.TEAM_MEMBER;
         return next();
       }
     }
@@ -219,9 +249,9 @@ const getUserRoleInfo = async (userId) => {
     if (!user || !user.active) return null;
 
     const roles = user.roleIds.map(role => role.key);
-    const isFounder = roles.includes('FOUNDER');
-    const isManager = roles.includes('TEAM_MANAGER');
-    const isMember = roles.includes('TEAM_MEMBER');
+    const isFounder = roles.includes(ROLE_KEYS.FOUNDER);
+    const isProjectManager = roles.includes(ROLE_KEYS.PROJECT_MANAGER);
+    const isMember = roles.includes(ROLE_KEYS.TEAM_MEMBER);
 
     return {
       userId,
@@ -229,9 +259,15 @@ const getUserRoleInfo = async (userId) => {
       email: user.email,
       roles,
       isFounder,
-      isManager,
+      isProjectManager,
       isMember,
-      primaryRole: isFounder ? 'FOUNDER' : isManager ? 'TEAM_MANAGER' : isMember ? 'TEAM_MEMBER' : 'UNKNOWN'
+      primaryRole: isFounder
+        ? ROLE_KEYS.FOUNDER
+        : isProjectManager
+        ? ROLE_KEYS.PROJECT_MANAGER
+        : isMember
+        ? ROLE_KEYS.TEAM_MEMBER
+        : 'UNKNOWN'
     };
   } catch (error) {
     console.error('Error getting user role info:', error);

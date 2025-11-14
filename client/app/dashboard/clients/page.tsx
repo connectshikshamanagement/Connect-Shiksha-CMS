@@ -15,7 +15,8 @@ import { FiEdit, FiTrash2, FiPlus, FiBriefcase, FiPhone, FiMail, FiMapPin, FiUse
 
 export default function ClientsPage() {
   const router = useRouter();
-  const { isFounder, isManager, isMember, loading: permissionsLoading } = usePermissions();
+  const { isFounder, isProjectManager, isMember, loading: permissionsLoading } = usePermissions();
+  const isManager = isProjectManager;
   const [clients, setClients] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);

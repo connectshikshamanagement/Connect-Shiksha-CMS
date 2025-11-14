@@ -1044,7 +1044,7 @@ export default function FinancePage() {
                         <div className="bg-gray-50 rounded-lg p-3">
                           <div className="flex items-center text-gray-600 mb-1">
                             <FiUsers className="mr-2 h-4 w-4" />
-                            <span className="text-xs font-medium uppercase tracking-wide">Owner</span>
+                            <span className="text-xs font-medium uppercase tracking-wide">Project Manager</span>
                           </div>
                           <p className="text-sm font-semibold text-gray-900">{project.ownerId?.name || 'N/A'}</p>
                         </div>

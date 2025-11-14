@@ -9,24 +9,71 @@ const { restrictToRole, restrictToRoles } = require('../middleware/roleAccess');
 
 const router = express.Router();
 
+async function getProjectManagerScope(userId) {
+  const projects = await Project.find({ ownerId: userId }).select('_id teamId');
+  const projectIds = projects.map(project => project._id);
+  const teamIds = projects
+    .map(project => project.teamId)
+    .filter(Boolean);
+
+  return {
+    projectIds,
+    teamIds,
+    projectIdStrings: projectIds.map(id => id.toString()),
+    teamIdStrings: teamIds.map(id => id.toString())
+  };
+}
+
 // Get all advance payment requests (Founder/Manager only)
-router.get('/', protect, restrictToRoles(['FOUNDER', 'TEAM_MANAGER']), async (req, res) => {
+router.get('/', protect, restrictToRoles(['FOUNDER', 'PROJECT_MANAGER']), async (req, res) => {
   try {
     const { status, teamId, userId } = req.query;
     const userRole = req.user.roleIds[0]?.key;
-    
-    let query = {};
-    
-    // Team managers can only see requests from their teams
-    if (userRole === 'TEAM_MANAGER') {
-      const userTeams = await Team.find({ members: req.user.id }).select('_id');
-      const teamIds = userTeams.map(team => team._id);
-      query.teamId = { $in: teamIds };
+
+    const conditions = [];
+
+    if (status) conditions.push({ status });
+    if (teamId) conditions.push({ teamId });
+    if (userId) conditions.push({ userId });
+
+    if (userRole === 'PROJECT_MANAGER') {
+      const scope = await getProjectManagerScope(req.user.id);
+
+      if (!scope.projectIds.length && !scope.teamIds.length) {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: []
+        });
+      }
+
+      const scopedConditions = [];
+
+      if (scope.projectIds.length > 0) {
+        scopedConditions.push({ projectId: { $in: scope.projectIds } });
+      }
+
+      if (scope.teamIds.length > 0) {
+        scopedConditions.push({
+          $and: [
+            { $or: [{ projectId: { $exists: false } }, { projectId: null }] },
+            { teamId: { $in: scope.teamIds } }
+          ]
+        });
+      }
+
+      if (scopedConditions.length > 0) {
+        conditions.push({ $or: scopedConditions });
+      } else {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: []
+        });
+      }
     }
-    
-    if (status) query.status = status;
-    if (teamId) query.teamId = teamId;
-    if (userId) query.userId = userId;
+
+    const query = conditions.length ? { $and: conditions } : {};
 
     const requests = await AdvancePayment.find(query)
       .populate('userId', 'name email')
@@ -127,7 +174,7 @@ router.post('/', protect, async (req, res) => {
 });
 
 // Approve/Reject advance payment request (Founder/Manager only)
-router.patch('/:id/status', protect, restrictToRoles(['FOUNDER', 'TEAM_MANAGER']), async (req, res) => {
+router.patch('/:id/status', protect, restrictToRoles(['FOUNDER', 'PROJECT_MANAGER']), async (req, res) => {
   try {
     const { status, reviewNotes } = req.body;
     
@@ -148,12 +195,22 @@ router.patch('/:id/status', protect, restrictToRoles(['FOUNDER', 'TEAM_MANAGER']
 
     // Check if user has permission to review this request
     const userRole = req.user.roleIds[0]?.key;
-    if (userRole === 'TEAM_MANAGER') {
-      const team = await Team.findById(request.teamId);
-      if (!team.members.includes(req.user.id)) {
+    if (userRole === 'PROJECT_MANAGER') {
+      const scope = await getProjectManagerScope(req.user.id);
+      const requestProjectId = request.projectId ? request.projectId.toString() : null;
+      const requestTeamId = request.teamId ? request.teamId.toString() : null;
+
+      const managesProject = requestProjectId
+        ? scope.projectIdStrings.includes(requestProjectId)
+        : false;
+      const managesTeam = !requestProjectId && requestTeamId
+        ? scope.teamIdStrings.includes(requestTeamId)
+        : false;
+
+      if (!managesProject && !managesTeam) {
         return res.status(403).json({
           success: false,
-          message: 'You can only review requests from your team'
+          message: 'You can only review requests from your managed projects'
         });
       }
     }
@@ -229,19 +286,56 @@ async function updatePayrollWithAdvancePayment(request) {
 }
 
 // Get advance payment statistics
-router.get('/stats', protect, restrictToRoles(['FOUNDER', 'TEAM_MANAGER']), async (req, res) => {
+router.get('/stats', protect, restrictToRoles(['FOUNDER', 'PROJECT_MANAGER']), async (req, res) => {
   try {
     const userRole = req.user.roleIds[0]?.key;
-    let teamFilter = {};
+    let matchFilter = {};
     
-    if (userRole === 'TEAM_MANAGER') {
-      const userTeams = await Team.find({ members: req.user.id }).select('_id');
-      const teamIds = userTeams.map(team => team._id);
-      teamFilter.teamId = { $in: teamIds };
+    if (userRole === 'PROJECT_MANAGER') {
+      const scope = await getProjectManagerScope(req.user.id);
+
+      if (!scope.projectIds.length && !scope.teamIds.length) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            pending: { count: 0, totalAmount: 0 },
+            approved: { count: 0, totalAmount: 0 },
+            rejected: { count: 0, totalAmount: 0 }
+          }
+        });
+      }
+
+      const scopedConditions = [];
+
+      if (scope.projectIds.length > 0) {
+        scopedConditions.push({ projectId: { $in: scope.projectIds } });
+      }
+
+      if (scope.teamIds.length > 0) {
+        scopedConditions.push({
+          $and: [
+            { $or: [{ projectId: { $exists: false } }, { projectId: null }] },
+            { teamId: { $in: scope.teamIds } }
+          ]
+        });
+      }
+
+      if (scopedConditions.length > 0) {
+        matchFilter = { $or: scopedConditions };
+      } else {
+        return res.status(200).json({
+          success: true,
+          data: {
+            pending: { count: 0, totalAmount: 0 },
+            approved: { count: 0, totalAmount: 0 },
+            rejected: { count: 0, totalAmount: 0 }
+          }
+        });
+      }
     }
 
     const stats = await AdvancePayment.aggregate([
-      { $match: teamFilter },
+      { $match: matchFilter },
       {
         $group: {
           _id: '$status',

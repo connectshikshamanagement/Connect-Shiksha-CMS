@@ -10,7 +10,7 @@ const Expense = require('../models/Expense');
 // Rules:
 //  - Founder receives 70% of project profit.
 //  - Team pool is 30% of project profit.
-//  - If the project owner is among team members, they receive an extra 3% of the 30% pool.
+//  - If the project manager is among team members, they receive an extra 3% of the 30% pool.
 //  - The remaining 27% (or full 30% if no owner) is distributed among non-founder
 //    members based on (configured share percentage) × (working days within period).
 exports.computeProjectProfitSharing = async (projectId, month = null, year = null) => {
@@ -135,7 +135,7 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
 
     // Get role IDs
     const founderRole = await Role.findOne({ key: 'FOUNDER' });
-    const managerRole = await Role.findOne({ key: 'TEAM_MANAGER' });
+    const projectManagerRole = await Role.findOne({ key: 'PROJECT_MANAGER' });
     const memberRole = await Role.findOne({ key: 'TEAM_MEMBER' });
 
     // Calculate pools
@@ -167,7 +167,7 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
       });
     }
 
-    // Get the project owner
+    // Get the project manager
     const projectOwner = await User.findById(project.ownerId);
 
     // Build eligible non-founder set from memberDetails with overlap in period
@@ -222,7 +222,7 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
       });
     }
 
-    // Compute owner bonus (3% of the 30% pool) if owner present
+    // Compute project manager bonus (3% of the 30% pool) if manager present
     const ownerBonus = hasProjectOwner ? teamPool * 0.03 : 0;
     const distributableTeamPool = Math.max(0, teamPool - ownerBonus);
 
@@ -236,7 +236,7 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
         shareAmount: Math.max(0, finalShare),
         description: `Team Share from ${project.title}`,
         isFounder: false,
-        isManager: (m.user.roleIds || []).some((r) => r.toString && r.toString() === managerRole?._id?.toString()),
+        isManager: (m.user.roleIds || []).some((r) => r.toString && r.toString() === projectManagerRole?._id?.toString()),
         isProjectOwner: m.isProjectOwner,
         ownerBonus: m.isProjectOwner ? ownerBonus : 0,
         meta: {
@@ -368,7 +368,7 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
         existingPayroll.memberIsActive = memberWindow.isActiveMember;
         existingPayroll.workDurationDays = workDurationDays;
         existingPayroll.projectStartDate = projectStartDate;
-        // Update project owner info
+        // Update project manager info
         existingPayroll.isProjectOwner = eligibleUser.isProjectOwner || false;
         existingPayroll.ownerBonus = eligibleUser.ownerBonus || 0;
         // Store configured share percent for visibility
@@ -411,7 +411,7 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
           memberIsActive: memberWindow.isActiveMember,
           workDurationDays: workDurationDays,
           projectStartDate: projectStartDate,
-          // Store project owner info
+          // Store project manager info
           isProjectOwner: eligibleUser.isProjectOwner || false,
           ownerBonus: eligibleUser.ownerBonus || 0
         });

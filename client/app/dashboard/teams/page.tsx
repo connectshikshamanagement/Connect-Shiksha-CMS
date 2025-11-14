@@ -22,7 +22,8 @@ export default function TeamsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingTeam, setEditingTeam] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const { isFounder, isManager, isMember } = usePermissions();
+  const { isFounder, isProjectManager, isMember } = usePermissions();
+  const isManager = isProjectManager;
   const [formData, setFormData] = useState({
     name: '',
     description: '',

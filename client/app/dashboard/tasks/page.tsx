@@ -52,7 +52,8 @@ export default function TasksPage() {
     status: ''
   });
 
-  const { userRole, isFounder, isManager, isMember } = usePermissions();
+  const { userRole, isFounder, isProjectManager, isMember } = usePermissions();
+  const isManager = isProjectManager;
 
   // Real-time socket events
   useTaskSocketEvents({

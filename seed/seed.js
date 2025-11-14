@@ -31,8 +31,8 @@ const seedData = async () => {
         reports: { create: true, read: true, update: true, delete: true }
       };
 
-      // Team Manager - Team and project management without finance access
-      const teamManagerPermissions = {
+      // Project Manager - Project-specific management without finance access
+      const projectManagerPermissions = {
         users: { create: false, read: true, update: false, delete: false },
         teams: { create: true, read: true, update: true, delete: true },
         projects: { create: true, read: true, update: true, delete: true },
@@ -57,7 +57,7 @@ const seedData = async () => {
 
       await Role.insertMany([
         { key: 'FOUNDER', name: 'Founder', permissions: founderPermissions },
-        { key: 'TEAM_MANAGER', name: 'Team Manager', permissions: teamManagerPermissions },
+        { key: 'PROJECT_MANAGER', name: 'Project Manager', permissions: projectManagerPermissions },
         { key: 'TEAM_MEMBER', name: 'Team Member', permissions: teamMemberPermissions },
       ]);
       console.log('✅ Roles seeded');
@@ -68,7 +68,7 @@ const seedData = async () => {
     // ---- USERS ----
     if (await User.countDocuments() === 0) {
       const founderRole = await Role.findOne({ key: 'FOUNDER' });
-      const teamManagerRole = await Role.findOne({ key: 'TEAM_MANAGER' });
+      const projectManagerRole = await Role.findOne({ key: 'PROJECT_MANAGER' });
       const teamMemberRole = await Role.findOne({ key: 'TEAM_MEMBER' });
 
       await User.create({
@@ -82,11 +82,11 @@ const seedData = async () => {
       });
 
       await User.create({
-        name: 'Team Manager',
-        email: 'manager@connectshiksha.com',
+        name: 'Project Manager',
+        email: 'project.manager@connectshiksha.com',
         phone: '9876543211',
         passwordHash: 'manager123', // will be hashed by pre-save middleware
-        roleIds: [teamManagerRole._id],
+        roleIds: [projectManagerRole._id],
         salary: 80000,
         active: true,
       });
@@ -187,7 +187,7 @@ const seedData = async () => {
     console.log('\n🎉 Safe seed done!');
     console.log('\n👉 Login credentials:');
     console.log('   - Founder (100% access): founder@connectshiksha.com / founder123');
-    console.log('   - Team Manager (70% access): manager@connectshiksha.com / manager123');
+    console.log('   - Project Manager (project-scoped access): project.manager@connectshiksha.com / manager123');
     console.log('   - Team Member (Basic access): member@connectshiksha.com / member123');
 
     process.exit(0);

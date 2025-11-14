@@ -325,9 +325,9 @@ export default function MembersPage() {
               </p>
             </div>
             <div className="rounded-lg bg-white p-6 shadow">
-              <p className="text-sm font-medium text-gray-600">Team Managers</p>
+              <p className="text-sm font-medium text-gray-600">Project Managers</p>
               <p className="mt-2 text-3xl font-bold text-blue-600">
-                {users.filter(u => u.roleIds.some(r => r.key === 'TEAM_MANAGER')).length}
+                {users.filter(u => u.roleIds.some(r => r.key === 'PROJECT_MANAGER')).length}
               </p>
             </div>
             <div className="rounded-lg bg-white p-6 shadow">
@@ -366,7 +366,7 @@ export default function MembersPage() {
                         <div className="mt-1">
                           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
                             user.roleIds[0]?.key === 'FOUNDER' ? 'bg-purple-100 text-purple-800' :
-                            user.roleIds[0]?.key === 'TEAM_MANAGER' ? 'bg-blue-100 text-blue-800' :
+                            user.roleIds[0]?.key === 'PROJECT_MANAGER' ? 'bg-blue-100 text-blue-800' :
                             'bg-green-100 text-green-800'
                           }`}>
                             {user.roleIds[0]?.name || 'No Role'}
@@ -431,7 +431,7 @@ export default function MembersPage() {
                       <td className="whitespace-nowrap px-6 py-4">
                         <span className={`rounded-full px-2 py-1 text-xs font-medium ${
                           user.roleIds[0]?.key === 'FOUNDER' ? 'bg-purple-100 text-purple-800' :
-                          user.roleIds[0]?.key === 'TEAM_MANAGER' ? 'bg-blue-100 text-blue-800' :
+                          user.roleIds[0]?.key === 'PROJECT_MANAGER' ? 'bg-blue-100 text-blue-800' :
                           'bg-green-100 text-green-800'
                         }`}>
                           {user.roleIds[0]?.name || 'No Role'}

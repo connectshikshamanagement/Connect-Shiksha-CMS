@@ -35,8 +35,8 @@ const verifyLogic = async () => {
     console.log(`  Founder (70%): ₹${founderShare.toLocaleString()}`);
     console.log(`  Team (30%): ₹${teamShare.toLocaleString()}`);
     
-    // Check project owner
-    console.log(`\nProject Owner: ${project.ownerId?.name || 'N/A'}`);
+    // Check project manager
+    console.log(`\nProject Manager: ${project.ownerId?.name || 'N/A'}`);
     
     // Count non-founder members
     const nonFounderMembers = project.projectMembers.filter(
@@ -46,7 +46,7 @@ const verifyLogic = async () => {
     nonFounderMembers.forEach(m => {
       console.log(`  - ${m.name} (${m.email})`);
       if (m._id.toString() === project.ownerId?._id.toString()) {
-        console.log('    👑 PROJECT OWNER');
+        console.log('    👑 PROJECT MANAGER');
       }
     });
     
@@ -54,12 +54,12 @@ const verifyLogic = async () => {
     console.log('\n📐 Team Share Calculation (30% = ₹15,000):');
     
     if (project.ownerId && nonFounderMembers.some(m => m._id.toString() === project.ownerId._id.toString())) {
-      console.log('  Project Owner Bonus: 3% of team share');
+      console.log('  Project Manager Bonus: 3% of team share');
       const ownerBonus = teamShare * 0.03; // 3% of 30% = 0.9% of total
       const remainingForMembers = teamShare * 0.97; // 97% of 30% = 29.1% of total
       const sharePerPerson = remainingForMembers / nonFounderMembers.length;
       
-      console.log(`  Owner Bonus: ₹${Math.round(ownerBonus).toLocaleString()} (3% of ₹${teamShare.toLocaleString()})`);
+      console.log(`  Project Manager Bonus: ₹${Math.round(ownerBonus).toLocaleString()} (3% of ₹${teamShare.toLocaleString()})`);
       console.log(`  Remaining for all: ₹${Math.round(remainingForMembers).toLocaleString()}`);
       console.log(`  Share per person: ₹${Math.round(sharePerPerson).toLocaleString()}`);
       
@@ -88,7 +88,7 @@ const verifyLogic = async () => {
       const percentage = ((p.profitShare / totalProfit) * 100).toFixed(2);
       console.log(`  ${p.userId.name}: ₹${Math.round(p.profitShare).toLocaleString()} (${percentage}% of total profit)`);
       if (p.ownerBonus) {
-        console.log(`    👑 Owner Bonus: ₹${Math.round(p.ownerBonus).toLocaleString()}`);
+        console.log(`    👑 Project Manager Bonus: ₹${Math.round(p.ownerBonus).toLocaleString()}`);
       }
     });
     

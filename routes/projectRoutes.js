@@ -292,6 +292,18 @@ router.delete('/:id', authorize('projects.delete'), async (req, res) => {
       });
     }
 
+    const hasAdminAccess = (req.user.roleIds || []).some(
+      (role) => role.key === 'ADMIN' || role.key === 'FOUNDER'
+    );
+    const isProjectOwner = project.ownerId?.toString() === req.user._id?.toString();
+
+    if (!hasAdminAccess && !isProjectOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the project manager or an admin can delete this project'
+      });
+    }
+
     // Delete all related data
     const [expensesDeleted, incomeDeleted, payrollDeleted, tasksDeleted] = await Promise.all([
       Expense.deleteMany({ projectId: projectId }),
@@ -331,6 +343,18 @@ router
       const project = await Project.findById(req.params.id);
       if (!project) {
         return res.status(404).json({ success: false, message: 'Project not found' });
+      }
+
+      const hasAdminAccess = (req.user.roleIds || []).some(
+        (role) => role.key === 'ADMIN' || role.key === 'FOUNDER'
+      );
+      const isProjectOwner = project.ownerId?.toString() === req.user._id?.toString();
+
+      if (!hasAdminAccess && !isProjectOwner) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the project manager or an admin can update this project'
+        });
       }
 
       // Apply updates (mirror generic controller behavior)

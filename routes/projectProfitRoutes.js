@@ -15,9 +15,9 @@ const router = express.Router();
 
 router.use(protect);
 
-// Compute profit sharing for a specific project (Founder and Team Managers only)
+// Compute profit sharing for a specific project (Founder and Project Managers only)
 router.post('/compute/:projectId', 
-  restrictToRoles(['FOUNDER', 'TEAM_MANAGER']),
+  restrictToRoles(['FOUNDER', 'PROJECT_MANAGER']),
   canAccessProject,
   async (req, res) => {
     try {
@@ -42,7 +42,7 @@ router.post('/compute/:projectId',
 
 // Get project profit summary
 router.get('/summary/:projectId',
-  restrictToRoles(['FOUNDER', 'TEAM_MANAGER', 'TEAM_MEMBER']),
+  restrictToRoles(['FOUNDER', 'PROJECT_MANAGER', 'TEAM_MEMBER']),
   canAccessProject,
   async (req, res) => {
     try {
@@ -89,7 +89,7 @@ router.post('/compute-all',
 
 // Get payroll records for a project
 router.get('/payroll/:projectId',
-  restrictToRoles(['FOUNDER', 'TEAM_MANAGER', 'TEAM_MEMBER']),
+  restrictToRoles(['FOUNDER', 'PROJECT_MANAGER', 'TEAM_MEMBER']),
   canAccessProject,
   async (req, res) => {
     try {

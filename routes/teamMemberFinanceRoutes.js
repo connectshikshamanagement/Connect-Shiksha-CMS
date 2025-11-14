@@ -36,12 +36,12 @@ router.post('/project-income', async (req, res) => {
       });
     }
 
-    // Check if user is a member of the project's team, team lead, or project owner
+    // Check if user is a member of the project's team, team lead, or project manager
     const team = await Team.findById(project.teamId?._id || project.teamId);
     const Role = require('../models/Role');
     const user = await User.findById(req.user.id).populate('roleIds');
     const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
-    const isManager = user.roleIds.some(role => role.key === 'TEAM_MANAGER');
+    const isProjectManager = user.roleIds.some(role => role.key === 'PROJECT_MANAGER');
     const userIdString = req.user.id.toString();
     const isTeamMember = team?.members?.some(member => member.toString() === userIdString);
     const isTeamLead = team?.leadUserId && team.leadUserId.toString() === userIdString;
@@ -52,7 +52,7 @@ router.post('/project-income', async (req, res) => {
       return detail.userId.toString() === userIdString && detail.isActive !== false;
     });
     
-    if (!team || (!isFounder && !isManager && !isTeamMember && !isTeamLead && !isProjectOwner && !isProjectMember && !isActiveProjectMember)) {
+    if (!team || (!isFounder && !isProjectManager && !isTeamMember && !isTeamLead && !isProjectOwner && !isProjectMember && !isActiveProjectMember)) {
       return res.status(403).json({
         success: false,
         message: 'You are not assigned to this project'
@@ -136,12 +136,12 @@ router.post('/project-expense', async (req, res) => {
       });
     }
 
-    // Check if user is a member of the project's team, team lead, or project owner
+    // Check if user is a member of the project's team, team lead, or project manager
     const team = await Team.findById(project.teamId?._id || project.teamId);
     const Role = require('../models/Role');
     const user = await User.findById(req.user.id).populate('roleIds');
     const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
-    const isManager = user.roleIds.some(role => role.key === 'TEAM_MANAGER');
+    const isProjectManager = user.roleIds.some(role => role.key === 'PROJECT_MANAGER');
     const userIdString = req.user.id.toString();
     const isTeamMember = team?.members?.some(member => member.toString() === userIdString);
     const isTeamLead = team?.leadUserId && team.leadUserId.toString() === userIdString;
@@ -152,7 +152,7 @@ router.post('/project-expense', async (req, res) => {
       return detail.userId.toString() === userIdString && detail.isActive !== false;
     });
     
-    if (!team || (!isFounder && !isManager && !isTeamMember && !isTeamLead && !isProjectOwner && !isProjectMember && !isActiveProjectMember)) {
+    if (!team || (!isFounder && !isProjectManager && !isTeamMember && !isTeamLead && !isProjectOwner && !isProjectMember && !isActiveProjectMember)) {
       return res.status(403).json({
         success: false,
         message: 'You are not assigned to this project'
@@ -286,7 +286,7 @@ router.get('/my-income-history', async (req, res) => {
         receivedByUserId: new mongoose.Types.ObjectId(req.user.id)
       };
     } else {
-      // Find teams where user is a member, team lead, or project owner
+      // Find teams where user is a member, team lead, or project manager
       const userTeams = await Team.find({ 
         $or: [
           { members: req.user.id },
@@ -375,7 +375,7 @@ router.get('/my-expense-history', async (req, res) => {
         submittedBy: new mongoose.Types.ObjectId(req.user.id)
       };
     } else {
-      // Find teams where user is a member, team lead, or project owner
+      // Find teams where user is a member, team lead, or project manager
       const userTeams = await Team.find({ 
         $or: [
           { members: req.user.id },

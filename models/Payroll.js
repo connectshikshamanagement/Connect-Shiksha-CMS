@@ -116,7 +116,7 @@ const payrollSchema = new mongoose.Schema({
   projectStartDate: {
     type: Date
   },
-  // Project owner bonus tracking
+  // Project manager bonus tracking
   isProjectOwner: {
     type: Boolean,
     default: false
