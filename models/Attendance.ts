@@ -1,10 +1,6 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
-export type AttendanceStatus =
-  | 'PENDING_MANAGER'
-  | 'PENDING_ADMIN'
-  | 'APPROVED'
-  | 'REJECTED';
+export type AttendanceStatus = 'PENDING_MANAGER' | 'APPROVED' | 'REJECTED';
 
 export interface LocationPoint {
   lat: number;
@@ -18,13 +14,12 @@ export interface AttendanceDocument extends Document {
   date: Date;
   checkInTime: Date;
   checkOutTime?: Date;
-  location: LocationPoint;
+  location?: LocationPoint;
   qrCodeRef?: string;
   status: AttendanceStatus;
   verifiedBy?: Schema.Types.ObjectId;
   remarks?: string;
   managerRemarks?: string;
-  adminRemarks?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -74,14 +69,14 @@ const attendanceSchema = new Schema<AttendanceDocument>(
     },
     location: {
       type: locationSchema,
-      required: true
+      required: false
     },
     qrCodeRef: {
       type: String
     },
     status: {
       type: String,
-      enum: ['PENDING_MANAGER', 'PENDING_ADMIN', 'APPROVED', 'REJECTED'],
+      enum: ['PENDING_MANAGER', 'APPROVED', 'REJECTED'],
       default: 'PENDING_MANAGER',
       index: true
     },
@@ -97,10 +92,6 @@ const attendanceSchema = new Schema<AttendanceDocument>(
       type: String,
       maxlength: 500
     },
-    adminRemarks: {
-      type: String,
-      maxlength: 500
-    }
   },
   {
     timestamps: true

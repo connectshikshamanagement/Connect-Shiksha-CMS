@@ -35,7 +35,7 @@ export const checkUserRoleStatus = () => {
     
     // Check if user has the new role structure
     const hasNewRoles = roles.some(role => 
-      ['FOUNDER', 'PROJECT_MANAGER', 'TEAM_MEMBER'].includes(role.key)
+      ['FOUNDER', 'PROJECT_MANAGER', 'TEAM_MANAGER', 'TEAM_MEMBER'].includes(role.key)
     );
     
     return hasNewRoles;

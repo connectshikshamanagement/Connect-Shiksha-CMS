@@ -27,11 +27,11 @@ const attendanceLogSchema = new Schema<AttendanceLogDocument>(
     },
     previousStatus: {
       type: String,
-      enum: ['PENDING_MANAGER', 'PENDING_ADMIN', 'APPROVED', 'REJECTED']
+      enum: ['PENDING_MANAGER', 'APPROVED', 'REJECTED']
     },
     newStatus: {
       type: String,
-      enum: ['PENDING_MANAGER', 'PENDING_ADMIN', 'APPROVED', 'REJECTED']
+      enum: ['PENDING_MANAGER', 'APPROVED', 'REJECTED']
     },
     actor: {
       type: Schema.Types.ObjectId,

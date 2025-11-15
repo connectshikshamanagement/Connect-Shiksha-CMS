@@ -62,6 +62,7 @@ export const projectAPI = {
   update: (id: string, data: any) => api.put(`/projects/${id}`, data),
   delete: (id: string) => api.delete(`/projects/${id}`),
   getMyTeamProjects: () => api.get('/projects/my-team-projects'),
+  getMyOwnedProjects: () => api.get('/projects/my-owned-projects'),
   getMyProjectFinancials: () => api.get('/projects/my-project-financials'),
 };
 
@@ -241,15 +242,11 @@ export const dataManagementAPI = {
 
 export const attendanceAPI = {
   mark: (data: any) => api.post('/attendance', data),
+  managerMark: (data: any) => api.post('/attendance/manager', data),
   getMy: (params?: any) => api.get('/attendance/my', { params }),
   getTeam: (params?: any) => api.get('/attendance/team', { params }),
   managerDecision: (id: string, data: { approve: boolean; remarks?: string }) =>
     api.patch(`/attendance/${id}/manager`, data),
-  adminDecision: (id: string, data: { approve: boolean; remarks?: string }) =>
-    api.patch(`/attendance/${id}/admin`, data),
-  getLogs: (id: string) => api.get(`/attendance/${id}/logs`),
-  getPayrollSummary: (params?: any) => api.get('/attendance/payroll/summary', { params }),
-  downloadPayrollCsv: (params?: any) =>
-    api.get('/attendance/payroll/summary.csv', { params, responseType: 'blob' })
+  getLogs: (id: string) => api.get(`/attendance/${id}/logs`)
 };
 

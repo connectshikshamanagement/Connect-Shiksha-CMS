@@ -7,6 +7,7 @@ const Project = require('../models/Project');
 const Income = require('../models/Income');
 const Expense = require('../models/Expense');
 const { protect, authorize } = require('../middleware/auth');
+const { isProjectManagerRole } = require('../middleware/roleAccess');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 
@@ -21,7 +22,7 @@ router.get('/', authorize('payroll.read'), async (req, res) => {
       .map(role => (role && role.key ? role.key : null))
       .filter(Boolean);
     const isFounder = roleKeys.includes('FOUNDER');
-    const isProjectManager = roleKeys.includes('PROJECT_MANAGER');
+    const isProjectManager = roleKeys.some(isProjectManagerRole);
 
     if (!isFounder && !isProjectManager) {
       return res.status(403).json({

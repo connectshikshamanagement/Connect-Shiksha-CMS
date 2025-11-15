@@ -26,6 +26,12 @@ export const usePermissions = () => {
   const [userRole, setUserRole] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
+  const PROJECT_MANAGER_KEYS = ['PROJECT_MANAGER', 'TEAM_MANAGER'];
+  const normalizeRoleKey = (key?: string): string => {
+    if (!key) return 'TEAM_MEMBER';
+    return PROJECT_MANAGER_KEYS.includes(key) ? 'PROJECT_MANAGER' : key;
+  };
+
   useEffect(() => {
     const loadUserData = async () => {
       const user = localStorage.getItem('user');
@@ -37,7 +43,7 @@ export const usePermissions = () => {
           const userData = JSON.parse(user);
           const roles = userData.roleIds || [];
           const hasNewRoles = roles.some((role: UserRole) => 
-            ['FOUNDER', 'PROJECT_MANAGER', 'TEAM_MEMBER'].includes(role.key)
+            ['FOUNDER', 'PROJECT_MANAGER', 'TEAM_MANAGER', 'TEAM_MEMBER'].includes(role.key)
           );
           needsRefresh = !hasNewRoles;
         } catch (error) {
@@ -69,10 +75,10 @@ export const usePermissions = () => {
                 if (roles.length > 0) {
                   const primaryRole =
                     roles.find((role: UserRole) => role.key === 'FOUNDER') ||
-                    roles.find((role: UserRole) => role.key === 'PROJECT_MANAGER') ||
+                    roles.find((role: UserRole) => PROJECT_MANAGER_KEYS.includes(role.key)) ||
                     roles.find((role: UserRole) => role.key === 'TEAM_MEMBER') ||
                     roles[0];
-                  setUserRole(primaryRole?.key || 'TEAM_MEMBER');
+                  setUserRole(normalizeRoleKey(primaryRole?.key) || 'TEAM_MEMBER');
                 } else {
                   setUserRole('TEAM_MEMBER');
                 }
@@ -93,10 +99,10 @@ export const usePermissions = () => {
           if (roles.length > 0) {
             const primaryRole =
               roles.find((role: UserRole) => role.key === 'FOUNDER') ||
-                    roles.find((role: UserRole) => role.key === 'PROJECT_MANAGER') ||
+              roles.find((role: UserRole) => PROJECT_MANAGER_KEYS.includes(role.key)) ||
               roles.find((role: UserRole) => role.key === 'TEAM_MEMBER') ||
               roles[0];
-            setUserRole(primaryRole?.key || 'TEAM_MEMBER');
+            setUserRole(normalizeRoleKey(primaryRole?.key) || 'TEAM_MEMBER');
           } else {
             setUserRole('TEAM_MEMBER');
           }

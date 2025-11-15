@@ -5,15 +5,26 @@ const User = require('../models/User');
 const ROLE_KEYS = {
   FOUNDER: 'FOUNDER',
   PROJECT_MANAGER: 'PROJECT_MANAGER',
+  TEAM_MANAGER: 'TEAM_MANAGER', // legacy name, kept for backward compatibility
   TEAM_MEMBER: 'TEAM_MEMBER'
 };
+
+const PROJECT_MANAGER_KEYS = [ROLE_KEYS.PROJECT_MANAGER, ROLE_KEYS.TEAM_MANAGER];
+
+const normalizeRoleKey = (roleKey = '') => {
+  if (!roleKey) return roleKey;
+  return PROJECT_MANAGER_KEYS.includes(roleKey) ? ROLE_KEYS.PROJECT_MANAGER : roleKey;
+};
+
+const isProjectManagerRole = (roleKey = '') => PROJECT_MANAGER_KEYS.includes(roleKey);
 
 const hasRole = async (userId, roleKey) => {
   try {
     const user = await User.findById(userId).populate('roleIds');
     if (!user || !user.active) return false;
     
-    return user.roleIds.some(role => role.key === roleKey);
+    const normalizedTarget = normalizeRoleKey(roleKey);
+    return user.roleIds.some(role => normalizeRoleKey(role.key) === normalizedTarget);
   } catch (error) {
     console.error('Error checking user role:', error);
     return false;
@@ -26,8 +37,9 @@ const hasAnyRole = async (userId, roleKeys) => {
     const user = await User.findById(userId).populate('roleIds');
     if (!user || !user.active) return false;
     
-    const userRoleKeys = user.roleIds.map(role => role.key);
-    return roleKeys.some(roleKey => userRoleKeys.includes(roleKey));
+    const normalizedUserRoles = user.roleIds.map(role => normalizeRoleKey(role.key));
+    const normalizedTargets = roleKeys.map(normalizeRoleKey);
+    return normalizedTargets.some(roleKey => normalizedUserRoles.includes(roleKey));
   } catch (error) {
     console.error('Error checking user roles:', error);
     return false;
@@ -122,23 +134,36 @@ const canAccessTeam = async (req, res, next) => {
     }
 
     // Project Manager has access to teams tied to their managed projects
-    const isProjectManager = user.roleIds.some(role => role.key === ROLE_KEYS.PROJECT_MANAGER);
+    const isProjectManager = user.roleIds.some(role => isProjectManagerRole(role.key));
     if (isProjectManager) {
       const Project = require('../models/Project');
       const managedProjects = await Project.find({ ownerId: user._id }).select('_id teamId');
 
-      if (!managedProjects.length) {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. No managed projects found.'
-        });
-      }
-
-      req.userRole = ROLE_KEYS.PROJECT_MANAGER;
-      req.userManagedProjectIds = managedProjects.map(project => project._id.toString());
-      req.userManagedTeamIds = managedProjects
+      const managedProjectIds = managedProjects.map(project => project._id.toString());
+      const managedTeamIds = managedProjects
         .map(project => project.teamId && project.teamId.toString())
         .filter(Boolean);
+
+      req.userRole = ROLE_KEYS.PROJECT_MANAGER;
+      req.userManagedProjectIds = managedProjectIds;
+      req.userManagedTeamIds = managedTeamIds;
+
+      if (!managedProjects.length) {
+        const memberTeamIds = (user.teamHistory || [])
+          .map(entry => entry?.teamId && entry.teamId.toString())
+          .filter(Boolean);
+
+        if (!memberTeamIds.length) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied. No managed projects or team memberships found.'
+          });
+        }
+
+        req.userManagedTeamIds = memberTeamIds;
+        req.userTeamId = memberTeamIds[memberTeamIds.length - 1];
+      }
+
       return next();
     }
 
@@ -206,7 +231,7 @@ const canAccessProject = async (req, res, next) => {
         project.projectMembers.some(memberId => memberId.toString() === user._id.toString());
 
       // Project Manager can access projects they own
-      const isProjectManager = user.roleIds.some(role => role.key === ROLE_KEYS.PROJECT_MANAGER);
+    const isProjectManager = user.roleIds.some(role => isProjectManagerRole(role.key));
       if (isProjectManager) {
         if (project.ownerId && project.ownerId.toString() === user._id.toString()) {
           req.userRole = ROLE_KEYS.PROJECT_MANAGER;
@@ -249,9 +274,10 @@ const getUserRoleInfo = async (userId) => {
     if (!user || !user.active) return null;
 
     const roles = user.roleIds.map(role => role.key);
-    const isFounder = roles.includes(ROLE_KEYS.FOUNDER);
-    const isProjectManager = roles.includes(ROLE_KEYS.PROJECT_MANAGER);
-    const isMember = roles.includes(ROLE_KEYS.TEAM_MEMBER);
+    const normalizedRoles = roles.map(normalizeRoleKey);
+    const isFounder = normalizedRoles.includes(ROLE_KEYS.FOUNDER);
+    const isProjectManager = normalizedRoles.includes(ROLE_KEYS.PROJECT_MANAGER);
+    const isMember = normalizedRoles.includes(ROLE_KEYS.TEAM_MEMBER);
 
     return {
       userId,
@@ -276,6 +302,10 @@ const getUserRoleInfo = async (userId) => {
 };
 
 module.exports = {
+  ROLE_KEYS,
+  PROJECT_MANAGER_KEYS,
+  normalizeRoleKey,
+  isProjectManagerRole,
   hasRole,
   hasAnyRole,
   restrictToRole,

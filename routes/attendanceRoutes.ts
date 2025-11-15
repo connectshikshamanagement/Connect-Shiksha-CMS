@@ -2,13 +2,11 @@ import { Router } from 'express';
 import { protect } from '../middleware/auth';
 import {
   markAttendance,
+  managerMarkAttendance,
   getMyAttendance,
   getTeamAttendance,
   managerDecision,
-  adminDecision,
-  getAttendanceLogs,
-  getPayrollSummary,
-  downloadPayrollCsv
+  getAttendanceLogs
 } from '../controllers/attendanceController';
 import { restrictToRoles } from '../middleware/roleAccess';
 
@@ -18,6 +16,11 @@ router.use(protect);
 
 router.post('/', markAttendance);
 router.get('/my', getMyAttendance);
+router.post(
+  '/manager',
+  restrictToRoles(['PROJECT_MANAGER', 'FOUNDER']),
+  managerMarkAttendance
+);
 
 router.get(
   '/team',
@@ -31,20 +34,7 @@ router.patch(
   managerDecision
 );
 
-router.patch('/:id/admin', restrictToRoles(['FOUNDER']), adminDecision);
 router.get('/:id/logs', restrictToRoles(['PROJECT_MANAGER', 'FOUNDER']), getAttendanceLogs);
-
-router.get(
-  '/payroll/summary',
-  restrictToRoles(['PROJECT_MANAGER', 'FOUNDER']),
-  getPayrollSummary
-);
-
-router.get(
-  '/payroll/summary.csv',
-  restrictToRoles(['PROJECT_MANAGER', 'FOUNDER']),
-  downloadPayrollCsv
-);
 
 export default router;
 

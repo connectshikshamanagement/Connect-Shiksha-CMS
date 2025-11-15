@@ -29,6 +29,8 @@ interface User {
 interface Team {
   _id: string;
   name: string;
+  leadUserId?: string | User;
+  members?: (string | User)[];
 }
 
 interface ProjectMember { _id?: string; name?: string }
@@ -77,6 +79,7 @@ export default function ProjectsPage() {
   const { isFounder, isProjectManager, isMember, userRoles } = usePermissions();
   const isManager = isProjectManager;
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<ProjectFormData>({
     title: '',
     description: '',
@@ -104,14 +107,28 @@ export default function ProjectsPage() {
   // Track existing members (cannot be removed after creation)
   const [existingMemberIds, setExistingMemberIds] = useState<Set<string>>(new Set());
 
+  const isAdmin = (userRoles || []).some((role) => role.key === 'ADMIN');
+  const isFounderOrAdmin = isFounder || isAdmin;
+  const canCreateProjects = isFounderOrAdmin || isManager;
+
   useEffect(() => {
     fetchData();
-  }, [isManager, isMember]);
+  }, [isManager, isMember, isFounderOrAdmin]);
 
   const fetchData = async () => {
     try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+      let me: User | null = null;
+      let myId: string | null = null;
+      if (raw) {
+        me = JSON.parse(raw) as User;
+        myId = me?._id || me?.id || null;
+      }
+      setCurrentUser(me);
+      setCurrentUserId(myId);
+
       // Use role-based API calls
-      const projectsPromise = (isFounder)
+      const projectsPromise = isFounder
         ? projectAPI.getAll()
         : projectAPI.getMyTeamProjects();
       
@@ -123,10 +140,6 @@ export default function ProjectsPage() {
       
       if (projectsRes.data.success) {
         let list: Project[] = projectsRes.data.data;
-        const raw = localStorage.getItem('user');
-        const me = raw ? JSON.parse(raw) as User : null;
-        const myId = me?._id || me?.id || null;
-        setCurrentUserId(myId);
         if (myId) {
           // For Project Managers and Team Members, restrict to projects they own or are explicitly a member of
           if (isManager || (isMember && !isManager)) {
@@ -139,7 +152,27 @@ export default function ProjectsPage() {
         }
         setProjects(list);
       }
-      if (teamsRes.data.success) setTeams(teamsRes.data.data);
+      if (teamsRes.data.success) {
+        let teamList: any[] = teamsRes.data.data;
+        if (!isFounderOrAdmin && myId) {
+          teamList = teamList.filter((team) => {
+            const leadValue = team.leadUserId;
+            const leadId =
+              typeof leadValue === 'string'
+                ? leadValue
+                : leadValue?._id || leadValue?.toString?.();
+            if (leadId === myId) return true;
+            const memberIds = (team.members || []).map((member: any) => {
+              if (typeof member === 'string') return member;
+              if (member?._id) return member._id;
+              if (typeof member?.toString === 'function') return member.toString();
+              return member;
+            });
+            return memberIds.includes(myId);
+          });
+        }
+        setTeams(teamList as Team[]);
+      }
       if (usersRes.data.success) setUsers(usersRes.data.data);
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Failed to fetch data');
@@ -151,7 +184,9 @@ export default function ProjectsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title || !formData.category || !formData.teamId || !formData.ownerId) {
+    const submissionOwnerId = isFounderOrAdmin ? formData.ownerId : currentUserId;
+
+    if (!formData.title || !formData.category || !formData.teamId || !submissionOwnerId) {
       showToast.error('Please fill in all required fields');
       return;
     }
@@ -180,6 +215,7 @@ export default function ProjectsPage() {
       // Prepare project data with automatic founder inclusion and member join dates
       const projectData: any = {
         ...formData,
+        ownerId: submissionOwnerId,
         projectMembers: Array.from(memberIds), // Ensure founder is always included
         memberJoinDates: memberJoinDates, // Include join dates for each member
         memberLeftDates: memberEndDates, // Include left dates for each member
@@ -295,7 +331,7 @@ export default function ProjectsPage() {
       category: '',
       status: 'planned',
       teamId: '',
-      ownerId: '',
+      ownerId: isFounderOrAdmin ? '' : (currentUserId || ''),
       projectMembers: [],
       budget: '',
       totalDealAmount: '',
@@ -371,7 +407,7 @@ const diffDays = (a: Date, b: Date) => {
                 {isMember ? "View projects you are assigned to" : "Track and manage your organization's projects"}
               </p>
             </div>
-            {(isFounder || isManager) && (
+            {canCreateProjects && (
               <Button onClick={() => { resetForm(); setShowModal(true); }} className="w-full sm:w-auto">
                 <FiPlus className="mr-2" />
                 Create Project
@@ -591,9 +627,8 @@ const diffDays = (a: Date, b: Date) => {
                       typeof project.ownerId === 'string'
                         ? project.ownerId
                         : project.ownerId?._id;
-                    const isAdmin = (userRoles || []).some((role) => role.key === 'ADMIN');
                     const canManageProject =
-                      isFounder || isAdmin || (currentUserId && ownerId === currentUserId);
+                      isFounderOrAdmin || (currentUserId && ownerId === currentUserId);
                     return (
                       canManageProject && (
                     <div className="flex  flex-row gap-3 pt-4 border-t border-gray-100">
@@ -631,7 +666,7 @@ const diffDays = (a: Date, b: Date) => {
               <p className="mt-1 text-sm text-gray-500">
                 {isMember ? "You are not assigned to any projects yet" : "Get started by creating your first project"}
               </p>
-              {(isFounder || isManager) && (
+              {canCreateProjects && (
                 <Button className="mt-4" onClick={() => { resetForm(); setShowModal(true); }}>
                   <FiPlus className="mr-2" />
                   Create Project
@@ -719,16 +754,25 @@ const diffDays = (a: Date, b: Date) => {
             />
 
 
-            <FormSelect
-              label="Project Manager"
-              required
-              value={formData.ownerId}
-              onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
-              options={users.map((user: any) => ({
-                value: user._id,
-                label: user.name,
-              }))}
-            />
+            {isFounderOrAdmin ? (
+              <FormSelect
+                label="Project Manager"
+                required
+                value={formData.ownerId}
+                onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
+                options={users.map((user: any) => ({
+                  value: user._id,
+                  label: user.name,
+                }))}
+              />
+            ) : (
+              <FormInput
+                label="Project Manager"
+                value={currentUser?.name || 'You'}
+                disabled
+                readOnly
+              />
+            )}
 
             <FormInput
               label="Budget (₹)"

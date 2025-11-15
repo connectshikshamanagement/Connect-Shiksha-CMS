@@ -39,7 +39,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const { isFounder, isProjectManager, isMember } = usePermissions();
-  const isManager = isProjectManager;
+const PROJECT_MANAGER_KEYS = ['PROJECT_MANAGER', 'TEAM_MANAGER'];
+const isManager = isProjectManager;
+const isProjectManagerRoleKey = (key?: string) => key ? PROJECT_MANAGER_KEYS.includes(key) : false;
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -330,7 +332,7 @@ export default function DashboardPage() {
                       <div className="mt-2">
                         <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
                           user.roleIds?.[0]?.key === 'FOUNDER' ? 'bg-purple-100 text-purple-800' :
-                          user.roleIds?.[0]?.key === 'PROJECT_MANAGER' ? 'bg-blue-100 text-blue-800' :
+                          isProjectManagerRoleKey(user.roleIds?.[0]?.key) ? 'bg-blue-100 text-blue-800' :
                           'bg-green-100 text-green-800'
                         }`}>
                           {user.roleIds?.[0]?.name || 'No Role'}

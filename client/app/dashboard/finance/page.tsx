@@ -1063,7 +1063,9 @@ export default function FinancePage() {
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                           <div className="text-center">
                             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Budget</div>
-                            <div className="text-lg font-bold text-gray-900">₹{project.allocatedBudget.toLocaleString()}</div>
+                            <div className="text-lg font-bold text-gray-900">
+                              ₹{(project.allocatedBudget ?? project.budget ?? 0).toLocaleString()}
+                            </div>
                           </div>
                           <div className="text-center">
                             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Income</div>

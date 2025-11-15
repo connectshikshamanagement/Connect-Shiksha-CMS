@@ -8,6 +8,7 @@ const Payroll = require('../models/Payroll');
 const Task = require('../models/Task');
 const { protect, authorize } = require('../middleware/auth');
 const { computeProjectProfitSharing } = require('../utils/projectProfitSharing');
+const { ROLE_KEYS, isProjectManagerRole } = require('../middleware/roleAccess');
 
 const router = express.Router();
 const projectController = createController(Project);
@@ -56,9 +57,87 @@ router.get('/', async (req, res) => {
   }
 });
 
-router
-  .route('/')
-  .post(authorize('projects.create'), projectController.create);
+const normalizeId = (value) => {
+  if (!value) return value;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value._id) {
+    return value._id.toString();
+  }
+  if (typeof value.toString === 'function') {
+    return value.toString();
+  }
+  return value;
+};
+
+const getRoleFlags = (req) => {
+  const roleKeys = (req.user?.roleIds || []).map((role) => role.key);
+  return {
+    isFounder: roleKeys.includes(ROLE_KEYS.FOUNDER),
+    isAdmin: roleKeys.includes('ADMIN'),
+    isProjectManager: roleKeys.some(isProjectManagerRole)
+  };
+};
+
+const ensureTeamMembership = async (teamId, userId) => {
+  if (!teamId) {
+    throw new Error('Team is required');
+  }
+
+  const team = await Team.findById(teamId).select('leadUserId members');
+  if (!team) {
+    const err = new Error('Team not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const stringUserId = userId.toString();
+  const isLead =
+    team.leadUserId && team.leadUserId.toString() === stringUserId;
+  const isMember = (team.members || []).some(
+    (memberId) => memberId.toString() === stringUserId
+  );
+
+  if (!isLead && !isMember) {
+    const err = new Error('You can only manage projects for teams you belong to');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return team;
+};
+
+router.post('/', authorize('projects.create'), async (req, res) => {
+  try {
+    const { isFounder, isAdmin, isProjectManager } = getRoleFlags(req);
+
+    if (!isFounder && !isAdmin) {
+      if (!isProjectManager) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only founders or project managers can create projects'
+        });
+      }
+
+      const normalizedTeamId = normalizeId(req.body.teamId);
+      await ensureTeamMembership(normalizedTeamId, req.user._id);
+      req.body.teamId = normalizedTeamId;
+      req.body.ownerId = req.user._id;
+    }
+
+    const project = await Project.create(req.body);
+
+    res.status(201).json({
+      success: true,
+      data: project
+    });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Failed to create project'
+    });
+  }
+});
 
 // Get projects relevant to the current user (member or manager)
 router.get('/my-team-projects', authorize('projects.read'), async (req, res) => {
@@ -131,6 +210,27 @@ router.get('/my-team-projects', authorize('projects.read'), async (req, res) => 
       success: true,
       data: projectsWithFinancials,
       teamCount: userTeams.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+router.get('/my-owned-projects', authorize('projects.read'), async (req, res) => {
+  try {
+    const projects = await Project.find({
+      ownerId: req.user.id
+    })
+      .populate('teamId', 'name')
+      .populate('projectMembers', 'name email')
+      .sort('-createdAt');
+
+    res.json({
+      success: true,
+      data: projects
     });
   } catch (error) {
     res.status(500).json({
@@ -345,9 +445,8 @@ router
         return res.status(404).json({ success: false, message: 'Project not found' });
       }
 
-      const hasAdminAccess = (req.user.roleIds || []).some(
-        (role) => role.key === 'ADMIN' || role.key === 'FOUNDER'
-      );
+      const { isFounder, isAdmin } = getRoleFlags(req);
+      const hasAdminAccess = isFounder || isAdmin;
       const isProjectOwner = project.ownerId?.toString() === req.user._id?.toString();
 
       if (!hasAdminAccess && !isProjectOwner) {
@@ -355,6 +454,28 @@ router
           success: false,
           message: 'Only the project manager or an admin can update this project'
         });
+      }
+
+      if (!hasAdminAccess) {
+        if (req.body.ownerId && req.body.ownerId.toString() !== project.ownerId.toString()) {
+          return res.status(403).json({
+            success: false,
+            message: 'Project managers cannot reassign project ownership'
+          });
+        }
+
+        const incomingTeamId = normalizeId(req.body.teamId);
+        if (incomingTeamId && incomingTeamId !== project.teamId.toString()) {
+          try {
+            await ensureTeamMembership(incomingTeamId, req.user._id);
+            req.body.teamId = incomingTeamId;
+          } catch (err) {
+            return res.status(err.statusCode || 500).json({
+              success: false,
+              message: err.message
+            });
+          }
+        }
       }
 
       // Apply updates (mirror generic controller behavior)

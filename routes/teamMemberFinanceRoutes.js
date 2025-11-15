@@ -7,6 +7,7 @@ const Team = require('../models/Team');
 const Payroll = require('../models/Payroll');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
+const { isProjectManagerRole } = require('../middleware/roleAccess');
 const { computeProfitSharing } = require('../utils/profitSharing');
 
 const router = express.Router();
@@ -41,7 +42,7 @@ router.post('/project-income', async (req, res) => {
     const Role = require('../models/Role');
     const user = await User.findById(req.user.id).populate('roleIds');
     const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
-    const isProjectManager = user.roleIds.some(role => role.key === 'PROJECT_MANAGER');
+    const isProjectManager = user.roleIds.some(role => isProjectManagerRole(role.key));
     const userIdString = req.user.id.toString();
     const isTeamMember = team?.members?.some(member => member.toString() === userIdString);
     const isTeamLead = team?.leadUserId && team.leadUserId.toString() === userIdString;
@@ -141,7 +142,7 @@ router.post('/project-expense', async (req, res) => {
     const Role = require('../models/Role');
     const user = await User.findById(req.user.id).populate('roleIds');
     const isFounder = user.roleIds.some(role => role.key === 'FOUNDER');
-    const isProjectManager = user.roleIds.some(role => role.key === 'PROJECT_MANAGER');
+    const isProjectManager = user.roleIds.some(role => isProjectManagerRole(role.key));
     const userIdString = req.user.id.toString();
     const isTeamMember = team?.members?.some(member => member.toString() === userIdString);
     const isTeamLead = team?.leadUserId && team.leadUserId.toString() === userIdString;

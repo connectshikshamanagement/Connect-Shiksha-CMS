@@ -75,6 +75,18 @@ export default function Sidebar() {
 
   const userInfo = getUserInfo();
 
+  const formatRoleLabel = (role: string) => {
+    if (!role) return 'Unknown';
+    const normalized = role.toUpperCase();
+    const roleLabels: Record<string, string> = {
+      FOUNDER: 'Founder',
+      PROJECT_MANAGER: 'Project Manager',
+      TEAM_MEMBER: 'Team Member',
+      TEAM_MANAGER: 'Project Manager'
+    };
+    return roleLabels[normalized] || normalized.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
   // Filter navigation based on permissions and role
   const filteredNavigation = navigation.filter(item => {
     // Don't show navigation items while permissions are loading
@@ -176,8 +188,8 @@ export default function Sidebar() {
                 <p className="text-xs text-gray-500 truncate mt-1">
                   {userInfo.email}
                 </p>
-                <p className="text-xs text-primary-600 capitalize mt-1 font-medium">
-                  {userInfo.role.toLowerCase().replace('_', ' ')}
+                <p className="text-xs text-primary-600 mt-1 font-medium">
+                  {formatRoleLabel(userInfo.role)}
                 </p>
               </div>
             </div>

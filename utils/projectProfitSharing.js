@@ -135,7 +135,7 @@ exports.computeProjectProfitSharing = async (projectId, month = null, year = nul
 
     // Get role IDs
     const founderRole = await Role.findOne({ key: 'FOUNDER' });
-    const projectManagerRole = await Role.findOne({ key: 'PROJECT_MANAGER' });
+    const projectManagerRole = await Role.findOne({ key: { $in: ['PROJECT_MANAGER', 'TEAM_MANAGER'] } });
     const memberRole = await Role.findOne({ key: 'TEAM_MEMBER' });
 
     // Calculate pools

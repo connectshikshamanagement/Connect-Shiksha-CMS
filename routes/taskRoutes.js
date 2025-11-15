@@ -3,7 +3,7 @@ const Task = require('../models/Task');
 const Team = require('../models/Team');
 const Project = require('../models/Project');
 const { protect, authorize } = require('../middleware/auth');
-const { restrictToRole, restrictToRoles } = require('../middleware/roleAccess');
+const { restrictToRole, restrictToRoles, isProjectManagerRole } = require('../middleware/roleAccess');
 
 const router = express.Router();
 
@@ -17,7 +17,7 @@ router.get('/', protect, async (req, res) => {
     if (userRole === 'TEAM_MEMBER') {
       // Team members can only see tasks assigned to them
       query.assignedTo = req.user.id;
-    } else if (userRole === 'PROJECT_MANAGER') {
+    } else if (isProjectManagerRole(userRole)) {
       // Team managers can see tasks for their teams AND projects they own
       const userTeams = await Team.find({ 
         $or: [
@@ -102,7 +102,7 @@ router.post('/', protect, authorize('tasks.create'), async (req, res) => {
 
     // Check if user has permission to assign tasks to this team
     const userRole = req.user.roleIds[0]?.key;
-    if (userRole === 'PROJECT_MANAGER') {
+    if (isProjectManagerRole(userRole)) {
       const isTeamLead = String(team.leadUserId) === String(req.user.id);
       const isTeamMember = team.members.includes(req.user.id);
       

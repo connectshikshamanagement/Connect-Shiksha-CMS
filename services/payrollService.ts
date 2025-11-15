@@ -89,7 +89,7 @@ export const calculateMonthlyPayroll = async (
     const dailyRate = (projectBudget * teamShare) / expectedDays;
     const cappedWorkingDays = Math.min(workingDays, expectedDays);
     const payoutBeforeMultiplier = cappedWorkingDays * dailyRate;
-    const multiplier = roleInfo?.isManager ? MANAGER_MULTIPLIER : 1;
+    const multiplier = roleInfo?.isProjectManager ? MANAGER_MULTIPLIER : 1;
     const payout = payoutBeforeMultiplier * multiplier;
 
     records.push({

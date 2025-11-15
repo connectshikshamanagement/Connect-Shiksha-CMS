@@ -5,7 +5,7 @@ const Team = require('../models/Team');
 const Project = require('../models/Project');
 const Payroll = require('../models/Payroll');
 const { protect, authorize } = require('../middleware/auth');
-const { restrictToRole, restrictToRoles } = require('../middleware/roleAccess');
+const { restrictToRole, restrictToRoles, isProjectManagerRole } = require('../middleware/roleAccess');
 
 const router = express.Router();
 
@@ -36,7 +36,7 @@ router.get('/', protect, restrictToRoles(['FOUNDER', 'PROJECT_MANAGER']), async 
     if (teamId) conditions.push({ teamId });
     if (userId) conditions.push({ userId });
 
-    if (userRole === 'PROJECT_MANAGER') {
+    if (isProjectManagerRole(userRole)) {
       const scope = await getProjectManagerScope(req.user.id);
 
       if (!scope.projectIds.length && !scope.teamIds.length) {
@@ -195,7 +195,7 @@ router.patch('/:id/status', protect, restrictToRoles(['FOUNDER', 'PROJECT_MANAGE
 
     // Check if user has permission to review this request
     const userRole = req.user.roleIds[0]?.key;
-    if (userRole === 'PROJECT_MANAGER') {
+    if (isProjectManagerRole(userRole)) {
       const scope = await getProjectManagerScope(req.user.id);
       const requestProjectId = request.projectId ? request.projectId.toString() : null;
       const requestTeamId = request.teamId ? request.teamId.toString() : null;
@@ -291,7 +291,7 @@ router.get('/stats', protect, restrictToRoles(['FOUNDER', 'PROJECT_MANAGER']), a
     const userRole = req.user.roleIds[0]?.key;
     let matchFilter = {};
     
-    if (userRole === 'PROJECT_MANAGER') {
+    if (isProjectManagerRole(userRole)) {
       const scope = await getProjectManagerScope(req.user.id);
 
       if (!scope.projectIds.length && !scope.teamIds.length) {

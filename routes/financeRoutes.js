@@ -199,8 +199,8 @@ router.get('/project-summary', authorize('finance.read'), async (req, res) => {
 
         const totalExpense = projectExpenses.length > 0 ? projectExpenses[0].totalExpense : 0;
         const totalIncome = projectIncome.length > 0 ? projectIncome[0].totalIncome : 0;
-        const allocatedBudget = project.allocatedBudget || 0;
-        const budgetExceeded = totalExpense > allocatedBudget;
+        const projectBudget = project.allocatedBudget || project.budget || 0;
+        const budgetExceeded = projectBudget > 0 ? totalExpense > projectBudget : false;
 
         return {
           projectId: project._id,
@@ -209,7 +209,7 @@ router.get('/project-summary', authorize('finance.read'), async (req, res) => {
           status: project.status,
           teamId: project.teamId,
           ownerId: project.ownerId,
-          allocatedBudget,
+          allocatedBudget: projectBudget,
           totalIncome,
           totalExpense,
           investmentAmount: project.investmentAmount || 0,

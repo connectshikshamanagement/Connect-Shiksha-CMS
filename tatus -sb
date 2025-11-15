@@ -1,0 +1,52 @@
+[1mdiff --git a/middleware/roleAccess.js b/middleware/roleAccess.js[m
+[1mindex f28f7bd..5a3f87c 100644[m
+[1m--- a/middleware/roleAccess.js[m
+[1m+++ b/middleware/roleAccess.js[m
+[36m@@ -127,18 +127,31 @@[m [mconst canAccessTeam = async (req, res, next) => {[m
+       const Project = require('../models/Project');[m
+       const managedProjects = await Project.find({ ownerId: user._id }).select('_id teamId');[m
+ [m
+[32m+[m[32m      const managedProjectIds = managedProjects.map(project => project._id.toString());[m
+[32m+[m[32m      const managedTeamIds = managedProjects[m
+[32m+[m[32m        .map(project => project.teamId && project.teamId.toString())[m
+[32m+[m[32m        .filter(Boolean);[m
+[32m+[m
+[32m+[m[32m      req.userRole = ROLE_KEYS.PROJECT_MANAGER;[m
+[32m+[m[32m      req.userManagedProjectIds = managedProjectIds;[m
+[32m+[m[32m      req.userManagedTeamIds = managedTeamIds;[m
+[32m+[m
+       if (!managedProjects.length) {[m
+[31m-        return res.status(403).json({[m
+[31m-          success: false,[m
+[31m-          message: 'Access denied. No managed projects found.'[m
+[31m-        });[m
+[32m+[m[32m        const memberTeamIds = (user.teamHistory || [])[m
+[32m+[m[32m          .map(entry => entry?.teamId && entry.teamId.toString())[m
+[32m+[m[32m          .filter(Boolean);[m
+[32m+[m
+[32m+[m[32m        if (!memberTeamIds.length) {[m
+[32m+[m[32m          return res.status(403).json({[m
+[32m+[m[32m            success: false,[m
+[32m+[m[32m            message: 'Access denied. No managed projects or team memberships found.'[m
+[32m+[m[32m          });[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        req.userManagedTeamIds = memberTeamIds;[m
+[32m+[m[32m        req.userTeamId = memberTeamIds[memberTeamIds.length - 1];[m
+       }[m
+ [m
+[31m-      req.userRole = ROLE_KEYS.PROJECT_MANAGER;[m
+[31m-      req.userManagedProjectIds = managedProjects.map(project => project._id.toString());[m
+[31m-      req.userManagedTeamIds = managedProjects[m
+[31m-        .map(project => project.teamId && project.teamId.toString())[m
+[31m-        .filter(Boolean);[m
+       return next();[m
+     }[m
+ [m
+[36m@@ -283,4 +296,4 @@[m [mmodule.exports = {[m
+   canAccessTeam,[m
+   canAccessProject,[m
+   getUserRoleInfo[m
+[31m-};[m
+[32m+[m[32m};[m
+\ No newline at end of file[m

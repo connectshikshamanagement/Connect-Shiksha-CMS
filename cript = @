@@ -1,0 +1,11 @@
+[1mdiff --git a/middleware/roleAccess.js b/middleware/roleAccess.js[m
+[1mindex f28f7bd..208e282 100644[m
+[1m--- a/middleware/roleAccess.js[m
+[1m+++ b/middleware/roleAccess.js[m
+[36m@@ -283,4 +283,4 @@[m [mmodule.exports = {[m
+   canAccessTeam,[m
+   canAccessProject,[m
+   getUserRoleInfo[m
+[31m-};[m
+[32m+[m[32m};[m
+\ No newline at end of file[m
